@@ -1,0 +1,21 @@
+# Core dependencies for portable telemetry analyzer
+fastapi>=0.104.0
+uvicorn>=0.24.0
+python-multipart>=0.0.6  # For file uploads
+
+# Data processing (your existing dependencies)
+numpy>=1.24.0
+pandas>=2.0.0
+matplotlib>=3.7.0
+scipy>=1.11.0
+
+# For Windows DLL support (if needed)
+# These are already in your existing code
+# ctypes (built-in)
+# pathlib (built-in)
+
+# Optional: Database support (SQLite is built-in, PostgreSQL for later)
+# psycopg2-binary>=2.9.0  # Uncomment for PostgreSQL support
+
+# Testing
+pytest>=7.4.0
