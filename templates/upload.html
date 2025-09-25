@@ -1,0 +1,397 @@
+{% extends "base.html" %}
+
+{% block title %}Upload XRK File - Telemetry Analyzer{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4">📁 Upload XRK File</h1>
+    </div>
+</div>
+
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Select Telemetry File</h5>
+            </div>
+            <div class="card-body">
+                <!-- Drag & Drop Upload Zone -->
+                <div id="uploadZone" class="upload-zone">
+                    <div class="mb-3">
+                        <i class="bi bi-cloud-upload" style="font-size: 3rem; color: #007bff;"></i>
+                    </div>
+                    <h5>Drag & Drop XRK Files Here</h5>
+                    <p class="text-muted">Select multiple files or drag & drop</p>
+                    <input type="file" id="fileInput" accept=".xrk" multiple style="display: none;">
+                    <button class="btn btn-primary" onclick="document.getElementById('fileInput').click()">
+                        Choose Files
+                    </button>
+                </div>
+                
+                <!-- File Information -->
+                <div id="fileInfo" style="display: none;" class="mt-3">
+                    <div class="card">
+                        <div class="card-body">
+                            <h6>Selected Files:</h6>
+                            <div id="fileList"></div>
+                            <div class="mt-3">
+                                <div id="uploadSummary"></div>
+                            </div>
+                            <div class="mt-2">
+                                <button id="uploadBtn" class="btn btn-success">
+                                    Upload All Files
+                                </button>
+                                <button class="btn btn-secondary" onclick="resetUpload()">
+                                    Cancel
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Upload Progress -->
+                <div id="uploadProgress" style="display: none;" class="mt-3">
+                    <div class="card bg-info text-white">
+                        <div class="card-body">
+                            <h6>Uploading Files...</h6>
+                            <div id="overallProgress" class="mb-2">
+                                <div class="progress">
+                                    <div id="overallProgressBar" class="progress-bar progress-bar-striped progress-bar-animated" 
+                                         role="progressbar" style="width: 0%"></div>
+                                </div>
+                                <small id="overallProgressText">Preparing upload...</small>
+                            </div>
+                            <div id="fileProgressList"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Upload Guidelines -->
+        <div class="card mt-4">
+            <div class="card-header">
+                <h6 class="mb-0">📋 Upload Guidelines</h6>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>Supported Files:</h6>
+                        <ul class="list-unstyled">
+                            <li>✅ XRK files from AIM systems</li>
+                            <li>✅ Maximum size: {{ max_size_mb }} MB</li>
+                            <li>✅ Any session duration</li>
+                        </ul>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>What happens next:</h6>
+                        <ol class="list-unstyled">
+                            <li>1️⃣ File is uploaded and imported</li>
+                            <li>2️⃣ Basic metadata is extracted</li>
+                            <li>3️⃣ File is ready for analysis</li>
+                            <li>4️⃣ Process to get lap data</li>
+                        </ol>
+                    </div>
+                </div>
+                
+                <div class="alert alert-info mt-3">
+                    <strong>💡 Tip:</strong> Upload files immediately after your track session for instant analysis!
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const uploadZone = document.getElementById('uploadZone');
+const fileInput = document.getElementById('fileInput');
+const fileInfo = document.getElementById('fileInfo');
+const uploadProgress = document.getElementById('uploadProgress');
+const uploadBtn = document.getElementById('uploadBtn');
+
+let selectedFiles = [];
+
+// Drag and drop handlers
+uploadZone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    uploadZone.classList.add('dragover');
+});
+
+uploadZone.addEventListener('dragleave', (e) => {
+    e.preventDefault();
+    uploadZone.classList.remove('dragover');
+});
+
+uploadZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    uploadZone.classList.remove('dragover');
+    
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length > 0) {
+        handleFileSelection(files);
+    }
+});
+
+// Click to browse
+uploadZone.addEventListener('click', (e) => {
+    // Don't trigger if clicking on a button or other interactive element
+    if (e.target.tagName === 'BUTTON' || e.target.closest('button')) {
+        return;
+    }
+    fileInput.click();
+});
+
+// File input change
+fileInput.addEventListener('change', (e) => {
+    if (e.target.files.length > 0) {
+        const files = Array.from(e.target.files);
+        handleFileSelection(files);
+    }
+});
+
+// Prevent the button click from triggering the zone click
+document.addEventListener('click', (e) => {
+    if (e.target.closest('#uploadZone button')) {
+        e.stopPropagation();
+    }
+});
+
+// Upload button click
+uploadBtn.addEventListener('click', uploadFiles);
+
+function handleFileSelection(files) {
+    // Filter for XRK files and validate
+    const validFiles = [];
+    const invalidFiles = [];
+    const maxSizeBytes = {{ max_size_mb }} * 1024 * 1024;
+    let totalSize = 0;
+    
+    for (const file of files) {
+        if (!file.name.toLowerCase().endsWith('.xrk')) {
+            invalidFiles.push({file: file, reason: 'Not an XRK file'});
+            continue;
+        }
+        
+        if (file.size > maxSizeBytes) {
+            invalidFiles.push({file: file, reason: `Too large (${formatFileSize(file.size)} > {{ max_size_mb }}MB)`});
+            continue;
+        }
+        
+        validFiles.push(file);
+        totalSize += file.size;
+    }
+    
+    // Show errors for invalid files
+    if (invalidFiles.length > 0) {
+        const errorMessage = invalidFiles.map(item => 
+            `❌ ${item.file.name}: ${item.reason}`
+        ).join('<br>');
+        showAlert(errorMessage, 'danger');
+    }
+    
+    // Continue with valid files
+    if (validFiles.length === 0) {
+        return;
+    }
+    
+    selectedFiles = validFiles;
+    
+    // Show file information
+    displaySelectedFiles(validFiles, totalSize);
+    
+    // Hide upload zone, show file info
+    uploadZone.style.display = 'none';
+    fileInfo.style.display = 'block';
+}
+
+function displaySelectedFiles(files, totalSize) {
+    const fileList = document.getElementById('fileList');
+    const uploadSummary = document.getElementById('uploadSummary');
+    
+    // Create file list with better dark mode styling
+    const fileListHTML = files.map((file, index) => `
+        <div class="d-flex justify-content-between align-items-center py-2 px-2 mb-2 rounded" 
+             style="background-color: var(--bs-card-bg); border: 1px solid var(--bs-border-color);">
+            <div>
+                <strong style="color: var(--bs-body-color);">${file.name}</strong><br>
+                <small class="text-muted">${formatFileSize(file.size)}</small>
+            </div>
+            <button class="btn btn-sm btn-outline-danger" onclick="removeFile(${index})" 
+                    title="Remove file">
+                ✕
+            </button>
+        </div>
+    `).join('');
+    
+    fileList.innerHTML = fileListHTML;
+    
+    // Create summary with better styling
+    uploadSummary.innerHTML = `
+        <div class="row text-center p-3 rounded" 
+             style="background-color: rgba(74, 144, 226, 0.1); border: 1px solid rgba(74, 144, 226, 0.3);">
+            <div class="col-4">
+                <strong style="color: #4a90e2; font-size: 1.2em;">${files.length}</strong><br>
+                <small class="text-muted">Files</small>
+            </div>
+            <div class="col-4">
+                <strong style="color: #4a90e2; font-size: 1.2em;">${formatFileSize(totalSize)}</strong><br>
+                <small class="text-muted">Total Size</small>
+            </div>
+            <div class="col-4">
+                <strong style="color: #4a90e2; font-size: 1.2em;">~${Math.round(files.length * 30)}s</strong><br>
+                <small class="text-muted">Est. Time</small>
+            </div>
+        </div>
+    `;
+}
+
+function removeFile(index) {
+    selectedFiles.splice(index, 1);
+    
+    if (selectedFiles.length === 0) {
+        resetUpload();
+        return;
+    }
+    
+    const totalSize = selectedFiles.reduce((sum, file) => sum + file.size, 0);
+    displaySelectedFiles(selectedFiles, totalSize);
+}
+
+function resetUpload() {
+    selectedFiles = [];
+    fileInput.value = '';
+    
+    // Reset UI
+    uploadZone.style.display = 'block';
+    fileInfo.style.display = 'none';
+    uploadProgress.style.display = 'none';
+    uploadZone.classList.remove('dragover');
+}
+
+async function uploadFiles() {
+    if (selectedFiles.length === 0) return;
+    
+    // Show progress
+    fileInfo.style.display = 'none';
+    uploadProgress.style.display = 'block';
+    
+    const results = {
+        successful: [],
+        failed: []
+    };
+    
+    // Create progress tracking
+    const fileProgressList = document.getElementById('fileProgressList');
+    fileProgressList.innerHTML = selectedFiles.map((file, index) => `
+        <div id="fileProgress${index}" class="mb-2">
+            <div class="d-flex justify-content-between">
+                <small>${file.name}</small>
+                <small id="fileStatus${index}">Waiting...</small>
+            </div>
+            <div class="progress progress-sm">
+                <div id="fileProgressBar${index}" class="progress-bar" style="width: 0%"></div>
+            </div>
+        </div>
+    `).join('');
+    
+    // Upload files sequentially (to avoid overwhelming the server)
+    for (let i = 0; i < selectedFiles.length; i++) {
+        const file = selectedFiles[i];
+        
+        updateOverallProgress(i, selectedFiles.length, `Uploading ${file.name}...`);
+        updateFileProgress(i, 0, 'Uploading...');
+        
+        try {
+            const result = await uploadSingleFile(file, i);
+            results.successful.push({file: file, result: result});
+            updateFileProgress(i, 100, '✅ Success');
+            
+        } catch (error) {
+            results.failed.push({file: file, error: error.message});
+            updateFileProgress(i, 100, '❌ Failed');
+        }
+    }
+    
+    // Show final results
+    updateOverallProgress(selectedFiles.length, selectedFiles.length, 'Upload complete!');
+    
+    const successCount = results.successful.length;
+    const failCount = results.failed.length;
+    
+    let message = `Upload complete!<br><strong>Successful:</strong> ${successCount}<br><strong>Failed:</strong> ${failCount}`;
+    
+    if (results.successful.length > 0) {
+        const totalLaps = results.successful.reduce((sum, item) => 
+            sum + (item.result.total_laps || 0), 0);
+        message += `<br><strong>Ready for processing!</strong>`;
+    }
+    
+    if (results.failed.length > 0) {
+        message += `<br><br><strong>Errors:</strong><br>`;
+        message += results.failed.map(item => 
+            `• ${item.file.name}: ${item.error}`
+        ).join('<br>');
+    }
+    
+    showAlert(message, results.failed.length > 0 ? 'warning' : 'success');
+    
+    // Reset and redirect after delay
+    setTimeout(() => {
+        resetUpload();
+        window.location.href = '/files';
+    }, 3000);
+}
+
+async function uploadSingleFile(file, index) {
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    const response = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData
+    });
+    
+    if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.detail || 'Upload failed');
+    }
+    
+    return await response.json();
+}
+
+function updateOverallProgress(current, total, text) {
+    const percent = Math.round((current / total) * 100);
+    const progressBar = document.getElementById('overallProgressBar');
+    const progressText = document.getElementById('overallProgressText');
+    
+    progressBar.style.width = percent + '%';
+    progressBar.setAttribute('aria-valuenow', percent);
+    progressText.textContent = text;
+}
+
+function updateFileProgress(index, percent, status) {
+    const progressBar = document.getElementById(`fileProgressBar${index}`);
+    const statusText = document.getElementById(`fileStatus${index}`);
+    
+    if (progressBar) {
+        progressBar.style.width = percent + '%';
+    }
+    if (statusText) {
+        statusText.textContent = status;
+    }
+}
+
+// Auto-clear alerts after 10 seconds
+setTimeout(() => {
+    const alerts = document.querySelectorAll('.alert-dismissible');
+    alerts.forEach(alert => {
+        if (alert.parentNode) {
+            alert.remove();
+        }
+    });
+}, 10000);
+</script>
+{% endblock %}

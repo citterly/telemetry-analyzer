@@ -18,7 +18,7 @@ def test_file_manager():
     
     # Create temporary test directory
     with tempfile.TemporaryDirectory() as temp_dir:
-        test_data_dir = Path(temp_dir) / "test_data"
+        test_data_dir = Path(temp_dir) / "data/uploads"
         
         # Initialize file manager
         fm = FileManager(str(test_data_dir))

@@ -1,0 +1,289 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Telemetry Analyzer{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4">📊 Telemetry Analysis Dashboard</h1>
+    </div>
+</div>
+
+<!-- Statistics Cards -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="card-body text-center">
+                <h3 class="card-title">{{ stats.total_files or 0 }}</h3>
+                <p class="card-text">Total Files</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="card-body text-center">
+                <h3 class="card-title">{{ stats.processed_files or 0 }}</h3>
+                <p class="card-text">Processed</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="card-body text-center">
+                <h3 class="card-title">
+                    {% if stats.fastest_overall_lap %}
+                        {{ "%.3f"|format(stats.fastest_overall_lap) }}s
+                    {% else %}
+                        N/A
+                    {% endif %}
+                </h3>
+                <p class="card-text">Fastest Lap</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="card-body text-center">
+                <h3 class="card-title">
+                    {% if stats.total_size_mb %}
+                        {{ "%.1f"|format(stats.total_size_mb) }} MB
+                    {% else %}
+                        0 MB
+                    {% endif %}
+                </h3>
+                <p class="card-text">Data Size</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Actions -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">🚀 Quick Actions</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <a href="/upload" class="btn btn-primary btn-lg w-100 mb-2">
+                            📁 Upload XRK File
+                        </a>
+                    </div>
+                    <div class="col-md-6">
+                        <a href="/files" class="btn btn-secondary btn-lg w-100 mb-2">
+                            📋 View All Files
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Files -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">📁 Recent Files</h5>
+                <a href="/files" class="btn btn-sm btn-outline-primary">View All</a>
+            </div>
+            <div class="card-body">
+                {% if recent_files %}
+                    <div class="row">
+                        {% for file in recent_files %}
+                        <div class="col-md-6 mb-3">
+                            <div class="card file-card {% if file.processed %}processed{% else %}unprocessed{% endif %}">
+                                <div class="card-body">
+                                    <h6 class="card-title">{{ file.filename }}</h6>
+                                    <div class="row">
+                                        <div class="col-6">
+                                            <small class="text-muted">Status:</small><br>
+                                            {% if file.processed %}
+                                                <span class="badge bg-success">Processed</span>
+                                            {% else %}
+                                                <span class="badge bg-warning">Pending</span>
+                                            {% endif %}
+                                        </div>
+                                        <div class="col-6">
+                                            <small class="text-muted">Imported:</small><br>
+                                            <small>{{ file.import_date[:10] if file.import_date else 'Unknown' }}</small>
+                                        </div>
+                                    </div>
+                                    
+                                    {% if file.processed and file.fastest_lap_time %}
+                                    <div class="row mt-2">
+                                        <div class="col-6">
+                                            <small class="text-muted">Fastest Lap:</small><br>
+                                            <strong>{{ "%.3f"|format(file.fastest_lap_time) }}s</strong>
+                                        </div>
+                                        <div class="col-6">
+                                            <small class="text-muted">Total Laps:</small><br>
+                                            <strong>{{ file.total_laps or 'N/A' }}</strong>
+                                        </div>
+                                    </div>
+                                    {% endif %}
+                                    
+                                    <div class="mt-2">
+                                        {% if not file.processed %}
+                                            <button class="btn btn-sm btn-primary" onclick="processFile('{{ file.filename }}')">
+                                                Process File
+                                            </button>
+                                        {% endif %}
+                                        <button class="btn btn-sm btn-outline-info" onclick="viewFileDetails('{{ file.filename }}')">
+                                            View Details
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="text-center py-4">
+                        <div class="mb-3">
+                            <i style="font-size: 3rem; color: #6c757d;">📁</i>
+                        </div>
+                        <h5 class="text-muted">No files uploaded yet</h5>
+                        <p class="text-muted">Upload your first XRK file to get started with telemetry analysis</p>
+                        <a href="/upload" class="btn btn-primary">Upload Now</a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if error %}
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="alert alert-warning">
+            <strong>Note:</strong> {{ error }}
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+async function processFile(filename) {
+    const button = event.target;
+    const originalText = button.innerHTML;
+    
+    try {
+        button.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Processing...';
+        button.disabled = true;
+        
+        const result = await apiCall(`/api/process/${filename}`, {
+            method: 'POST'
+        });
+        
+        showAlert(`✅ Successfully processed ${filename}!<br>
+                   <strong>Laps found:</strong> ${result.total_laps}<br>
+                   ${result.fastest_lap ? `<strong>Fastest lap:</strong> ${formatLapTime(result.fastest_lap.lap_time)}` : ''}`, 
+                   'success');
+        
+        // Refresh the page to show updated stats
+        setTimeout(() => {
+            window.location.reload();
+        }, 2000);
+        
+    } catch (error) {
+        showAlert(`❌ Failed to process ${filename}: ${error.message}`, 'danger');
+        button.innerHTML = originalText;
+        button.disabled = false;
+    }
+}
+
+async function viewFileDetails(filename) {
+    try {
+        const details = await apiCall(`/api/file/${filename}`);
+        
+        // Create modal content
+        const modalContent = `
+            <div class="modal fade" id="fileModal" tabindex="-1">
+                <div class="modal-dialog modal-lg">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">📄 ${details.filename}</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <h6>File Information</h6>
+                                    <table class="table table-sm">
+                                        <tr><td><strong>Size:</strong></td><td>${details.file_size_mb} MB</td></tr>
+                                        <tr><td><strong>Imported:</strong></td><td>${details.import_date ? new Date(details.import_date).toLocaleString() : 'Unknown'}</td></tr>
+                                        <tr><td><strong>Session Date:</strong></td><td>${details.session_date || 'Unknown'}</td></tr>
+                                        <tr><td><strong>Track:</strong></td><td>${details.track_name || 'Unknown'}</td></tr>
+                                    </table>
+                                </div>
+                                <div class="col-md-6">
+                                    <h6>Session Data</h6>
+                                    <table class="table table-sm">
+                                        <tr><td><strong>Duration:</strong></td><td>${details.session_duration ? Math.round(details.session_duration / 60) + ' minutes' : 'Unknown'}</td></tr>
+                                        <tr><td><strong>Data Points:</strong></td><td>${details.sample_count ? details.sample_count.toLocaleString() : 'Unknown'}</td></tr>
+                                        <tr><td><strong>Processed:</strong></td><td>${details.processed ? '✅ Yes' : '❌ No'}</td></tr>
+                                    </table>
+                                </div>
+                            </div>
+                            ${details.processed ? `
+                                <div class="row mt-3">
+                                    <div class="col-12">
+                                        <h6>Analysis Results</h6>
+                                        <table class="table table-sm">
+                                            <tr><td><strong>Total Laps:</strong></td><td>${details.total_laps || 'N/A'}</td></tr>
+                                            <tr><td><strong>Fastest Lap:</strong></td><td>${details.fastest_lap_time ? formatLapTime(details.fastest_lap_time) : 'N/A'}</td></tr>
+                                            <tr><td><strong>Max Speed:</strong></td><td>${details.max_speed_mph ? details.max_speed_mph.toFixed(1) + ' mph' : 'N/A'}</td></tr>
+                                            <tr><td><strong>Max RPM:</strong></td><td>${details.max_rpm ? Math.round(details.max_rpm) : 'N/A'}</td></tr>
+                                        </table>
+                                    </div>
+                                </div>
+                            ` : ''}
+                        </div>
+                        <div class="modal-footer">
+                            ${!details.processed ? `
+                                <button type="button" class="btn btn-primary" onclick="processFile('${details.filename}'); bootstrap.Modal.getInstance(document.getElementById('fileModal')).hide();">
+                                    Process File
+                                </button>
+                            ` : ''}
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // Remove existing modal if any
+        const existingModal = document.getElementById('fileModal');
+        if (existingModal) {
+            existingModal.remove();
+        }
+        
+        // Add modal to page and show
+        document.body.insertAdjacentHTML('beforeend', modalContent);
+        const modal = new bootstrap.Modal(document.getElementById('fileModal'));
+        modal.show();
+        
+    } catch (error) {
+        showAlert(`❌ Failed to load file details: ${error.message}`, 'danger');
+    }
+}
+
+// Auto-refresh dashboard stats every 30 seconds
+setInterval(async () => {
+    try {
+        const stats = await apiCall('/api/stats');
+        // Update stats cards with new data
+        // This could be enhanced to update specific elements without full page reload
+    } catch (error) {
+        console.log('Failed to refresh stats:', error);
+    }
+}, 30000);
+</script>
+{% endblock %}

@@ -1,0 +1,455 @@
+{% extends "base.html" %}
+
+{% block title %}File Management - Telemetry Analyzer{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>📁 File Management</h1>
+            <a href="/upload" class="btn btn-primary">
+                📤 Upload New File
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- File Statistics Summary -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="card-body text-center">
+                <h4 class="card-title" id="totalFiles">{{ files|length }}</h4>
+                <p class="card-text">Total Files</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="card-body text-center">
+                <h4 class="card-title" id="processedFiles">
+                    {{ files|selectattr("processed")|list|length }}
+                </h4>
+                <p class="card-text">Processed</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="card-body text-center">
+                <h4 class="card-title" id="pendingFiles">
+                    {{ (files|length) - (files|selectattr("processed")|list|length) }}
+                </h4>
+                <p class="card-text">Pending</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="card-body text-center">
+                <h4 class="card-title">
+                    {% set total_size = files|sum(attribute='file_size_bytes')|default(0) %}
+                    {{ "%.1f"|format(total_size / (1024*1024)) }} MB
+                </h4>
+                <p class="card-text">Total Size</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- File List -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">📋 All Files</h5>
+                <div>
+                    <button class="btn btn-sm btn-outline-success" onclick="processAllPending()">
+                        Process All Pending
+                    </button>
+                    <button class="btn btn-sm btn-outline-primary" onclick="refreshFileList()">
+                        🔄 Refresh
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                {% if files %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Filename</th>
+                                    <th>Size</th>
+                                    <th>Imported</th>
+                                    <th>Status</th>
+                                    <th>Laps</th>
+                                    <th>Fastest Lap</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for file in files %}
+                                <tr class="{% if not file.processed %}table-warning{% endif %}">
+                                    <td>
+                                        <strong>{{ file.filename }}</strong>
+                                        {% if file.session_date %}
+                                            <br><small class="text-muted">{{ file.session_date }}</small>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {{ "%.1f"|format(file.file_size_bytes / (1024*1024)) }} MB
+                                    </td>
+                                    <td>
+                                        <small>{{ file.import_date[:16] if file.import_date else 'Unknown' }}</small>
+                                    </td>
+                                    <td>
+                                        {% if file.processed %}
+                                            <span class="badge bg-success">✅ Processed</span>
+                                        {% else %}
+                                            <span class="badge bg-warning">⏳ Pending</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if file.total_laps %}
+                                            {{ file.total_laps }}
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if file.fastest_lap_time %}
+                                            <strong>{{ "%.3f"|format(file.fastest_lap_time) }}s</strong>
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm">
+                                            {% if not file.processed %}
+                                                <button class="btn btn-primary" onclick="processFile('{{ file.filename }}', this)">
+                                                    Process
+                                                </button>
+                                            {% endif %}
+                                            <button class="btn btn-outline-info" onclick="viewFileDetails('{{ file.filename }}')">
+                                                Details
+                                            </button>
+                                            <button class="btn btn-outline-danger" onclick="deleteFile('{{ file.filename }}', this)">
+                                                Delete
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="text-center py-5">
+                        <div class="mb-3">
+                            <i style="font-size: 4rem; color: #6c757d;">📁</i>
+                        </div>
+                        <h4 class="text-muted">No files found</h4>
+                        <p class="text-muted">Upload your first XRK file to get started</p>
+                        <a href="/upload" class="btn btn-primary btn-lg">
+                            📤 Upload XRK File
+                        </a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Bulk Actions (if needed) -->
+{% if files %}
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0">🔧 Bulk Actions</h6>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4">
+                        <button class="btn btn-warning w-100" onclick="processAllPending()" 
+                                {% if not files|selectattr("processed", "equalto", false)|list %}disabled{% endif %}>
+                            ⚡ Process All Pending Files
+                        </button>
+                    </div>
+                    <div class="col-md-4">
+                        <button class="btn btn-info w-100" onclick="exportFileList()">
+                            💾 Export File List
+                        </button>
+                    </div>
+                    <div class="col-md-4">
+                        <button class="btn btn-secondary w-100" onclick="refreshFileList()">
+                            🔄 Refresh Data
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+async function processFile(filename, buttonElement) {
+    const originalText = buttonElement.innerHTML;
+    
+    try {
+        buttonElement.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Processing...';
+        buttonElement.disabled = true;
+        
+        const result = await apiCall(`/api/process/${filename}`, {
+            method: 'POST'
+        });
+        
+        showAlert(`✅ Successfully processed ${filename}!<br>
+                   <strong>Laps found:</strong> ${result.total_laps}<br>
+                   ${result.fastest_lap ? `<strong>Fastest lap:</strong> ${formatLapTime(result.fastest_lap.lap_time)}` : ''}`, 
+                   'success');
+        
+        // Refresh the page to show updated data
+        setTimeout(() => {
+            window.location.reload();
+        }, 2000);
+        
+    } catch (error) {
+        showAlert(`❌ Failed to process ${filename}: ${error.message}`, 'danger');
+        buttonElement.innerHTML = originalText;
+        buttonElement.disabled = false;
+    }
+}
+
+async function deleteFile(filename, buttonElement) {
+    if (!confirm(`Are you sure you want to delete ${filename}? This cannot be undone.`)) {
+        return;
+    }
+    
+    const originalText = buttonElement.innerHTML;
+    
+    try {
+        buttonElement.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+        buttonElement.disabled = true;
+        
+        await apiCall(`/api/file/${filename}`, {
+            method: 'DELETE'
+        });
+        
+        showAlert(`✅ Successfully deleted ${filename}`, 'success');
+        
+        // Remove the row from the table
+        const row = buttonElement.closest('tr');
+        row.style.transition = 'opacity 0.5s';
+        row.style.opacity = '0.5';
+        
+        setTimeout(() => {
+            window.location.reload();
+        }, 1000);
+        
+    } catch (error) {
+        showAlert(`❌ Failed to delete ${filename}: ${error.message}`, 'danger');
+        buttonElement.innerHTML = originalText;
+        buttonElement.disabled = false;
+    }
+}
+
+async function viewFileDetails(filename) {
+    try {
+        const details = await apiCall(`/api/file/${filename}`);
+        
+        // Create modal content (similar to dashboard modal)
+        const modalContent = `
+            <div class="modal fade" id="fileModal" tabindex="-1">
+                <div class="modal-dialog modal-lg">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">📄 ${details.filename}</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <h6>File Information</h6>
+                                    <table class="table table-sm">
+                                        <tr><td><strong>Size:</strong></td><td>${details.file_size_mb} MB</td></tr>
+                                        <tr><td><strong>Imported:</strong></td><td>${details.import_date ? new Date(details.import_date).toLocaleString() : 'Unknown'}</td></tr>
+                                        <tr><td><strong>Session Date:</strong></td><td>${details.session_date || 'Unknown'}</td></tr>
+                                        <tr><td><strong>Track:</strong></td><td>${details.track_name || 'Unknown'}</td></tr>
+                                        <tr><td><strong>File Hash:</strong></td><td><code>${details.file_hash}</code></td></tr>
+                                    </table>
+                                </div>
+                                <div class="col-md-6">
+                                    <h6>Session Data</h6>
+                                    <table class="table table-sm">
+                                        <tr><td><strong>Duration:</strong></td><td>${details.session_duration ? Math.round(details.session_duration / 60) + ' minutes' : 'Unknown'}</td></tr>
+                                        <tr><td><strong>Data Points:</strong></td><td>${details.sample_count ? details.sample_count.toLocaleString() : 'Unknown'}</td></tr>
+                                        <tr><td><strong>Processed:</strong></td><td>${details.processed ? '✅ Yes' : '❌ No'}</td></tr>
+                                    </table>
+                                </div>
+                            </div>
+                            ${details.processed ? `
+                                <div class="row mt-3">
+                                    <div class="col-12">
+                                        <h6>Analysis Results</h6>
+                                        <table class="table table-sm">
+                                            <tr><td><strong>Total Laps:</strong></td><td>${details.total_laps || 'N/A'}</td></tr>
+                                            <tr><td><strong>Fastest Lap:</strong></td><td>${details.fastest_lap_time ? formatLapTime(details.fastest_lap_time) : 'N/A'}</td></tr>
+                                            <tr><td><strong>Max Speed:</strong></td><td>${details.max_speed_mph ? details.max_speed_mph.toFixed(1) + ' mph' : 'N/A'}</td></tr>
+                                            <tr><td><strong>Max RPM:</strong></td><td>${details.max_rpm ? Math.round(details.max_rpm) : 'N/A'}</td></tr>
+                                        </table>
+                                    </div>
+                                </div>
+                            ` : ''}
+                            ${details.custom_attributes && Object.keys(details.custom_attributes).length > 0 ? `
+                                <div class="row mt-3">
+                                    <div class="col-12">
+                                        <h6>Custom Attributes</h6>
+                                        <pre class="bg-secondary p-2 rounded"><code>${JSON.stringify(details.custom_attributes, null, 2)}</code></pre>
+                                    </div>
+                                </div>
+                            ` : ''}
+                        </div>
+                        <div class="modal-footer">
+                            ${!details.processed ? `
+                                <button type="button" class="btn btn-primary" onclick="processFileFromModal('${details.filename}')">
+                                    Process File
+                                </button>
+                            ` : ''}
+                            <button type="button" class="btn btn-danger" onclick="deleteFileFromModal('${details.filename}')">
+                                Delete File
+                            </button>
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // Remove existing modal if any
+        const existingModal = document.getElementById('fileModal');
+        if (existingModal) {
+            existingModal.remove();
+        }
+        
+        // Add modal to page and show
+        document.body.insertAdjacentHTML('beforeend', modalContent);
+        const modal = new bootstrap.Modal(document.getElementById('fileModal'));
+        modal.show();
+        
+    } catch (error) {
+        showAlert(`❌ Failed to load file details: ${error.message}`, 'danger');
+    }
+}
+
+async function processAllPending() {
+    const pendingFiles = Array.from(document.querySelectorAll('tr .badge.bg-warning'))
+        .map(badge => badge.closest('tr').querySelector('strong').textContent);
+    
+    if (pendingFiles.length === 0) {
+        showAlert('ℹ️ No pending files to process', 'info');
+        return;
+    }
+    
+    if (!confirm(`Process all ${pendingFiles.length} pending files? This may take some time.`)) {
+        return;
+    }
+    
+    showAlert(`⚡ Processing ${pendingFiles.length} files...`, 'info');
+    
+    let processed = 0;
+    let failed = 0;
+    
+    for (const filename of pendingFiles) {
+        try {
+            await apiCall(`/api/process/${filename}`, { method: 'POST' });
+            processed++;
+        } catch (error) {
+            failed++;
+            console.error(`Failed to process ${filename}:`, error);
+        }
+    }
+    
+    showAlert(`✅ Bulk processing complete!<br>
+               <strong>Processed:</strong> ${processed}<br>
+               <strong>Failed:</strong> ${failed}`, 
+               failed > 0 ? 'warning' : 'success');
+    
+    setTimeout(() => {
+        window.location.reload();
+    }, 3000);
+}
+
+async function refreshFileList() {
+    window.location.reload();
+}
+
+async function exportFileList() {
+    try {
+        const files = await apiCall('/api/files');
+        
+        // Create CSV content
+        const csvContent = [
+            ['Filename', 'Size (MB)', 'Imported', 'Processed', 'Laps', 'Fastest Lap', 'Max Speed', 'Max RPM'].join(','),
+            ...files.files.map(file => [
+                file.filename,
+                file.file_size_mb,
+                file.import_date,
+                file.processed ? 'Yes' : 'No',
+                file.total_laps || '',
+                file.fastest_lap_time || '',
+                file.max_speed_mph || '',
+                file.max_rpm || ''
+            ].join(','))
+        ].join('\n');
+        
+        // Download CSV file
+        const blob = new Blob([csvContent], { type: 'text/csv' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = url;
+        a.download = `telemetry_files_${new Date().toISOString().split('T')[0]}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        
+        showAlert('✅ File list exported successfully!', 'success');
+        
+    } catch (error) {
+        showAlert(`❌ Failed to export file list: ${error.message}`, 'danger');
+    }
+}
+
+function processFileFromModal(filename) {
+    bootstrap.Modal.getInstance(document.getElementById('fileModal')).hide();
+    // Find the process button for this file and click it
+    const buttons = document.querySelectorAll('button');
+    for (const button of buttons) {
+        if (button.textContent.trim() === 'Process' && 
+            button.closest('tr').querySelector('strong').textContent === filename) {
+            button.click();
+            break;
+        }
+    }
+}
+
+function deleteFileFromModal(filename) {
+    bootstrap.Modal.getInstance(document.getElementById('fileModal')).hide();
+    // Find the delete button for this file and click it
+    const buttons = document.querySelectorAll('button');
+    for (const button of buttons) {
+        if (button.textContent.trim() === 'Delete' && 
+            button.closest('tr').querySelector('strong').textContent === filename) {
+            button.click();
+            break;
+        }
+    }
+}
+</script>
+{% endblock %}

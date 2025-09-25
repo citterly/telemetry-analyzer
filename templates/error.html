@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title or "Error" }} - Telemetry Analyzer{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card border-danger">
+            <div class="card-header bg-danger text-white">
+                <h5 class="mb-0">❌ {{ title or "Error" }}</h5>
+            </div>
+            <div class="card-body text-center">
+                <div class="mb-3">
+                    <i class="bi bi-exclamation-triangle" style="font-size: 3rem; color: #dc3545;"></i>
+                </div>
+                <p class="lead">{{ error or "An unexpected error occurred" }}</p>
+                <div class="mt-4">
+                    <a href="/" class="btn btn-primary">🏠 Go to Dashboard</a>
+                    <button class="btn btn-secondary" onclick="history.back()">⬅️ Go Back</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

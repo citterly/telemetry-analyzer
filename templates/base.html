@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Telemetry Analyzer{% endblock %}</title>
+    
+    <!-- Bootstrap CSS for quick styling -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- Custom CSS - Dark Mode Theme -->
+    <style>
+        :root {
+            --bs-body-bg: #1a1a1a;
+            --bs-body-color: #ffffff;
+            --bs-card-bg: #2d2d2d;
+            --bs-border-color: #404040;
+        }
+        
+        body {
+            background-color: var(--bs-body-bg);
+            color: var(--bs-body-color);
+        }
+        
+        .card {
+            background-color: var(--bs-card-bg);
+            border-color: var(--bs-border-color);
+        }
+        
+        .card-header {
+            background-color: #383838;
+            border-bottom-color: var(--bs-border-color);
+        }
+        
+        .table {
+            --bs-table-bg: transparent;
+            --bs-table-color: var(--bs-body-color);
+            --bs-table-border-color: var(--bs-border-color);
+        }
+        
+        .modal-content {
+            background-color: var(--bs-card-bg);
+            color: var(--bs-body-color);
+        }
+        
+        .modal-header {
+            border-bottom-color: var(--bs-border-color);
+        }
+        
+        .modal-footer {
+            border-top-color: var(--bs-border-color);
+        }
+        
+        .navbar-brand {
+            font-weight: bold;
+        }
+        
+        .stat-card {
+            background: linear-gradient(135deg, #4a90e2 0%, #6c5ce7 100%);
+            color: white;
+            border-radius: 10px;
+            border: none;
+        }
+        
+        .file-card {
+            border-left: 4px solid #4a90e2;
+            background-color: #353535;
+        }
+        
+        .processed {
+            border-left-color: #00b894;
+        }
+        
+        .unprocessed {
+            border-left-color: #fdcb6e;
+        }
+        
+        .upload-zone {
+            border: 2px dashed #4a90e2;
+            border-radius: 10px;
+            padding: 2rem;
+            text-align: center;
+            background-color: #2d2d2d;
+            transition: all 0.3s ease;
+        }
+        
+        .upload-zone:hover {
+            border-color: #74b9ff;
+            background-color: #383838;
+        }
+        
+        .upload-zone.dragover {
+            border-color: #00b894;
+            background-color: #2d3748;
+        }
+        
+        .footer {
+            margin-top: 3rem;
+            padding: 1rem 0;
+            border-top: 1px solid var(--bs-border-color);
+            color: #a0a0a0;
+        }
+        
+        /* Dark mode badges */
+        .badge {
+            --bs-badge-color: #000;
+        }
+        
+        .bg-success {
+            background-color: #00b894 !important;
+        }
+        
+        .bg-warning {
+            background-color: #fdcb6e !important;
+        }
+        
+        .bg-info {
+            background-color: #74b9ff !important;
+        }
+        
+        .bg-danger {
+            background-color: #e17055 !important;
+        }
+        
+        /* Alert styling for dark mode */
+        .alert {
+            border-color: var(--bs-border-color);
+        }
+        
+        .alert-success {
+            background-color: rgba(0, 184, 148, 0.1);
+            color: #00b894;
+            border-color: #00b894;
+        }
+        
+        .alert-danger {
+            background-color: rgba(225, 112, 85, 0.1);
+            color: #e17055;
+            border-color: #e17055;
+        }
+        
+        .alert-info {
+            background-color: rgba(116, 185, 255, 0.1);
+            color: #74b9ff;
+            border-color: #74b9ff;
+        }
+        
+        .alert-warning {
+            background-color: rgba(253, 203, 110, 0.1);
+            color: #fdcb6e;
+            border-color: #fdcb6e;
+        }
+        
+        /* Button styling tweaks */
+        .btn-primary {
+            background-color: #4a90e2;
+            border-color: #4a90e2;
+        }
+        
+        .btn-primary:hover {
+            background-color: #357abd;
+            border-color: #357abd;
+        }
+        
+        .btn-secondary {
+            background-color: #6c757d;
+            border-color: #6c757d;
+        }
+        
+        .btn-outline-primary {
+            color: #4a90e2;
+            border-color: #4a90e2;
+        }
+        
+        .btn-outline-primary:hover {
+            background-color: #4a90e2;
+            border-color: #4a90e2;
+        }
+        
+        .btn-outline-info {
+            color: #74b9ff;
+            border-color: #74b9ff;
+        }
+        
+        .btn-outline-info:hover {
+            background-color: #74b9ff;
+            border-color: #74b9ff;
+        }
+        
+        /* Progress bar dark mode */
+        .progress {
+            background-color: #404040;
+        }
+        
+        /* Text muted for dark mode */
+        .text-muted {
+            color: #a0a0a0 !important;
+        }
+        
+        /* Form controls dark mode */
+        .form-control {
+            background-color: #2d2d2d;
+            border-color: var(--bs-border-color);
+            color: var(--bs-body-color);
+        }
+        
+        .form-control:focus {
+            background-color: #2d2d2d;
+            border-color: #4a90e2;
+            color: var(--bs-body-color);
+            box-shadow: 0 0 0 0.2rem rgba(74, 144, 226, 0.25);
+        }
+    </style>
+    
+    {% block extra_head %}{% endblock %}
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark" style="background-color: #1a1a1a !important;">
+        <div class="container">
+            <a class="navbar-brand" href="/">
+                🏁 Telemetry Analyzer
+            </a>
+            
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/">Dashboard</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/upload">Upload</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/files">Files</a>
+                    </li>
+                </ul>
+                
+                <span class="navbar-text">
+                    Trackside Ready 🏎️
+                </span>
+            </div>
+        </div>
+    </nav>
+    
+    <!-- Main Content -->
+    <main class="container mt-4">
+        {% block content %}{% endblock %}
+    </main>
+    
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container text-center">
+            <span>Telemetry Analyzer v1.0 - Built for trackside analysis</span>
+        </div>
+    </footer>
+    
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Custom JavaScript -->
+    <script>
+        // Utility functions
+        function showAlert(message, type = 'info') {
+            const alertDiv = document.createElement('div');
+            alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+            alertDiv.innerHTML = `
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            document.querySelector('main').insertBefore(alertDiv, document.querySelector('main').firstChild);
+            
+            // Auto-dismiss after 5 seconds
+            setTimeout(() => {
+                if (alertDiv.parentNode) {
+                    alertDiv.remove();
+                }
+            }, 5000);
+        }
+        
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+        
+        function formatLapTime(seconds) {
+            if (!seconds) return 'N/A';
+            const minutes = Math.floor(seconds / 60);
+            const secs = (seconds % 60).toFixed(3);
+            return minutes > 0 ? `${minutes}:${secs.padStart(6, '0')}` : `${secs}s`;
+        }
+        
+        // API helper functions
+        async function apiCall(url, options = {}) {
+            try {
+                const response = await fetch(url, {
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...options.headers
+                    },
+                    ...options
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Request failed');
+                }
+                
+                return await response.json();
+            } catch (error) {
+                console.error('API call failed:', error);
+                throw error;
+            }
+        }
+    </script>
+    
+    {% block extra_scripts %}{% endblock %}
+</body>
+</html>
