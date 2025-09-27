@@ -7,7 +7,7 @@ import numpy as np
 from typing import Dict, List, Tuple, Optional
 from dataclasses import dataclass
 
-from .config import (
+from ..config.config_analysis import (
     TIRE_CIRCUMFERENCE_METERS, 
     CURRENT_SETUP, 
     TRANSMISSION_SCENARIOS,

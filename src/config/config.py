@@ -7,6 +7,19 @@ import os
 from pathlib import Path
 from typing import Optional
 
+PROJECT_ROOT = Path(__file__).resolve().parents[2]  # go up two levels from src/config
+THIRD_PARTY_ROOT = PROJECT_ROOT / "third-party" / "AIM"
+SRC_ROOT         = PROJECT_ROOT / "src"
+DATA_ROOT        = PROJECT_ROOT / "data"
+SAMPLE_FILES_PATH = DATA_ROOT / "uploads"
+
+DLL_PATH        = THIRD_PARTY_ROOT / "DLL-2022" / "MatLabXRK-2022-64-ReleaseU.dll"
+DEPENDENCY_PATH = THIRD_PARTY_ROOT / "64"
+UNITS_XML_PATH  = SRC_ROOT / "analysis" / "units.xml"
+UPLOADS_PATH    = DATA_ROOT / "uploads"
+EXPORTS_PATH    = DATA_ROOT / "exports"
+
+
 class Config:
     """Main configuration class with environment variable overrides"""
     

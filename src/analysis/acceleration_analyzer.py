@@ -11,7 +11,7 @@ warnings.filterwarnings('ignore')
 
 from .data_loader import load_session_data
 from .lap_analyzer import analyze_session_laps
-from .config import ENGINE_SPECS
+from ..config.config_analysis import ENGINE_SPECS
 
 def analyze_power_simple():
     """

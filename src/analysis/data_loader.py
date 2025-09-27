@@ -10,7 +10,7 @@ import os
 from typing import Dict, Optional, Tuple
 from pathlib import Path
 
-from .config import DLL_PATH, DEPENDENCY_PATH, SAMPLE_FILES_PATH, DEFAULT_SESSION
+from ..config.config_analysis import DLL_PATH, DEPENDENCY_PATH, SAMPLE_FILES_PATH, DEFAULT_SESSION
 
 class XRKDataLoader:
     """Handler for loading and synchronizing XRK telemetry data"""

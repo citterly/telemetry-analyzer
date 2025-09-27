@@ -8,7 +8,7 @@ import shutil
 from pathlib import Path
 import json
 
-from file_manager import FileManager, FileMetadata
+from src.io.file_manager import FileManager, FileMetadata
 
 
 def test_file_manager():
@@ -49,7 +49,7 @@ def test_file_manager():
         print("\n3. Testing with real XRK file...")
         
         # Look for your default session file
-        from config import SAMPLE_FILES_PATH, DEFAULT_SESSION
+        from config.config import SAMPLE_FILES_PATH, DEFAULT_SESSION
         real_xrk_path = SAMPLE_FILES_PATH / DEFAULT_SESSION
         
         if real_xrk_path.exists():

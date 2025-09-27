@@ -13,8 +13,8 @@ from pathlib import Path
 from typing import List, Optional
 import traceback
 
-from config import get_config
-from file_manager import FileManager
+from config.config import get_config
+from src.io.file_manager import FileManager
 
 # Initialize configuration
 config = get_config()
