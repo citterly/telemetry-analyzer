@@ -7,7 +7,7 @@ import numpy as np
 from typing import Dict, List, Tuple, Optional
 from dataclasses import dataclass
 
-from ..config.config_analysis import PROCESSING_CONFIG, TRACK_CONFIG
+from src.config.vehicle_config import PROCESSING_CONFIG, TRACK_CONFIG
 
 @dataclass
 class LapInfo:
@@ -41,7 +41,7 @@ class LapAnalyzer:
         time = self.session_data['time']
         
         # Use actual Road America start/finish line coordinates
-        from ..config.config_analysis import TRACK_CONFIG
+        from ..config.vehicle_config import TRACK_CONFIG
         start_lat, start_lon = TRACK_CONFIG['start_finish_gps']
         
         print(f"Detecting laps using Road America start/finish at: {start_lat:.6f}, {start_lon:.6f}")
@@ -301,7 +301,7 @@ if __name__ == "__main__":
     print("Testing Lap Analyzer")
     print("=" * 50)
     
-    from .data_loader import load_session_data
+    from ..extract.data_loader import load_session_data
     
     # Load session data
     session_data = load_session_data()

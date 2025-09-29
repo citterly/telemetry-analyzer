@@ -12,10 +12,9 @@ from datetime import datetime
 from dataclasses import dataclass, asdict
 import hashlib
 
-# Import your existing analysis modules
-from analysis.data_loader import load_session_data, get_data_summary
-from analysis.lap_analyzer import analyze_session_laps
-
+# Clean imports – DLL check removed (belongs in data_loader)
+from src.extract.data_loader import load_session_data, get_data_summary
+from src.analysis.lap_analyzer import analyze_session_laps
 
 @dataclass
 class FileMetadata:
@@ -166,7 +165,7 @@ class FileManager:
         
         try:
             # Load session data using your existing code
-            session_data = load_session_data(str(file_path))
+            session_data = load_session_data(metadata.filename)
             if not session_data:
                 raise Exception("Failed to load session data")
             

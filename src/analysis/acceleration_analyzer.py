@@ -9,7 +9,7 @@ from scipy import signal
 import warnings
 warnings.filterwarnings('ignore')
 
-from .data_loader import load_session_data
+from ..extract.data_loader import load_session_data
 from .lap_analyzer import analyze_session_laps
 from ..config.config_analysis import ENGINE_SPECS
 

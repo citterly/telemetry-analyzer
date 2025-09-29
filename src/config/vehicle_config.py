@@ -5,18 +5,9 @@ Contains all constants, settings, and gear specifications
 
 from pathlib import Path
 from typing import Dict, List, Tuple
-# from analysis.config import DLL_PATH, DEPENDENCY_PATH, SAMPLE_FILES_PATH
-
-# File paths
-PROJECT_ROOT = Path(__file__).parent.parent
-THIRD_PARTY_ROOT = PROJECT_ROOT / "third-party" / "AIM"
-DLL_PATH = THIRD_PARTY_ROOT / "DLL-2022" / "MatLabXRK-2022-64-ReleaseU.dll"
-DEPENDENCY_PATH = THIRD_PARTY_ROOT / "64"
-SAMPLE_FILES_PATH = PROJECT_ROOT / "data" / "uploads"
-UNITS_XML_PATH = PROJECT_ROOT / "analysis" / "units.xml"
 
 # Default session file
-DEFAULT_SESSION = "20250713_094018_Road America_a_0411.xrk"
+DEFAULT_SESSION = "20250712_104619_Road America_a_0394.xrk"
 
 # Vehicle specifications
 TIRE_SIZE = "275/35/18"  # Andy's current tire size
