@@ -1,23 +1,26 @@
 """
-Session Builder — WP3 Canonicalization
---------------------------------------
+Session Builder — WP4 Canonical Metadata Extension (MVP)
+--------------------------------------------------------
 Extracts ALL XRK channels into a canonical Parquet dataset:
 - Iterates all channels (regular + GPS)
 - Normalizes to common time base
-- Attaches units from DLL or units.xml
+- Resolves units via DLL or units_helper
 - Exports Parquet
 - Updates metadata JSON with Parquet reference
 """
 
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 import numpy as np
 import pandas as pd
+import unicodedata
+
+from ctypes import c_char_p, cast
 
 from src.extract.data_loader import XRKDataLoader
-from src.config.config import EXPORTS_PATH, UNITS_XML_PATH
+from src.config.config import EXPORTS_PATH
 from src.io.file_manager import FileManager
-
+from src.utils import units_helper
 
 # -------------------------------------------------------------------
 # Core API
@@ -27,12 +30,6 @@ def extract_full_session(filename: str,
                          resample_hz: int = 10) -> pd.DataFrame:
     """
     Load an XRK file and return canonical DataFrame.
-
-    Columns:
-        - All channels (regular + GPS)
-        - Units attached via DataFrame.attrs['units']
-        - Uniform time base (resampled to resample_hz)
-        - Timestamp index (session-relative seconds)
     """
     loader = XRKDataLoader()
     if not loader.open_file(filename):
@@ -41,11 +38,10 @@ def extract_full_session(filename: str,
     raw_channels = _extract_all_channels(loader)
     loader.close_file()
 
-    df = _build_dataframe(raw_channels, resample_hz=resample_hz)
-    df.attrs["units"] = _load_units_map(raw_channels)
+    # Build canonical DataFrame at uniform rate
+    df = _build_dataframe(raw_channels, base_rate_hz=resample_hz)
 
     return df
-
 
 def export_session(df: pd.DataFrame, session_id: str) -> Path:
     """
@@ -61,8 +57,9 @@ def export_session(df: pd.DataFrame, session_id: str) -> Path:
         f"{session_id}.xrk",
         out_path,
         channel_list=list(df.columns),
-        units_map=df.attrs.get("units", {})
+        units_map={k: _normalize_unit_text(v) for k, v in df.attrs.get("units", {}).items()}
     )
+
 
     return out_path
 
@@ -80,94 +77,201 @@ def _extract_all_channels(loader: XRKDataLoader) -> Dict[str, Dict[str, Any]]:
     # ---- Regular channels ----
     try:
         chan_count = loader.dll.get_channels_count(loader.file_index)
+        print(f"🔍 Regular channels reported: {chan_count}")
         for i in range(chan_count):
             name_ptr = loader.dll.get_channel_name(loader.file_index, i)
             unit_ptr = loader.dll.get_channel_units(loader.file_index, i)
+
             if not name_ptr:
+                print(f"⚠️ Channel {i} has no name")
                 continue
-            name = name_ptr.decode("utf-8")
-            unit = unit_ptr.decode("utf-8") if unit_ptr else None
+
+            # --- Decode name ---
+            try:
+                name = name_ptr.decode("utf-8")
+            except Exception as e:
+                print(f"⚠️ Failed to decode channel {i} name: {e}")
+                name = f"chan_{i}"
+
+            # --- Decode unit ---
+            unit = None
+            if unit_ptr:
+                if isinstance(unit_ptr, (bytes, bytearray)):
+                    try:
+                        unit = unit_ptr.decode("utf-8")
+                    except Exception as e:
+                        print(f"⚠️ Failed to decode channel {i} unit: {e}")
+                elif isinstance(unit_ptr, str):
+                    unit = unit_ptr
+                else:
+                    print(f"⚠️ Channel {i} unit came back as {type(unit_ptr)}: {unit_ptr}")
+
+            # Always normalize if we got something
+            if unit:
+                unit = _normalize_unit_text(unit)
+
+            # Fallback to heuristic if no usable unit
+            if not unit:
+                unit, source = units_helper.guess_unit(name)
+            else:
+                source = "dll"
+
+            # --- Extract data ---
             chan = loader._extract_channel_data(i, is_gps=False)
             if chan:
                 chan["unit"] = unit
+                chan["unit_source"] = source
                 channels[name] = chan
     except Exception as e:
-        print(f"⚠️ Error enumerating regular channels: {e}")
+        print(f"❌ Error enumerating regular channels: {e}")
 
     # ---- GPS channels ----
     try:
         gps_count = loader.dll.get_GPS_channels_count(loader.file_index)
+        print(f"🔍 GPS channels reported: {gps_count}")
         for i in range(gps_count):
             name_ptr = loader.dll.get_GPS_channel_name(loader.file_index, i)
             if not name_ptr:
                 continue
-            name = name_ptr.decode("utf-8")
-            # GPS channels may not expose units directly
+
+            try:
+                name = name_ptr.decode("utf-8")
+            except Exception as e:
+                print(f"⚠️ Failed to decode GPS channel {i} name: {e}")
+                name = f"gps_chan_{i}"
+
             chan = loader._extract_channel_data(i, is_gps=True)
+
             if chan:
-                chan["unit"] = None
+                # GPS often lacks explicit units → heuristic
+                unit, source = units_helper.guess_unit(name)
+                unit = _normalize_unit_text(unit)
+                chan["unit"] = unit
+                chan["unit_source"] = source
                 channels[name] = chan
+
     except Exception as e:
         print(f"⚠️ Error enumerating GPS channels: {e}")
 
     return channels
 
-
-
-
-
 def _build_dataframe(raw_channels: Dict[str, Dict[str, Any]],
-                     resample_hz: int) -> pd.DataFrame:
+                     base_rate_hz: int) -> pd.DataFrame:
     """
     Build a canonical DataFrame from raw channel data.
-    - Includes ALL channels (regular + GPS).
-    - Normalized to a common time base.
-    - Resampled to resample_hz with interpolation.
-    """
 
+    MVP Implementation (WP4):
+    - One canonical index at base_rate_hz.
+    - Linear interpolation for upsampling.
+    - Naive reindex + fill for downsampling (TODO: anti-alias + decimate).
+    - Units resolved via DLL or units_helper.
+    - Future: add native_rate_hz tracking + hi-res sidecars.
+
+    Returns:
+        pd.DataFrame with:
+          - Index: session-relative seconds (uniform)
+          - Columns: all channels normalized to base_rate_hz
+          - attrs["units"]: {channel: unit}
+          - attrs["unit_sources"]: {channel: {unit, source}}
+    """
     if not raw_channels:
         return pd.DataFrame()
 
-    # Determine global time bounds
-    min_time = min(chan["time"][0] for chan in raw_channels.values() if len(chan["time"]) > 0)
-    max_time = max(chan["time"][-1] for chan in raw_channels.values() if len(chan["time"]) > 0)
+    # Global time bounds
+    t_min = min(c["time"][0] for c in raw_channels.values() if len(c["time"]) > 0)
+    t_max = max(c["time"][-1] for c in raw_channels.values() if len(c["time"]) > 0)
 
-    # Build common time index
-    dt = 1.0 / resample_hz
-    time_index = np.arange(min_time, max_time, dt)
+    # Compute expected number of samples
+    duration = t_max - t_min
+    n_rows = int(round(duration * base_rate_hz)) + 1
 
-    # Build DataFrame
+    # Perfectly uniform index with linspace (avoids float drift from arange)
+    time_index = np.linspace(t_min, t_max, n_rows)
+
     df = pd.DataFrame(index=time_index)
+    units_map = {}
+
     for name, chan in raw_channels.items():
-        if len(chan["time"]) == 0:
-            continue
         series = pd.Series(chan["values"], index=chan["time"])
-        df[name] = series.reindex(time_index, method=None).interpolate()
+
+        # Reindex to canonical index with interpolation
+        df[name] = (
+            series.reindex(time_index, method=None)
+                  .interpolate(method="linear")
+                  .bfill()
+                  .ffill()
+        )
+
+        # Unit resolution
+        if chan.get("unit"):
+            unit = _normalize_unit_text(chan["unit"])
+            source = chan.get("unit_source", "dll")
+        else:
+            unit, source = units_helper.guess_unit(name)
+            unit = _normalize_unit_text(unit)
+
+        units_map[name] = {"unit": unit, "source": source}
+
+    df.attrs["units"] = {n: u["unit"] for n, u in units_map.items()}
+    df.attrs["unit_sources"] = units_map
+    df.attrs["base_rate_hz"] = base_rate_hz
 
     return df
 
 
-
-def _load_units_map(raw_channels: Dict[str, Dict[str, Any]]) -> Dict[str, str]:
+def _safe_decode(ptr) -> str:
     """
-    Build a {channel_name: unit} map from DLL + units.xml fallback.
+    Safely decode DLL-returned pointer values.
+    Handles bytes, c_char_p, int, or None without segfaulting.
     """
-    units = {}
+    if not ptr:
+        return ""
+    try:
+        if isinstance(ptr, (bytes, bytearray)):
+            return ptr.decode("utf-8")
+        if isinstance(ptr, str):
+            return ptr  # already decoded
+        if isinstance(ptr, int):
+            # DLL returned an integer (likely because restype not set)
+            return f"chan_{ptr}"
+        # Try generic cast/decode if possible
+        return str(ptr)
+    except Exception:
+        return str(ptr)
 
-    for name, chan in raw_channels.items():
-        unit = chan.get("unit")
-        units[name] = unit or "unknown"
-    return units
+def _normalize_unit_text(text: str) -> str:
+    """
+    Normalize unit strings to clean UTF-8 for storage.
+    Fixes Windows-1252/UTF-8 artifacts (e.g., 'Â°F' → '°F', 'm/sÂ2' → 'm/s²').
+    """
+    if not text:
+        return ""
+    cleaned = unicodedata.normalize("NFKC", str(text))
+
+    # Common Win1252/UTF-8 glitches
+    replacements = {
+        "Â°": "°",    # degrees
+        "Â²": "²",    # squared (common mis-decoding)
+        "Â2": "²",    # squared (alt mis-decoding)
+        "Â³": "³",    # cubed
+        "m/sÂ2": "m/s²",  # full sequence safety catch
+        "m/sÂ²": "m/s²",  # just in case
+    }
+    for bad, good in replacements.items():
+        cleaned = cleaned.replace(bad, good)
+
+    return cleaned.strip()
+
 
 
 
 # -------------------------------------------------------------------
-# Smoke Test
+# Smoke Test (manual)
 # -------------------------------------------------------------------
 
 if __name__ == "__main__":
-    print("🔍 Smoke test: Session Builder (WP3)")
-    test_file = "data/uploads/example.xrk"  # replace with sample
+    print("🔍 Smoke test: Session Builder (WP4 MVP)")
+    test_file = "data/uploads/20250712_104619_Road America_a_0394.xrk"  # example session
     df = extract_full_session(test_file)
     print("✅ Extracted DataFrame:", df.shape)
     print("Columns:", list(df.columns)[:10])

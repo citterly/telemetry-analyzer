@@ -83,6 +83,12 @@ class AIMDLL:
         self.dll.get_channel_units.argtypes = [ctypes.c_int, ctypes.c_int]
         self.dll.get_channel_units.restype = ctypes.c_char_p
 
+        self.dll.get_GPS_channels_count.argtypes = [ctypes.c_int]
+        self.dll.get_GPS_channels_count.restype = ctypes.c_int
+
+        self.dll.get_GPS_channel_name.argtypes = [ctypes.c_int, ctypes.c_int]
+        self.dll.get_GPS_channel_name.restype = ctypes.c_char_p
+
         try:
             self.dll.AiMLib_SetUnitsFile.argtypes = [ctypes.c_char_p]
             self.dll.AiMLib_SetUnitsFile.restype = ctypes.c_int

@@ -1,0 +1,11 @@
+If you want to run just this **single smoke test file**:
+pytest tests/test_session_builder_smoke.py -v
+
+If you want to run the **specific test function** inside the file:
+pytest tests/test_session_builder_smoke.py::test_canonical_export -v
+
+If you want to run **all tests in the repo** (good for CI):
+pytest -v
+
+And if you want **live output (print statements)** to show up:
+pytest -s -v

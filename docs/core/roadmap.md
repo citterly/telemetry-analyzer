@@ -44,9 +44,16 @@ Focus: establish reliable IO layer and canonical data export.
   Scope: Extract all XRK channels with solid unit mapping (heuristics + overrides). Confirm units are attached to DataFrame.  
   Status: In Progress. Exploratory script (`explore_xrk.py`) now displays channels with unit source (`override`, `heuristic`).  
 
-- **WP4 — Session Canonicalization (Next)**  
-  Scope: Normalize all channels to a common time base, export canonical Parquet, extend metadata JSON with pointer to Parquet file.  
-  Status: Upcoming. Will extend `session_builder` to produce analysis-ready datasets with Parquet export and metadata linkage.  
+- **WP4 — Canonical Metadata Extension ⏳ In Progress**  
+  Scope: Normalize all channels to a common time base, export canonical Parquet, and extend metadata JSON with pointer to Parquet file and verified units.  
+  Files: `src/session/session_builder.py`, `src/io/file_manager.py`, `src/utils/units_helper.py`, `src/config/config.py`  
+  Artifacts: Canonical Parquet file(s) with normalized index, updated metadata JSON (with channel list + units map + Parquet path), smoke test confirmation.  
+  Acceptance:  
+   - All channels exported to Parquet with common, normalized index  
+   - Units included in `df.attrs["units"]`  
+   - Metadata JSON updated with canonical Parquet path  
+   - Smoke test reload succeeds with no data/metadata loss  
+  Status: In Progress  
 
 
 ---
@@ -178,7 +185,58 @@ Focus: establish reliable IO layer and canonical data export.
 
 ---
 
-## Backlog
+### Backlog — Technical Debt & Fixes
+
+- **Fix DLL Channel Name & Unit Decode**  
+  - **Type:** Bug  
+  - **Phase:** Phase 1 — Foundation 🚀  
+  - **Files Affected:**  
+    - `src/session/session_builder.py` (`_extract_all_channels`)  
+    - `src/io/dll_interface.py` (binding declarations)  
+  - **Scope:** Ensure channel name and unit strings returned by the AIM DLL are properly declared as `c_char_p` and decoded as `bytes → str`.  
+    - Currently DLL returns `int` (memory address) instead of `bytes`.  
+    - `_safe_decode()` is a workaround but not the final fix.  
+  - **Acceptance Criteria:**  
+    - No decode warnings in smoke tests.  
+    - All channels (regular + GPS) return human-readable names and units.  
+    - `_safe_decode()` no longer needed.
+
+- **Replace Deprecated `fillna(method=...)`** ✅ **Done (WP4)**  
+  - **Type:** Tech Debt  
+  - **Phase:** Phase 1 — Foundation 🚀  
+  - **Files Affected:** `src/session/session_builder.py` (`_build_dataframe`)  
+  - **Scope:** Replace `.fillna(method="ffill")` and `.fillna(method="bfill")` with `.ffill()` and `.bfill()`.  
+  - **Acceptance Criteria:**  
+    - No FutureWarning during smoke test.  
+    - DataFrame gaps still fill consistently in both directions.  
+  - **Status:** Completed in WP4.
+
+- **Fix DLL Restype Declarations**  
+  - **Type:** Tech Debt  
+  - **Phase:** Phase 1 — Foundation 🚀  
+  - **Files Affected:**  
+    - `src/io/dll_interface.py`  
+    - `src/extract/data_loader.py`  
+  - **Scope:** Correctly declare AIM DLL functions with `restype = c_char_p` for string-returning methods (`get_channel_name`, `get_channel_units`, `get_GPS_channel_name`).  
+  - **Acceptance Criteria:**  
+    - Channel names/units consistently returned as decoded strings.  
+    - No fallback to `"chan_1234"` names.  
+    - Smoke test passes cleanly without warnings.
+
+
+### Backlog — Future Enhancements
+
+- **Hi-Res Sidecar Export**  
+  - **Type:** Feature  
+  - **Phase:** Phase 3 — Extended Data Access 🧩  
+  - **Files Affected:** `src/session/session_builder.py`, `src/io/file_manager.py`, `src/config/config.py`  
+  - **Scope:** Add dual-tier export. Channels with native_rate_hz > HIRES_THRESH_HZ are downsampled for canonical Parquet (with anti-alias filter) and also written to hi-res sidecars at native rate.  
+  - **Artifacts:** Per-channel hi-res Parquet files, metadata JSON updated with `native_rate_hz` and `hires_paths`.  
+  - **Acceptance Criteria:**  
+    - Canonical file remains consistent with current WP4 format.  
+    - Hi-res files reload successfully.  
+    - Metadata JSON includes correct references and per-channel rates.  
+  - **Notes:** MVP in WP4 uses naive reindex/interpolate. Future work replaces downsample step with `scipy.signal.decimate` (polyphase filter) and introduces hi-res sidecar export.
 
 - **Title:** Add unit tests for FileManager  
 - **Type:** Feature  

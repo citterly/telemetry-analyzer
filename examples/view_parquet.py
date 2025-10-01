@@ -12,10 +12,16 @@ Example:
 
 import sys
 import pandas as pd
+import numpy as np
 from pathlib import Path
 from src.config.config import EXPORTS_PATH
 from src.io.file_manager import FileManager
 import re
+
+# Ensure project root is on sys.path
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 
 def main():
@@ -47,6 +53,32 @@ def main():
     # Load DataFrame
     df = pd.read_parquet(parquet_path)
 
+    # Check timebase normalization
+    diffs = df.index.to_series().diff().dropna()
+    unique_steps = diffs.unique()
+
+    # Timebase verification (data-based, no forcing)
+    if "base_rate_hz" in df.attrs:
+        base_rate = df.attrs["base_rate_hz"]
+        expected_step = 1.0 / base_rate
+        steps = np.diff(df.index.values)
+
+        # Compute deviation stats
+        deviations = np.abs(steps - expected_step)
+        max_dev = deviations.max() if len(deviations) > 0 else 0.0
+        mean_dev = deviations.mean() if len(deviations) > 0 else 0.0
+
+        print("\n▶ Timebase Verification:")
+        print(f"  Base rate (from attrs): {base_rate} Hz")
+        print(f"  Expected step: {expected_step:.6f} s")
+        print(f"  Total steps: {len(steps)}")
+        print(f"  Mean deviation: {mean_dev:.3e} s")
+        print(f"  Max deviation:  {max_dev:.3e} s")
+
+        if max_dev < 1e-6:
+            print("  ✅ Timebase is uniform within floating-point tolerance")
+        else:
+            print("  ⚠️ Timebase shows irregularities (check resampling)")
 
 
     print("="*80)
