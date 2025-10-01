@@ -32,17 +32,21 @@ Status codes: 📝 Planned | ⏳ In Progress | ✅ Done
 ## Phase 1 — Foundation 🚀
 Focus: establish reliable IO layer and canonical data export.
 
-- **WP1 — DLL Setup & Smoke Test ✅**
+- **WP1 — DLL Setup & Smoke Test ✅**  
   Scope: Verify AIM DLL can load, units.xml is available, XRK can open, channels list accessible.  
   Status: Completed. .xrk opens, channels listed, DLL closes cleanly.  
 
-- **WP2 — File Manager Import & Metadata ✅**
+- **WP2 — File Manager Import & Metadata ✅**  
   Scope: Import XRK files, deduplicate by hash, persist metadata, generate session summaries.  
-  Status: Completed. FileManager implemented, metadata JSON persisted, duplicate detection verified, Parquet export tested.  
+  Status: Completed. FileManager implemented, metadata JSON persisted, duplicate detection verified.  
 
-- **WP3 — Session Canonicalization (Next)**
-  Scope: Extract all XRK channels, normalize to a common time base, attach units, and export canonical Parquet.  
-  Status: Upcoming. Will extend session_builder to output complete, analysis-ready datasets with metadata pointer to Parquet file.  
+- **WP3 — Channel Extraction & Unit Resolution 🏗️ In Progress**  
+  Scope: Extract all XRK channels with solid unit mapping (heuristics + overrides). Confirm units are attached to DataFrame.  
+  Status: In Progress. Exploratory script (`explore_xrk.py`) now displays channels with unit source (`override`, `heuristic`).  
+
+- **WP4 — Session Canonicalization (Next)**  
+  Scope: Normalize all channels to a common time base, export canonical Parquet, extend metadata JSON with pointer to Parquet file.  
+  Status: Upcoming. Will extend `session_builder` to produce analysis-ready datasets with Parquet export and metadata linkage.  
 
 
 ---

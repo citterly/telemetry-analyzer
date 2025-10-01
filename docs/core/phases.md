@@ -6,19 +6,17 @@ It emphasizes actionable insights (e.g., RPM/shift analysis) early for on-track 
 ---
 
 ## Phase 1: Foundation 🚀
-**Goal:** Get the system running with basic ingestion and verification.  
+**Goal:** Establish a reliable I/O layer and canonical data export pipeline.  
 - DLL integration and smoke tests (open XRK, list channels).  
 - Metadata extraction (session info, channel list, file stats).  
 - FileManager basics: import, deduplication, metadata persistence.  
-- Unit tests for ingestion and metadata handling.  
-- Simple command-line reporting.  
+- Unit resolution (heuristics + overrides) verified across channels.  
+- Channel extraction validated with summaries and sample dumps.  
+- Canonicalization prep: define normalization to a common time base and Parquet export.  
+- Unit tests for ingestion, metadata, and unit mapping.  
+- Simple command-line reporting via `explore_xrk.py`.  
 
-**Deliverable:** Confidence that XRK files can be reliably opened, indexed, and stored with metadata. 
--- WP2: File Manager Import & Metadata (in progress)
-+- WP2: File Manager Import & Metadata ✅ (completed)
-
-+-- WP3: Session Canonicalization (upcoming)
-+   Goal: Canonical session export (Parquet) with all channels, units, and aligned time base. 
+**Deliverable:** Confidence that XRK files can be reliably opened, indexed, and stored with metadata and units, with a clear path to canonical Parquet export.  
 
 ---
 

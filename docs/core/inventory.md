@@ -9,21 +9,31 @@ This document lists all core source code and documentation files in the project,
   DLL wrapper for AIM XRK interface. Handles loading the DLL, ensuring `units.xml` is available, and defining ctypes prototypes for key functions (open, close, get channels). Forms the foundation of the `io/` layer.  
 
 - **`src/io/fallback_units.py`**  
-  Provides fallback logic to copy `units.xml` into the hard-coded SDK profile path required by the AIM DLL. Called when automatic setup fails.  
+  Legacy helper that ensured `units.xml` was present in AIM’s cache. Still kept for reference, but unit mapping has migrated to `utils/units_helper.py`.  
+
 
 - **`src/io/file_manager.py`**  
   Manages XRK file imports, duplicate detection (via hash), metadata extraction, and metadata persistence. Provides command-line interface for import/list/process/stats. Integrates with analysis modules for lap and session data.  
 
 ---
+
 ## Session Layer
 
 - **`src/session/session_builder.py`**  
-  Extracts all XRK channel data using the DLL, normalizes to a common time base, attaches units, and exports canonical Parquet. Designed as the bridge between raw XRK files and higher-level analysis.  
+  Builds canonical session datasets from XRK files. Extracts all channels, normalizes to a common time base, attaches units, and exports Parquet for downstream analysis. Updates metadata with export references.  
 
 - **`data/exports/processed/`**  
-  Directory for canonical Parquet exports, one file per session. Each Parquet file contains all available channels, aligned timestamps, and attached units. Metadata JSON in `data/metadata/` points to these exports.  
+  Destination directory for canonical Parquet exports, one file per XRK session. Each contains aligned time-series with units attached.  
 
 ---
+
+## Utilities
+
+- **`src/utils/units_helper.py`**  
+  Central unit mapping logic. Provides heuristics, overrides, and formatting of units. Replaces older `analysis/units_helper.py` and removes dependency on AIM’s `units.xml`.  
+
+---
+
 ## Analysis Modules (deprecated)
 
 These modules were used during early development for exploring XRK data and quick checks.  
@@ -84,12 +94,10 @@ They are being phased out in favor of `session/` and `features/` modules but rem
 
 ## Documentation
 
-- **`README.md`**  
-  Top-level documentation for the project, describing purpose, usage, and structure.
-
-- **`docs/overview.md`**  
-  High-level overview of the Telemetry Analyzer project, its goals, and system context.
-
-- **`docs/phases.md`**  
-  Development roadmap document. Outlines incremental phases from foundation and data access through analysis, visualization, and extended features.
+- **`README.md`** — Project overview and usage.  
+- **`docs/overview.md`** — High-level system context and goals.  
+- **`docs/phases.md`** — Phase roadmap and deliverables.  
+- **`docs/roadmap.md`** — Work package tracker with status.  
+- **`docs/inventory.md`** — File manifest (this document).  
+- **`docs/rules.md`** — Rules of engagement and governance. 
 

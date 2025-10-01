@@ -107,20 +107,21 @@ class XRKDataLoader:
     # ---------------- File Handling ---------------- #
 
     def open_file(self, filename: str) -> bool:
-        """Open XRK file for reading"""
+        """Open XRK file for reading.
+        Accepts either a plain filename (resolved in SAMPLE_FILES_PATH)
+        or a full/relative path to the XRK file.
+        """
         if not self._setup_dll():
             return False
 
         fn = Path(filename)
 
-        # Resolve to absolute path
-        if not fn.is_absolute():
-            if str(fn).startswith(str(SAMPLE_FILES_PATH)):
-                xrk_path = fn.resolve()
-            else:
-                xrk_path = (SAMPLE_FILES_PATH / fn).resolve()
-        else:
+        # Case 1: explicit path (absolute or relative) → use directly
+        if fn.exists():
             xrk_path = fn.resolve()
+        else:
+            # Case 2: assume it's just a bare filename, prepend SAMPLE_FILES_PATH
+            xrk_path = (SAMPLE_FILES_PATH / fn).resolve()
 
         if not xrk_path.exists():
             print(f"❌ File not found: {xrk_path}")
@@ -132,8 +133,12 @@ class XRKDataLoader:
             print(f"❌ Failed to open file: {xrk_path}")
             return False
 
+        # Store path for later (e.g. metadata)
+        self.filepath = xrk_path
         print(f"✅ Opened XRK file: {xrk_path.name}")
         return True
+
+
 
     def close_file(self):
         """Close the currently open file"""

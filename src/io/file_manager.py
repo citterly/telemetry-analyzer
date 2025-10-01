@@ -40,6 +40,11 @@ class FileMetadata:
     
     # Expandable custom attributes
     custom_attributes: Dict[str, Any] = None
+
+    # Canonical session export
+    parquet_path: Optional[str] = None          # pointer to canonical Parquet
+    channel_list: Optional[List[str]] = None    # list of channel names
+    units_map: Optional[Dict[str, str]] = None  # map channel → unit
     
     def __post_init__(self):
         if self.custom_attributes is None:
@@ -280,6 +285,16 @@ class FileManager:
         
         return stats
     
+    def attach_canonical_export(self, filename: str, parquet_path: Path,
+                                channel_list: List[str], units_map: Dict[str, str]) -> bool:
+        """Update metadata with canonical export info"""
+        updates = {
+            "parquet_path": str(parquet_path),
+            "channel_list": channel_list,
+            "units_map": units_map
+        }
+        return self.update_metadata(filename, updates)
+
     # Private methods
     
     def _load_existing_files(self):
