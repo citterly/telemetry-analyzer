@@ -7,6 +7,14 @@ import os
 from pathlib import Path
 from typing import Optional
 
+# --- Test Defaults ---
+BASE_PATH = Path(__file__).resolve().parent.parent.parent
+DATA_PATH = BASE_PATH / "data" / "uploads"
+
+# Used by tests/test_file_manager.py and test_session_builder.py
+SAMPLE_FILES_PATH = DATA_PATH
+DEFAULT_SESSION = str(DATA_PATH / "20250712_104619_Road America_a_0394.xrk")
+
 PROJECT_ROOT = Path(__file__).resolve().parents[2]  # go up two levels from src/config
 THIRD_PARTY_ROOT = PROJECT_ROOT / "third-party" / "AIM"
 SRC_ROOT         = PROJECT_ROOT / "src"

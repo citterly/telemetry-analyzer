@@ -78,43 +78,48 @@ def _extract_all_channels(loader: XRKDataLoader) -> Dict[str, Dict[str, Any]]:
     try:
         chan_count = loader.dll.get_channels_count(loader.file_index)
         print(f"🔍 Regular channels reported: {chan_count}")
+
         for i in range(chan_count):
             name_ptr = loader.dll.get_channel_name(loader.file_index, i)
             unit_ptr = loader.dll.get_channel_units(loader.file_index, i)
 
             if not name_ptr:
-                print(f"⚠️ Channel {i} has no name")
+                print(f"⚠️ Channel {i} has no name pointer")
                 continue
 
-            # --- Decode name ---
+            # --- Decode channel name ---
             try:
-                name = name_ptr.decode("utf-8")
+                if isinstance(name_ptr, (bytes, bytearray)):
+                    name = name_ptr.decode("utf-8", errors="replace")
+                elif isinstance(name_ptr, str):
+                    name = name_ptr
+                else:
+                    raise TypeError(f"Unexpected name_ptr type: {type(name_ptr)}")
             except Exception as e:
                 print(f"⚠️ Failed to decode channel {i} name: {e}")
                 name = f"chan_{i}"
 
-            # --- Decode unit ---
+            # --- Decode channel unit ---
             unit = None
-            if unit_ptr:
-                if isinstance(unit_ptr, (bytes, bytearray)):
-                    try:
-                        unit = unit_ptr.decode("utf-8")
-                    except Exception as e:
-                        print(f"⚠️ Failed to decode channel {i} unit: {e}")
-                elif isinstance(unit_ptr, str):
-                    unit = unit_ptr
-                else:
-                    print(f"⚠️ Channel {i} unit came back as {type(unit_ptr)}: {unit_ptr}")
+            source = "dll"
+            try:
+                if unit_ptr:
+                    if isinstance(unit_ptr, (bytes, bytearray)):
+                        unit = unit_ptr.decode("utf-8", errors="replace")
+                    elif isinstance(unit_ptr, str):
+                        unit = unit_ptr
+                    else:
+                        # DLL sometimes returns bogus ints → ignore
+                        unit = None
+            except Exception:
+                unit = None
 
-            # Always normalize if we got something
+
+            # --- Normalize or fallback ---
             if unit:
                 unit = _normalize_unit_text(unit)
-
-            # Fallback to heuristic if no usable unit
             if not unit:
                 unit, source = units_helper.guess_unit(name)
-            else:
-                source = "dll"
 
             # --- Extract data ---
             chan = loader._extract_channel_data(i, is_gps=False)
@@ -122,6 +127,7 @@ def _extract_all_channels(loader: XRKDataLoader) -> Dict[str, Dict[str, Any]]:
                 chan["unit"] = unit
                 chan["unit_source"] = source
                 channels[name] = chan
+
     except Exception as e:
         print(f"❌ Error enumerating regular channels: {e}")
 
@@ -129,19 +135,24 @@ def _extract_all_channels(loader: XRKDataLoader) -> Dict[str, Dict[str, Any]]:
     try:
         gps_count = loader.dll.get_GPS_channels_count(loader.file_index)
         print(f"🔍 GPS channels reported: {gps_count}")
+
         for i in range(gps_count):
             name_ptr = loader.dll.get_GPS_channel_name(loader.file_index, i)
             if not name_ptr:
                 continue
 
             try:
-                name = name_ptr.decode("utf-8")
+                if isinstance(name_ptr, (bytes, bytearray)):
+                    name = name_ptr.decode("utf-8", errors="replace")
+                elif isinstance(name_ptr, str):
+                    name = name_ptr
+                else:
+                    raise TypeError(f"Unexpected GPS name_ptr type: {type(name_ptr)}")
             except Exception as e:
                 print(f"⚠️ Failed to decode GPS channel {i} name: {e}")
                 name = f"gps_chan_{i}"
 
             chan = loader._extract_channel_data(i, is_gps=True)
-
             if chan:
                 # GPS often lacks explicit units → heuristic
                 unit, source = units_helper.guess_unit(name)
@@ -154,6 +165,7 @@ def _extract_all_channels(loader: XRKDataLoader) -> Dict[str, Dict[str, Any]]:
         print(f"⚠️ Error enumerating GPS channels: {e}")
 
     return channels
+
 
 def _build_dataframe(raw_channels: Dict[str, Dict[str, Any]],
                      base_rate_hz: int) -> pd.DataFrame:
@@ -218,7 +230,6 @@ def _build_dataframe(raw_channels: Dict[str, Dict[str, Any]],
 
     return df
 
-
 def _safe_decode(ptr) -> str:
     """
     Safely decode DLL-returned pointer values.
@@ -261,9 +272,6 @@ def _normalize_unit_text(text: str) -> str:
         cleaned = cleaned.replace(bad, good)
 
     return cleaned.strip()
-
-
-
 
 # -------------------------------------------------------------------
 # Smoke Test (manual)

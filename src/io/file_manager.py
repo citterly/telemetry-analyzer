@@ -137,23 +137,32 @@ class FileManager:
         return self.file_index.get(filename)
     
     def update_metadata(self, filename: str, updates: Dict[str, Any]) -> bool:
-        """Update metadata for a file"""
+        """Update metadata for a file, creating it if missing"""
         if filename not in self.file_index:
-            return False
-        
-        metadata = self.file_index[filename]
-        
-        # Update standard fields
+            # Auto-create new metadata entry
+            metadata = FileMetadata(
+                filename=filename,
+                file_path=str(self.uploads_dir / filename),
+                file_size_bytes=0,
+                file_hash="",
+                import_date=datetime.now().isoformat(),
+                custom_attributes={}
+            )
+            self.file_index[filename] = metadata
+        else:
+            metadata = self.file_index[filename]
+
+        # Apply updates
         for key, value in updates.items():
             if hasattr(metadata, key):
                 setattr(metadata, key, value)
             else:
-                # Add to custom attributes
                 metadata.custom_attributes[key] = value
-        
-        # Save updated metadata
+
+        # Save JSON to data/metadata
         self._save_metadata(metadata)
         return True
+
     
     def process_file(self, filename: str) -> Dict[str, Any]:
         """Process a file and update its metadata with analysis results"""

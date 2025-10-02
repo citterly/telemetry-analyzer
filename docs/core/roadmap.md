@@ -224,6 +224,44 @@ Focus: establish reliable IO layer and canonical data export.
     - Smoke test passes cleanly without warnings.
 
 
+# Backlog — Post-WP4 Polishing & Regression Coverage
+
+## 🐞 Test Improvements
+- **Mock XRK Import Test**
+  - **Type:** Bug/Polish
+  - **Phase:** Phase 1 — Foundation 🚀
+  - **Files:** `tests/test_file_manager.py`
+  - **Scope:** Ensure mock `.xrk` import is expected to fail (don’t allow false “Imported (25 bytes)” messages).
+  - **Acceptance Criteria:**
+    - Mock XRK import raises a controlled error.
+    - Test output is clean (no misleading "Imported" message).
+
+## 🧪 Regression Coverage
+- **Metadata File Persistence**
+  - **Type:** Test Coverage
+  - **Phase:** Phase 1 — Foundation 🚀
+  - **Files:** `tests/test_session_builder.py`, `tests/test_session_builder_smoke.py`
+  - **Scope:** Add explicit assertions that `data/metadata/*.json` is created after `export_session()`.
+  - **Acceptance Criteria:**
+    - Metadata JSON file exists on disk after export.
+    - File contents include expected keys (`parquet_path`, `channel_list`, `units_map`).
+
+## ⚠️ DLL Warnings
+- **AiMLib_SetUnitsFile Export**
+  - **Type:** Tech Debt
+  - **Phase:** Phase 1 — Foundation 🚀
+  - **Files:** `src/io/dll_interface.py`
+  - **Scope:** Investigate missing `AiMLib_SetUnitsFile` in current AIM DLL. Decide whether:
+    - Safe to ignore (no functional impact), OR
+    - Provide fallback handling.
+  - **Acceptance Criteria:**
+    - Warning silenced or properly logged.
+    - No runtime issues during DLL integration tests.
+
+---
+
+
+
 ### Backlog — Future Enhancements
 
 - **Hi-Res Sidecar Export**  

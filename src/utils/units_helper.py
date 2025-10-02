@@ -1,6 +1,8 @@
 from pathlib import Path
 import json
 
+from src.config.config import UNITS_XML_PATH
+
 OVERRIDE_FILE = Path(__file__).resolve().parent.parent / "config" / "units_override.json"
 
 # Load overrides once
@@ -13,14 +15,15 @@ else:
 def load_overrides():
     """Load units_override.json if available."""
     global overrides
-    if not overrides and UNITS_OVERRIDE_PATH.exists():
+    if not overrides and OVERRIDE_FILE.exists():
         try:
-            with open(UNITS_OVERRIDE_PATH, "r") as f:
+            with open(OVERRIDE_FILE, "r") as f:
                 overrides = json.load(f)
-            print(f"✅ Loaded {len(overrides)} overrides from {UNITS_OVERRIDE_PATH}")
+            print(f"✅ Loaded {len(overrides)} overrides from {OVERRIDE_FILE}")
         except Exception as e:
             print(f"⚠️ Failed to load overrides: {e}")
     return overrides
+
 
 
 def guess_unit(channel_name: str) -> tuple[str, str]:
@@ -50,3 +53,13 @@ def guess_unit(channel_name: str) -> tuple[str, str]:
 
     # 3. Fallback
     return "unknown", "unknown"
+
+
+def ensure_units_file() -> Path:
+    """
+    Ensure that units.xml exists, returning its path.
+    For now, just returns UNITS_XML_PATH (stub).
+    """
+    if not UNITS_XML_PATH.exists():
+        print(f"⚠️ units.xml not found at {UNITS_XML_PATH}, using fallback")
+    return UNITS_XML_PATH
