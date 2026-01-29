@@ -742,6 +742,111 @@ async def get_track_map(
         raise HTTPException(status_code=500, detail=f"Track map generation failed: {str(e)}")
 
 
+# ============================================================
+# Queue Dashboard Endpoints
+# ============================================================
+
+from src.extraction.queue import ExtractionQueue
+from src.extraction.models import JobStatus
+
+# Initialize queue (uses default db path)
+_extraction_queue = None
+
+def get_queue() -> ExtractionQueue:
+    """Get or create the extraction queue singleton"""
+    global _extraction_queue
+    if _extraction_queue is None:
+        db_path = Path(config.DATA_DIR) / "extraction_queue.db"
+        _extraction_queue = ExtractionQueue(str(db_path))
+    return _extraction_queue
+
+
+@app.get("/queue", response_class=HTMLResponse)
+async def queue_dashboard_page(request: Request):
+    """Queue status dashboard page"""
+    return templates.TemplateResponse("queue.html", {
+        "request": request,
+        "title": "Extraction Queue"
+    })
+
+
+@app.get("/api/queue/stats")
+async def get_queue_stats():
+    """Get queue statistics"""
+    queue = get_queue()
+    return queue.get_stats()
+
+
+@app.get("/api/queue/jobs")
+async def list_queue_jobs(
+    status: Optional[str] = None,
+    limit: int = 50,
+    offset: int = 0
+):
+    """List jobs in the queue"""
+    queue = get_queue()
+
+    job_status = None
+    if status and status != "all":
+        try:
+            job_status = JobStatus(status)
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"Invalid status: {status}")
+
+    jobs = queue.list_jobs(status=job_status, limit=limit, offset=offset)
+    return {
+        "jobs": [job.to_dict() for job in jobs],
+        "total": queue.count(job_status),
+        "status_filter": status
+    }
+
+
+@app.get("/api/queue/jobs/{job_id}")
+async def get_queue_job(job_id: int):
+    """Get a specific job"""
+    queue = get_queue()
+    job = queue.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+    return job.to_dict()
+
+
+@app.post("/api/queue/jobs/{job_id}/retry")
+async def retry_queue_job(job_id: int):
+    """Retry a failed job"""
+    queue = get_queue()
+    job = queue.retry(job_id)
+    if not job:
+        raise HTTPException(status_code=400, detail=f"Cannot retry job {job_id} - not found or not eligible")
+    return {"success": True, "job": job.to_dict()}
+
+
+@app.post("/api/queue/retry-all")
+async def retry_all_failed_jobs():
+    """Retry all failed jobs that are eligible"""
+    queue = get_queue()
+    count = queue.retry_all_failed()
+    return {"success": True, "retried_count": count}
+
+
+@app.delete("/api/queue/jobs/{job_id}")
+async def delete_queue_job(job_id: int):
+    """Delete a job from the queue"""
+    queue = get_queue()
+    success = queue.delete(job_id)
+    if not success:
+        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+    return {"success": True}
+
+
+@app.post("/api/queue/clear-completed")
+async def clear_completed_jobs():
+    """Remove all completed jobs from the queue"""
+    queue = get_queue()
+    count = queue.clear_completed()
+    return {"success": True, "cleared_count": count}
+
+
 def _find_parquet_file(filename: str) -> Optional[Path]:
     """Find a Parquet file by name in the data directories"""
     data_dir = Path(config.DATA_DIR)

@@ -1,0 +1,398 @@
+{% extends "base.html" %}
+
+{% block title %}Extraction Queue - {{ super() }}{% endblock %}
+
+{% block extra_head %}
+<style>
+    .status-badge {
+        padding: 0.35rem 0.65rem;
+        border-radius: 4px;
+        font-size: 0.85rem;
+        font-weight: 500;
+    }
+    .status-pending { background-color: #fdcb6e; color: #000; }
+    .status-processing { background-color: #74b9ff; color: #000; }
+    .status-completed { background-color: #00b894; color: #fff; }
+    .status-failed { background-color: #e17055; color: #fff; }
+
+    .stat-card {
+        background: linear-gradient(135deg, #4a90e2 0%, #6c5ce7 100%);
+        border-radius: 10px;
+        padding: 1.5rem;
+        text-align: center;
+        color: white;
+    }
+    .stat-card.pending { background: linear-gradient(135deg, #fdcb6e 0%, #f39c12 100%); }
+    .stat-card.processing { background: linear-gradient(135deg, #74b9ff 0%, #0984e3 100%); }
+    .stat-card.completed { background: linear-gradient(135deg, #00b894 0%, #00cec9 100%); }
+    .stat-card.failed { background: linear-gradient(135deg, #e17055 0%, #d63031 100%); }
+
+    .stat-value { font-size: 2rem; font-weight: bold; }
+    .stat-label { font-size: 0.9rem; opacity: 0.9; }
+
+    .job-row {
+        border-bottom: 1px solid #404040;
+        padding: 0.75rem 0;
+    }
+    .job-row:hover {
+        background-color: #383838;
+    }
+
+    .job-filename {
+        font-weight: 500;
+        word-break: break-all;
+    }
+
+    .job-meta {
+        font-size: 0.85rem;
+        color: #a0a0a0;
+    }
+
+    .error-message {
+        background-color: rgba(225, 112, 85, 0.1);
+        border-left: 3px solid #e17055;
+        padding: 0.5rem;
+        margin-top: 0.5rem;
+        font-size: 0.85rem;
+        color: #e17055;
+    }
+
+    .filter-btn {
+        margin-right: 0.5rem;
+        margin-bottom: 0.5rem;
+    }
+    .filter-btn.active {
+        background-color: #4a90e2;
+        border-color: #4a90e2;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4">Extraction Queue</h1>
+        <p class="text-muted">Monitor XRK extraction jobs and manage failed tasks</p>
+    </div>
+</div>
+
+<!-- Stats Cards -->
+<div class="row mb-4" id="stats-row">
+    <div class="col-md-3 mb-3">
+        <div class="stat-card pending">
+            <div class="stat-value" id="stat-pending">-</div>
+            <div class="stat-label">Pending</div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="stat-card processing">
+            <div class="stat-value" id="stat-processing">-</div>
+            <div class="stat-label">Processing</div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="stat-card completed">
+            <div class="stat-value" id="stat-completed">-</div>
+            <div class="stat-label">Completed</div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="stat-card failed">
+            <div class="stat-value" id="stat-failed">-</div>
+            <div class="stat-label">Failed</div>
+        </div>
+    </div>
+</div>
+
+<!-- Actions and Filters -->
+<div class="row mb-4">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">Filter Jobs</div>
+            <div class="card-body">
+                <button class="btn btn-outline-secondary filter-btn active" data-status="all" onclick="filterJobs('all')">All</button>
+                <button class="btn btn-outline-warning filter-btn" data-status="pending" onclick="filterJobs('pending')">Pending</button>
+                <button class="btn btn-outline-info filter-btn" data-status="processing" onclick="filterJobs('processing')">Processing</button>
+                <button class="btn btn-outline-success filter-btn" data-status="completed" onclick="filterJobs('completed')">Completed</button>
+                <button class="btn btn-outline-danger filter-btn" data-status="failed" onclick="filterJobs('failed')">Failed</button>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">Bulk Actions</div>
+            <div class="card-body">
+                <button class="btn btn-outline-warning btn-sm me-2" onclick="retryAllFailed()">
+                    Retry All Failed
+                </button>
+                <button class="btn btn-outline-success btn-sm" onclick="clearCompleted()">
+                    Clear Completed
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Jobs List -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span>Jobs (<span id="jobs-count">0</span>)</span>
+                <button class="btn btn-sm btn-outline-primary" onclick="refreshData()">Refresh</button>
+            </div>
+            <div class="card-body" id="jobs-container">
+                <div class="text-center text-muted py-4">Loading...</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Job Detail Modal -->
+<div class="modal fade" id="jobModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Job Details</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="job-detail-content">
+                <!-- Filled by JS -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-warning" id="modal-retry-btn" style="display: none;" onclick="retryJob()">Retry</button>
+                <button type="button" class="btn btn-danger" id="modal-delete-btn" onclick="deleteJob()">Delete</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    let currentFilter = 'all';
+    let currentJobId = null;
+
+    // Load data on page load
+    document.addEventListener('DOMContentLoaded', () => {
+        refreshData();
+        // Auto-refresh every 10 seconds
+        setInterval(refreshData, 10000);
+    });
+
+    async function refreshData() {
+        await Promise.all([loadStats(), loadJobs()]);
+    }
+
+    async function loadStats() {
+        try {
+            const response = await fetch('/api/queue/stats');
+            const stats = await response.json();
+
+            document.getElementById('stat-pending').textContent = stats.pending;
+            document.getElementById('stat-processing').textContent = stats.processing;
+            document.getElementById('stat-completed').textContent = stats.completed;
+            document.getElementById('stat-failed').textContent = stats.failed;
+        } catch (error) {
+            console.error('Failed to load stats:', error);
+        }
+    }
+
+    async function loadJobs() {
+        try {
+            const response = await fetch(`/api/queue/jobs?status=${currentFilter}&limit=100`);
+            const data = await response.json();
+
+            document.getElementById('jobs-count').textContent = data.total;
+
+            const container = document.getElementById('jobs-container');
+
+            if (data.jobs.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center text-muted py-4">
+                        No jobs found${currentFilter !== 'all' ? ' with status "' + currentFilter + '"' : ''}
+                    </div>
+                `;
+                return;
+            }
+
+            let html = '<div class="list-group">';
+            for (const job of data.jobs) {
+                html += renderJobRow(job);
+            }
+            html += '</div>';
+            container.innerHTML = html;
+
+        } catch (error) {
+            document.getElementById('jobs-container').innerHTML = `
+                <div class="alert alert-danger">Failed to load jobs: ${error.message}</div>
+            `;
+        }
+    }
+
+    function renderJobRow(job) {
+        const createdAt = new Date(job.created_at).toLocaleString();
+        const updatedAt = new Date(job.updated_at).toLocaleString();
+
+        let statusClass = 'status-' + job.status;
+        let errorHtml = '';
+        if (job.status === 'failed' && job.error_message) {
+            errorHtml = `<div class="error-message">${escapeHtml(job.error_message)}</div>`;
+        }
+
+        let actions = '';
+        if (job.status === 'failed' && job.retry_count < job.max_retries) {
+            actions = `<button class="btn btn-sm btn-outline-warning" onclick="quickRetry(${job.id}); event.stopPropagation();">Retry</button>`;
+        }
+
+        return `
+            <div class="list-group-item list-group-item-action job-row"
+                 style="background-color: #353535; border-color: #404040; cursor: pointer;"
+                 onclick="showJobDetail(${job.id})">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div class="flex-grow-1">
+                        <div class="job-filename">${escapeHtml(job.xrk_filename)}</div>
+                        <div class="job-meta">
+                            <span class="me-3">ID: ${job.id}</span>
+                            <span class="me-3">Created: ${createdAt}</span>
+                            ${job.retry_count > 0 ? `<span class="me-3">Retries: ${job.retry_count}/${job.max_retries}</span>` : ''}
+                        </div>
+                        ${errorHtml}
+                    </div>
+                    <div class="d-flex align-items-center">
+                        ${actions}
+                        <span class="status-badge ${statusClass} ms-2">${job.status}</span>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    function filterJobs(status) {
+        currentFilter = status;
+
+        // Update button states
+        document.querySelectorAll('.filter-btn').forEach(btn => {
+            btn.classList.remove('active');
+            if (btn.dataset.status === status) {
+                btn.classList.add('active');
+            }
+        });
+
+        loadJobs();
+    }
+
+    async function showJobDetail(jobId) {
+        currentJobId = jobId;
+
+        try {
+            const response = await fetch(`/api/queue/jobs/${jobId}`);
+            const job = await response.json();
+
+            const content = document.getElementById('job-detail-content');
+            content.innerHTML = `
+                <table class="table table-sm">
+                    <tr><th style="width: 150px;">ID</th><td>${job.id}</td></tr>
+                    <tr><th>Filename</th><td>${escapeHtml(job.xrk_filename)}</td></tr>
+                    <tr><th>Status</th><td><span class="status-badge status-${job.status}">${job.status}</span></td></tr>
+                    <tr><th>Priority</th><td>${job.priority}</td></tr>
+                    <tr><th>Created</th><td>${new Date(job.created_at).toLocaleString()}</td></tr>
+                    <tr><th>Updated</th><td>${new Date(job.updated_at).toLocaleString()}</td></tr>
+                    ${job.started_at ? `<tr><th>Started</th><td>${new Date(job.started_at).toLocaleString()}</td></tr>` : ''}
+                    ${job.completed_at ? `<tr><th>Completed</th><td>${new Date(job.completed_at).toLocaleString()}</td></tr>` : ''}
+                    <tr><th>Retry Count</th><td>${job.retry_count} / ${job.max_retries}</td></tr>
+                    ${job.output_path ? `<tr><th>Output</th><td>${escapeHtml(job.output_path)}</td></tr>` : ''}
+                    ${job.error_message ? `<tr><th>Error</th><td class="text-danger">${escapeHtml(job.error_message)}</td></tr>` : ''}
+                </table>
+            `;
+
+            // Show/hide retry button
+            const retryBtn = document.getElementById('modal-retry-btn');
+            if (job.status === 'failed' && job.retry_count < job.max_retries) {
+                retryBtn.style.display = 'block';
+            } else {
+                retryBtn.style.display = 'none';
+            }
+
+            const modal = new bootstrap.Modal(document.getElementById('jobModal'));
+            modal.show();
+
+        } catch (error) {
+            showAlert('Failed to load job details: ' + error.message, 'danger');
+        }
+    }
+
+    async function quickRetry(jobId) {
+        try {
+            const response = await fetch(`/api/queue/jobs/${jobId}/retry`, { method: 'POST' });
+            if (!response.ok) throw new Error('Retry failed');
+
+            showAlert('Job queued for retry', 'success');
+            refreshData();
+        } catch (error) {
+            showAlert('Failed to retry job: ' + error.message, 'danger');
+        }
+    }
+
+    async function retryJob() {
+        if (!currentJobId) return;
+        await quickRetry(currentJobId);
+        bootstrap.Modal.getInstance(document.getElementById('jobModal')).hide();
+    }
+
+    async function deleteJob() {
+        if (!currentJobId) return;
+
+        if (!confirm('Are you sure you want to delete this job?')) return;
+
+        try {
+            const response = await fetch(`/api/queue/jobs/${currentJobId}`, { method: 'DELETE' });
+            if (!response.ok) throw new Error('Delete failed');
+
+            showAlert('Job deleted', 'success');
+            bootstrap.Modal.getInstance(document.getElementById('jobModal')).hide();
+            refreshData();
+        } catch (error) {
+            showAlert('Failed to delete job: ' + error.message, 'danger');
+        }
+    }
+
+    async function retryAllFailed() {
+        if (!confirm('Retry all failed jobs that are eligible?')) return;
+
+        try {
+            const response = await fetch('/api/queue/retry-all', { method: 'POST' });
+            const data = await response.json();
+
+            showAlert(`${data.retried_count} job(s) queued for retry`, 'success');
+            refreshData();
+        } catch (error) {
+            showAlert('Failed to retry jobs: ' + error.message, 'danger');
+        }
+    }
+
+    async function clearCompleted() {
+        if (!confirm('Remove all completed jobs from the queue?')) return;
+
+        try {
+            const response = await fetch('/api/queue/clear-completed', { method: 'POST' });
+            const data = await response.json();
+
+            showAlert(`${data.cleared_count} completed job(s) removed`, 'success');
+            refreshData();
+        } catch (error) {
+            showAlert('Failed to clear jobs: ' + error.message, 'danger');
+        }
+    }
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        return str.replace(/&/g, '&amp;')
+                  .replace(/</g, '&lt;')
+                  .replace(/>/g, '&gt;')
+                  .replace(/"/g, '&quot;');
+    }
+</script>
+{% endblock %}
