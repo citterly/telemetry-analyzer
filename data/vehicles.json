@@ -1,0 +1,175 @@
+{
+  "active_vehicle": "bmw-e46-m3",
+  "vehicles": [
+    {
+      "id": "bmw-e46-m3",
+      "name": "Andy's M3",
+      "make": "BMW",
+      "model": "E46 M3",
+      "year": 2003,
+      "tire_size": "275/35/18",
+      "tire_circumference_meters": 2.026,
+      "weight_lbs": 3450,
+      "engine": {
+        "max_rpm": 8000,
+        "safe_rpm_limit": 7000,
+        "shift_rpm": 6800,
+        "power_band_min": 5500,
+        "power_band_max": 7000,
+        "idle_rpm": 800
+      },
+      "current_setup": {
+        "name": "Current Setup",
+        "transmission_ratios": [2.20, 1.64, 1.28, 1.00],
+        "final_drive": 3.55,
+        "weight_lbs": 3450
+      },
+      "alternative_setups": [
+        {
+          "name": "New Trans + Current Final",
+          "transmission_ratios": [2.88, 1.91, 1.33, 1.00],
+          "final_drive": 3.55,
+          "weight_lbs": 3400
+        },
+        {
+          "name": "New Trans + Shorter Final",
+          "transmission_ratios": [2.88, 1.91, 1.33, 1.00],
+          "final_drive": 3.73,
+          "weight_lbs": 3400
+        },
+        {
+          "name": "New Trans + Taller Final",
+          "transmission_ratios": [2.88, 1.91, 1.33, 1.00],
+          "final_drive": 3.31,
+          "weight_lbs": 3400
+        }
+      ],
+      "notes": "Primary vehicle for telemetry analysis. S54 engine with stock 4-speed Getrag."
+    },
+    {
+      "id": "mazda-nc-miata",
+      "name": "NC Miata",
+      "make": "Mazda",
+      "model": "MX-5 NC",
+      "year": 2008,
+      "tire_size": "225/45/17",
+      "tire_circumference_meters": 1.946,
+      "weight_lbs": 2550,
+      "engine": {
+        "max_rpm": 7500,
+        "safe_rpm_limit": 7000,
+        "shift_rpm": 6800,
+        "power_band_min": 5000,
+        "power_band_max": 7000,
+        "idle_rpm": 750
+      },
+      "current_setup": {
+        "name": "Stock 6-Speed",
+        "transmission_ratios": [3.82, 2.26, 1.64, 1.18, 1.00, 0.79],
+        "final_drive": 3.91,
+        "weight_lbs": 2550
+      },
+      "alternative_setups": [
+        {
+          "name": "Short Final Drive",
+          "transmission_ratios": [3.82, 2.26, 1.64, 1.18, 1.00, 0.79],
+          "final_drive": 4.10,
+          "weight_lbs": 2550
+        }
+      ],
+      "notes": "Common spec racer. Good benchmark comparison."
+    },
+    {
+      "id": "porsche-996-gt3",
+      "name": "996 GT3",
+      "make": "Porsche",
+      "model": "996 GT3",
+      "year": 2004,
+      "tire_size": "235/40/18",
+      "tire_circumference_meters": 1.986,
+      "weight_lbs": 3075,
+      "engine": {
+        "max_rpm": 8200,
+        "safe_rpm_limit": 7800,
+        "shift_rpm": 7500,
+        "power_band_min": 6000,
+        "power_band_max": 7800,
+        "idle_rpm": 900
+      },
+      "current_setup": {
+        "name": "Stock GT3",
+        "transmission_ratios": [3.82, 2.15, 1.56, 1.21, 0.97, 0.82],
+        "final_drive": 3.44,
+        "weight_lbs": 3075
+      },
+      "alternative_setups": [
+        {
+          "name": "Cup Gearing",
+          "transmission_ratios": [3.36, 2.00, 1.52, 1.24, 1.03, 0.86],
+          "final_drive": 3.89,
+          "weight_lbs": 3075
+        }
+      ],
+      "notes": "Mezger flat-6 engine. Different power characteristics than inline-6."
+    },
+    {
+      "id": "honda-s2000",
+      "name": "S2000",
+      "make": "Honda",
+      "model": "S2000 AP1",
+      "year": 2002,
+      "tire_size": "245/40/17",
+      "tire_circumference_meters": 1.940,
+      "weight_lbs": 2850,
+      "engine": {
+        "max_rpm": 9000,
+        "safe_rpm_limit": 8500,
+        "shift_rpm": 8200,
+        "power_band_min": 6500,
+        "power_band_max": 8500,
+        "idle_rpm": 850
+      },
+      "current_setup": {
+        "name": "Stock 6-Speed",
+        "transmission_ratios": [3.13, 2.05, 1.48, 1.16, 0.97, 0.81],
+        "final_drive": 4.10,
+        "weight_lbs": 2850
+      },
+      "alternative_setups": [
+        {
+          "name": "OS Giken Close Ratio",
+          "transmission_ratios": [3.07, 2.10, 1.63, 1.30, 1.09, 0.92],
+          "final_drive": 4.10,
+          "weight_lbs": 2850
+        }
+      ],
+      "notes": "F20C engine - requires high RPM operation for power."
+    },
+    {
+      "id": "spec-e30",
+      "name": "Spec E30",
+      "make": "BMW",
+      "model": "E30 325is",
+      "year": 1989,
+      "tire_size": "225/50/15",
+      "tire_circumference_meters": 1.910,
+      "weight_lbs": 2700,
+      "engine": {
+        "max_rpm": 6500,
+        "safe_rpm_limit": 6200,
+        "shift_rpm": 6000,
+        "power_band_min": 4000,
+        "power_band_max": 6000,
+        "idle_rpm": 800
+      },
+      "current_setup": {
+        "name": "Spec E30 Legal",
+        "transmission_ratios": [3.83, 2.20, 1.40, 1.00],
+        "final_drive": 3.73,
+        "weight_lbs": 2700
+      },
+      "alternative_setups": [],
+      "notes": "Spec E30 class rules. Limited modification allowed."
+    }
+  ]
+}

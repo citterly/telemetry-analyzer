@@ -195,3 +195,38 @@ Features: 19/22 passing (86%)
 
 Next priority: feat-041 (Vehicle profiles)
 
+
+=== Session 4 (2026-01-29 08:00 UTC) ===
+Working on: feat-041 (Vehicle profiles)
+
+Work completed:
+- Created src/config/vehicles.py with dataclasses and VehicleDatabase
+- Created data/vehicles.json with 5 vehicle profiles:
+  - BMW E46 M3 (Andy's car) with 4 transmission setups
+  - NC Miata with stock 6-speed and short final option
+  - Porsche 996 GT3 with stock and Cup gearing
+  - Honda S2000 AP1 with stock and OS Giken close ratio
+  - Spec E30 with class-legal gearing
+- Created tests/test_vehicles.py with 32 test cases
+
+Implementation details:
+- Vehicle dataclass with tire size, weight, engine specs, transmission setups
+- EngineSpec dataclass with RPM limits and power band
+- TransmissionSetup dataclass with ratios and final drive
+- VehicleDatabase class with JSON loading, singleton pattern
+- Speed/RPM calculation methods on Vehicle class
+- Convenience functions: get_vehicle(), get_active_vehicle(), set_active_vehicle()
+- Backward compatibility exports for legacy code
+
+Test results: 32/32 passing
+- 10 tests for Vehicle model
+- 9 tests for VehicleDatabase class
+- 5 tests for convenience functions
+- 3 tests for backward compatibility
+- 5 tests for vehicles.json file
+
+Status: feat-041 marked PASSING
+Features: 20/22 passing (91%)
+
+Next priority: feat-050 (Test coverage for core modules)
+
