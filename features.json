@@ -238,19 +238,19 @@
       "name": "Integration tests with real data",
       "category": "testing",
       "description": "End-to-end tests using actual Parquet files from Road America sessions",
-      "status": "failing",
+      "status": "passing",
       "priority": 18,
       "tests": ["pytest tests/integration/"],
       "files": ["tests/integration/test_full_analysis.py"],
-      "notes": "Uses data/exports/processed/*.parquet as fixtures"
+      "notes": "25 tests: parquet loading, GPS validation, track detection, lap analysis, track map. All using real Road America data."
     }
   ],
   "metadata": {
     "created_at": "2025-01-29T01:00:00Z",
-    "last_updated": "2026-01-29T08:30:00Z",
+    "last_updated": "2026-01-29T09:00:00Z",
     "total_features": 22,
-    "passing": 21,
-    "failing": 1
+    "passing": 22,
+    "failing": 0
   },
   "categories": {
     "bugfix": "Bug fixes and corrections",
