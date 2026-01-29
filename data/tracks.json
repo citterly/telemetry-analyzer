@@ -1,0 +1,197 @@
+{
+  "tracks": [
+    {
+      "id": "road-america",
+      "name": "Road America",
+      "location": "Elkhart Lake, Wisconsin",
+      "country": "USA",
+      "length_meters": 4048,
+      "length_miles": 2.52,
+      "corner_count": 14,
+      "start_finish_lat": 43.797875,
+      "start_finish_lon": -87.989638,
+      "main_straight_length": 800,
+      "elevation_change_meters": 30,
+      "min_lap_time_seconds": 90,
+      "max_lap_time_seconds": 300,
+      "gps_bounds": {
+        "min_lat": 43.790,
+        "max_lat": 43.806,
+        "min_lon": -88.005,
+        "max_lon": -87.988
+      },
+      "corners": {
+        "T1": {"lat": 43.792069, "lon": -87.989800, "apex_speed_mph": 85, "gear": 3},
+        "T3": {"lat": 43.791595, "lon": -87.995327, "apex_speed_mph": 70, "gear": 3},
+        "T5": {"lat": 43.801770, "lon": -87.992596, "apex_speed_mph": 115, "gear": 4},
+        "T6": {"lat": 43.801592, "lon": -87.996089, "apex_speed_mph": 60, "gear": 2},
+        "T7": {"lat": 43.799578, "lon": -87.996243, "apex_speed_mph": 55, "gear": 2},
+        "T8": {"lat": 43.797101, "lon": -87.999953, "apex_speed_mph": 75, "gear": 3},
+        "Carousel": {"lat": 43.794216, "lon": -87.999916, "apex_speed_mph": 90, "gear": 3},
+        "Kink": {"lat": 43.798512, "lon": -88.002654, "apex_speed_mph": 125, "gear": 5},
+        "T12": {"lat": 43.804928, "lon": -87.997402, "apex_speed_mph": 50, "gear": 2},
+        "T13": {"lat": 43.803806, "lon": -87.994009, "apex_speed_mph": 80, "gear": 3},
+        "T14": {"lat": 43.804001, "lon": -87.990058, "apex_speed_mph": 105, "gear": 4}
+      }
+    },
+    {
+      "id": "watkins-glen",
+      "name": "Watkins Glen International",
+      "location": "Watkins Glen, New York",
+      "country": "USA",
+      "length_meters": 5435,
+      "length_miles": 3.37,
+      "corner_count": 11,
+      "start_finish_lat": 42.336813,
+      "start_finish_lon": -76.927408,
+      "main_straight_length": 600,
+      "elevation_change_meters": 53,
+      "min_lap_time_seconds": 100,
+      "max_lap_time_seconds": 240,
+      "gps_bounds": {
+        "min_lat": 42.326,
+        "max_lat": 42.342,
+        "min_lon": -76.934,
+        "max_lon": -76.913
+      },
+      "corners": {
+        "T1": {"lat": 42.336278, "lon": -76.924608, "apex_speed_mph": 85, "gear": 3},
+        "Esses": {"lat": 42.333989, "lon": -76.919186, "apex_speed_mph": 95, "gear": 4},
+        "T5": {"lat": 42.329547, "lon": -76.915011, "apex_speed_mph": 55, "gear": 2},
+        "T6": {"lat": 42.327864, "lon": -76.920444, "apex_speed_mph": 115, "gear": 4},
+        "T7": {"lat": 42.330847, "lon": -76.928989, "apex_speed_mph": 70, "gear": 3},
+        "Toe": {"lat": 42.332928, "lon": -76.931519, "apex_speed_mph": 100, "gear": 4},
+        "Heel": {"lat": 42.335503, "lon": -76.929314, "apex_speed_mph": 75, "gear": 3},
+        "T10": {"lat": 42.338456, "lon": -76.928025, "apex_speed_mph": 65, "gear": 3},
+        "T11": {"lat": 42.339019, "lon": -76.927197, "apex_speed_mph": 90, "gear": 4}
+      }
+    },
+    {
+      "id": "mid-ohio",
+      "name": "Mid-Ohio Sports Car Course",
+      "location": "Lexington, Ohio",
+      "country": "USA",
+      "length_meters": 3861,
+      "length_miles": 2.4,
+      "corner_count": 15,
+      "start_finish_lat": 40.695833,
+      "start_finish_lon": -82.596944,
+      "main_straight_length": 457,
+      "elevation_change_meters": 24,
+      "min_lap_time_seconds": 80,
+      "max_lap_time_seconds": 200,
+      "gps_bounds": {
+        "min_lat": 40.691,
+        "max_lat": 40.702,
+        "min_lon": -82.604,
+        "max_lon": -82.589
+      },
+      "corners": {
+        "T1": {"lat": 40.696389, "lon": -82.595278, "apex_speed_mph": 90, "gear": 3},
+        "Keyhole": {"lat": 40.694167, "lon": -82.591944, "apex_speed_mph": 45, "gear": 2},
+        "T4": {"lat": 40.692500, "lon": -82.594167, "apex_speed_mph": 80, "gear": 3},
+        "T5": {"lat": 40.693056, "lon": -82.596389, "apex_speed_mph": 65, "gear": 3},
+        "T6": {"lat": 40.694722, "lon": -82.598056, "apex_speed_mph": 60, "gear": 2},
+        "Carousel": {"lat": 40.697222, "lon": -82.601389, "apex_speed_mph": 95, "gear": 4},
+        "Thunder_Valley": {"lat": 40.699722, "lon": -82.600833, "apex_speed_mph": 105, "gear": 4},
+        "T10": {"lat": 40.700556, "lon": -82.597778, "apex_speed_mph": 55, "gear": 2}
+      }
+    },
+    {
+      "id": "laguna-seca",
+      "name": "WeatherTech Raceway Laguna Seca",
+      "location": "Monterey, California",
+      "country": "USA",
+      "length_meters": 3602,
+      "length_miles": 2.238,
+      "corner_count": 11,
+      "start_finish_lat": 36.583611,
+      "start_finish_lon": -121.751389,
+      "main_straight_length": 450,
+      "elevation_change_meters": 54,
+      "min_lap_time_seconds": 75,
+      "max_lap_time_seconds": 180,
+      "gps_bounds": {
+        "min_lat": 36.578,
+        "max_lat": 36.591,
+        "min_lon": -121.760,
+        "max_lon": -121.748
+      },
+      "corners": {
+        "T1": {"lat": 36.585556, "lon": -121.751389, "apex_speed_mph": 75, "gear": 3},
+        "Andretti_Hairpin": {"lat": 36.586667, "lon": -121.752500, "apex_speed_mph": 40, "gear": 1},
+        "T3": {"lat": 36.588333, "lon": -121.752778, "apex_speed_mph": 65, "gear": 3},
+        "T4": {"lat": 36.588889, "lon": -121.755556, "apex_speed_mph": 80, "gear": 3},
+        "T5": {"lat": 36.588056, "lon": -121.757222, "apex_speed_mph": 90, "gear": 4},
+        "T6": {"lat": 36.586111, "lon": -121.757778, "apex_speed_mph": 55, "gear": 2},
+        "Corkscrew": {"lat": 36.585278, "lon": -121.755556, "apex_speed_mph": 45, "gear": 2},
+        "Rainey_Curve": {"lat": 36.581667, "lon": -121.752778, "apex_speed_mph": 85, "gear": 3},
+        "T10": {"lat": 36.580556, "lon": -121.750833, "apex_speed_mph": 95, "gear": 4},
+        "T11": {"lat": 36.581389, "lon": -121.750278, "apex_speed_mph": 75, "gear": 3}
+      }
+    },
+    {
+      "id": "sebring",
+      "name": "Sebring International Raceway",
+      "location": "Sebring, Florida",
+      "country": "USA",
+      "length_meters": 6019,
+      "length_miles": 3.74,
+      "corner_count": 17,
+      "start_finish_lat": 27.454722,
+      "start_finish_lon": -81.348889,
+      "main_straight_length": 1100,
+      "elevation_change_meters": 6,
+      "min_lap_time_seconds": 110,
+      "max_lap_time_seconds": 280,
+      "gps_bounds": {
+        "min_lat": 27.445,
+        "max_lat": 27.460,
+        "min_lon": -81.360,
+        "max_lon": -81.340
+      },
+      "corners": {
+        "T1": {"lat": 27.455833, "lon": -81.348333, "apex_speed_mph": 75, "gear": 3},
+        "T2": {"lat": 27.456389, "lon": -81.351111, "apex_speed_mph": 60, "gear": 2},
+        "T3": {"lat": 27.457778, "lon": -81.353333, "apex_speed_mph": 90, "gear": 4},
+        "T7": {"lat": 27.455000, "lon": -81.356389, "apex_speed_mph": 115, "gear": 4},
+        "Hairpin": {"lat": 27.449722, "lon": -81.358056, "apex_speed_mph": 35, "gear": 1},
+        "Sunset_Bend": {"lat": 27.447222, "lon": -81.354722, "apex_speed_mph": 105, "gear": 4},
+        "T13": {"lat": 27.448333, "lon": -81.346667, "apex_speed_mph": 55, "gear": 2},
+        "T15": {"lat": 27.450556, "lon": -81.344167, "apex_speed_mph": 70, "gear": 3},
+        "T17": {"lat": 27.453889, "lon": -81.347500, "apex_speed_mph": 80, "gear": 3}
+      }
+    },
+    {
+      "id": "vir",
+      "name": "Virginia International Raceway",
+      "location": "Alton, Virginia",
+      "country": "USA",
+      "length_meters": 5263,
+      "length_miles": 3.27,
+      "corner_count": 17,
+      "start_finish_lat": 36.567222,
+      "start_finish_lon": -79.206111,
+      "main_straight_length": 700,
+      "elevation_change_meters": 38,
+      "min_lap_time_seconds": 100,
+      "max_lap_time_seconds": 240,
+      "gps_bounds": {
+        "min_lat": 36.560,
+        "max_lat": 36.575,
+        "min_lon": -79.215,
+        "max_lon": -79.195
+      },
+      "corners": {
+        "T1": {"lat": 36.567778, "lon": -79.204722, "apex_speed_mph": 95, "gear": 4},
+        "Oak_Tree": {"lat": 36.568889, "lon": -79.201389, "apex_speed_mph": 105, "gear": 4},
+        "Climbing_Esses": {"lat": 36.571667, "lon": -79.198889, "apex_speed_mph": 85, "gear": 3},
+        "Hog_Pen": {"lat": 36.573889, "lon": -79.201111, "apex_speed_mph": 55, "gear": 2},
+        "Roller_Coaster": {"lat": 36.572222, "lon": -79.206667, "apex_speed_mph": 100, "gear": 4},
+        "Bitch": {"lat": 36.568333, "lon": -79.210833, "apex_speed_mph": 70, "gear": 3},
+        "South_Bend": {"lat": 36.563889, "lon": -79.211389, "apex_speed_mph": 90, "gear": 3},
+        "NASCAR_Bend": {"lat": 36.562222, "lon": -79.206667, "apex_speed_mph": 80, "gear": 3}
+      }
+    }
+  ]
+}
