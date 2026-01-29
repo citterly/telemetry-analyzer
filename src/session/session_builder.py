@@ -204,15 +204,9 @@ def _build_dataframe(raw_channels: Dict[str, Dict[str, Any]],
     units_map = {}
 
     for name, chan in raw_channels.items():
-        series = pd.Series(chan["values"], index=chan["time"])
-
-        # Reindex to canonical index with interpolation
-        df[name] = (
-            series.reindex(time_index, method=None)
-                  .interpolate(method="linear")
-                  .bfill()
-                  .ffill()
-        )
+        # Use numpy interp for direct interpolation onto canonical time index
+        # This avoids exact-match issues with pandas reindex
+        df[name] = np.interp(time_index, chan["time"], chan["values"])
 
         # Unit resolution
         if chan.get("unit"):

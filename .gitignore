@@ -28,7 +28,12 @@ env/
 ENV/
 
 # Data directories (contains user's telemetry files)
-data/
+data/*
+!data/exports/
+data/exports/*
+!data/exports/processed/
+data/exports/processed/*
+!data/exports/processed/*.parquet
 *.xrk
 *.csv
 
