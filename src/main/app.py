@@ -871,14 +871,57 @@ def _find_parquet_file(filename: str) -> Optional[Path]:
 
 
 def _find_column(df, candidates: List[str]):
-    """Find a column by trying multiple names"""
+    """Find a column by trying multiple names, preferring columns with actual data"""
     import numpy as np
+
+    def has_data(col_data):
+        """Check if column has meaningful non-zero data"""
+        if col_data is None or len(col_data) == 0:
+            return False
+        non_null = np.sum(~np.isnan(col_data) if np.issubdtype(col_data.dtype, np.floating) else np.ones(len(col_data), dtype=bool))
+        non_zero = np.sum(col_data != 0)
+        return non_null > 0 and non_zero > len(col_data) * 0.1  # At least 10% non-zero
+
+    # First try exact matches
+    for col in candidates:
+        if col in df.columns:
+            data = df[col].values
+            if has_data(data):
+                return data
+
+    # Then try case-insensitive exact matches
+    for col in candidates:
+        for actual_col in df.columns:
+            if actual_col.lower() == col.lower():
+                data = df[actual_col].values
+                if has_data(data):
+                    return data
+
+    # Then try partial/contains matches, collecting all candidates
+    matching_cols = []
+    for col in candidates:
+        for actual_col in df.columns:
+            if col.lower() in actual_col.lower():
+                matching_cols.append(actual_col)
+
+    # Return the matching column with the most non-zero data
+    best_col = None
+    best_score = 0
+    for col in matching_cols:
+        data = df[col].values
+        non_zero = np.sum(data != 0)
+        if non_zero > best_score:
+            best_score = non_zero
+            best_col = col
+
+    if best_col is not None:
+        return df[best_col].values
+
+    # Fallback: return first exact match even if no data
     for col in candidates:
         if col in df.columns:
             return df[col].values
-        for actual_col in df.columns:
-            if actual_col.lower() == col.lower():
-                return df[actual_col].values
+
     return None
 
 
