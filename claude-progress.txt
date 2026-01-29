@@ -230,3 +230,37 @@ Features: 20/22 passing (91%)
 
 Next priority: feat-050 (Test coverage for core modules)
 
+
+=== Session 4 continued (2026-01-29 08:30 UTC) ===
+Working on: feat-050 (Test coverage for core modules)
+
+Work completed:
+- Created tests/test_gear_calculator.py with 25 test cases
+- Created tests/test_lap_analyzer.py with 20 test cases
+- Fixed bug in gear_calculator.py line 247 (speed_array handling)
+- Existing test_session_builder.py has 2 tests (require Windows DLL)
+
+Test breakdown:
+- test_gear_calculator.py (25 tests):
+  - 2 tests for GearInfo dataclass
+  - 18 tests for GearCalculator class
+  - 5 tests for module functions
+- test_lap_analyzer.py (20 tests):
+  - 1 test for LapInfo dataclass
+  - 16 tests for LapAnalyzer class
+  - 2 tests for module functions
+  - 1 test for crossing detection
+
+Bug fix:
+- gear_calculator.py line 247: Fixed multiplication of empty list with float
+- Changed from: `lap_data.get('speed_ms', []) * 2.237`
+- Changed to: Proper conditional check for speed_mph vs speed_ms
+
+Test results: 45/45 passing (core modules)
+Note: session_builder tests require Windows DLL environment
+
+Status: feat-050 marked PASSING
+Features: 21/22 passing (95%)
+
+Next priority: feat-051 (Integration tests with real data)
+

@@ -244,10 +244,15 @@ def analyze_lap_gearing(lap_data: Dict, scenario_name: str = 'Current Setup') ->
     
     # Calculate gear trace
     rpm_array = lap_data['rpm']
-    speed_array = lap_data.get('speed_mph', lap_data.get('speed_ms', []) * 2.237)
+    if 'speed_mph' in lap_data:
+        speed_array = lap_data['speed_mph']
+    elif 'speed_ms' in lap_data:
+        speed_array = np.array(lap_data['speed_ms']) * 2.237
+    else:
+        raise ValueError("No speed data available in lap data")
     
     if len(speed_array) == 0:
-        raise ValueError("No speed data available in lap data")
+        raise ValueError("Speed data array is empty")
     
     print(f"Calculating gear usage for {scenario_name}")
     print(f"  Transmission: {scenario['transmission_ratios']}")

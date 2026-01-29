@@ -227,11 +227,11 @@
       "name": "Test coverage for core modules",
       "category": "testing",
       "description": "Unit tests for gear_calculator, lap_analyzer, session_builder",
-      "status": "failing",
+      "status": "passing",
       "priority": 17,
       "tests": ["pytest tests/"],
       "files": ["tests/test_gear_calculator.py", "tests/test_lap_analyzer.py"],
-      "notes": "Improve test coverage before adding new features"
+      "notes": "25 gear_calculator tests, 20 lap_analyzer tests. Session builder tests need Windows DLL environment."
     },
     {
       "id": "feat-051",
@@ -247,10 +247,10 @@
   ],
   "metadata": {
     "created_at": "2025-01-29T01:00:00Z",
-    "last_updated": "2026-01-29T08:00:00Z",
+    "last_updated": "2026-01-29T08:30:00Z",
     "total_features": 22,
-    "passing": 20,
-    "failing": 2
+    "passing": 21,
+    "failing": 1
   },
   "categories": {
     "bugfix": "Bug fixes and corrections",
