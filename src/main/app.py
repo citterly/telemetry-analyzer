@@ -470,6 +470,15 @@ async def parquet_viewer_page(request: Request):
     })
 
 
+@app.get("/analysis", response_class=HTMLResponse)
+async def analysis_page(request: Request):
+    """Analysis results viewer page"""
+    return templates.TemplateResponse("analysis.html", {
+        "request": request,
+        "title": "Session Analysis"
+    })
+
+
 # ============================================================
 # Analysis API Endpoints
 # ============================================================

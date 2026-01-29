@@ -183,11 +183,11 @@
       "name": "Analysis results viewer",
       "category": "ui",
       "description": "Web page to view analysis results with charts and tables",
-      "status": "failing",
+      "status": "passing",
       "priority": 13,
       "tests": ["test_results_page"],
-      "files": ["templates/analysis.html"],
-      "notes": "Interactive display of shift points, lap times, gear usage"
+      "files": ["templates/analysis.html", "src/main/app.py"],
+      "notes": "Interactive display with Chart.js charts for shifts, laps, gears, power. 18 tests passing."
     },
     {
       "id": "feat-033",
@@ -247,10 +247,10 @@
   ],
   "metadata": {
     "created_at": "2025-01-29T01:00:00Z",
-    "last_updated": "2026-01-29T04:30:00Z",
+    "last_updated": "2026-01-29T06:00:00Z",
     "total_features": 22,
-    "passing": 16,
-    "failing": 6
+    "passing": 17,
+    "failing": 5
   },
   "categories": {
     "bugfix": "Bug fixes and corrections",

@@ -71,3 +71,61 @@ Features by category:
 
 Status: 5/22 passing (23%)
 
+
+=== Session 2 (2026-01-29 01:15 UTC) ===
+Working on: feat-010 (XRK extraction queue)
+
+Work completed:
+- Created src/extraction/__init__.py (module init)
+- Created src/extraction/models.py (ExtractionJob, JobStatus dataclasses)
+- Created src/extraction/queue.py (SQLite-backed ExtractionQueue class)
+- Created tests/test_extraction_queue.py (26 test cases)
+
+Implementation details:
+- SQLite backend for persistence across restarts
+- Thread-safe operations with locking
+- Job states: pending, processing, completed, failed
+- Priority queue (higher priority jobs processed first)
+- Retry logic with configurable max_retries
+- Methods: submit, get, claim_next, mark_completed, mark_failed, retry, get_stats
+
+Test results: 26/26 passing
+- 7 tests for ExtractionJob model
+- 19 tests for ExtractionQueue operations
+
+Status: feat-010 marked PASSING
+Features: 6/22 passing (27%)
+
+Next priority: feat-011 (Windows extraction API)
+
+
+=== Session 3 (2026-01-29 06:00 UTC) ===
+Working on: feat-032 (Analysis results viewer)
+
+Work completed:
+- Created templates/analysis.html with interactive analysis viewer
+- Added /analysis route to src/main/app.py
+- Added Analysis link to navbar in templates/base.html
+- Created tests/test_results_page.py with 18 test cases
+
+Implementation details:
+- Session selector dropdown populates from /api/parquet/list
+- 5 analysis types: Full Report, Shifts, Laps, Gears, Power
+- Chart.js for visualizations (lap times bar chart, shift RPM chart, gear distribution doughnut)
+- Dark theme matching existing UI
+- Summary metric boxes with gradients
+- Recommendations section for actionable insights
+- Shift table with quality indicators (early/optimal/late/over-rev)
+- Loading overlay during API calls
+
+Test results: 18/18 passing
+- 5 tests for page structure
+- 6 tests for API integration
+- 5 tests for JavaScript functions
+- 2 tests for CSS styling
+
+Status: feat-032 marked PASSING
+Features: 17/22 passing (77%)
+
+Next priority: feat-033 (Queue status dashboard)
+

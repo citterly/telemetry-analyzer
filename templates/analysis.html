@@ -1,0 +1,848 @@
+{% extends "base.html" %}
+
+{% block title %}Analysis Results - {{ super() }}{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+    .analysis-card {
+        background-color: #353535;
+        border-left: 4px solid #4a90e2;
+        margin-bottom: 1rem;
+    }
+    .analysis-card.shifts { border-left-color: #e17055; }
+    .analysis-card.laps { border-left-color: #00b894; }
+    .analysis-card.gears { border-left-color: #6c5ce7; }
+    .analysis-card.power { border-left-color: #fdcb6e; }
+
+    .metric-box {
+        background: linear-gradient(135deg, #4a90e2 0%, #6c5ce7 100%);
+        border-radius: 8px;
+        padding: 1rem;
+        text-align: center;
+        color: white;
+    }
+    .metric-box.success { background: linear-gradient(135deg, #00b894 0%, #00cec9 100%); }
+    .metric-box.warning { background: linear-gradient(135deg, #fdcb6e 0%, #e17055 100%); }
+    .metric-box.info { background: linear-gradient(135deg, #74b9ff 0%, #0984e3 100%); }
+
+    .metric-value { font-size: 1.8rem; font-weight: bold; }
+    .metric-label { font-size: 0.85rem; opacity: 0.9; }
+
+    .shift-quality-early { color: #fdcb6e; }
+    .shift-quality-optimal { color: #00b894; }
+    .shift-quality-late { color: #e17055; }
+    .shift-quality-over-rev { color: #d63031; }
+
+    .recommendation-item {
+        padding: 0.75rem;
+        margin-bottom: 0.5rem;
+        background-color: rgba(116, 185, 255, 0.1);
+        border-left: 3px solid #74b9ff;
+        border-radius: 0 4px 4px 0;
+    }
+
+    .loading-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0,0,0,0.7);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 9999;
+    }
+
+    .chart-container {
+        position: relative;
+        height: 250px;
+        margin-bottom: 1rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4">Session Analysis</h1>
+        <p class="text-muted">Run telemetry analysis on extracted session data</p>
+    </div>
+</div>
+
+<!-- File Selection -->
+<div class="row mb-4">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">Select Session</div>
+            <div class="card-body">
+                <select class="form-select" id="file-select" onchange="updateAnalysisButtons()">
+                    <option value="">Loading sessions...</option>
+                </select>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">Analysis Type</div>
+            <div class="card-body">
+                <div class="btn-group-vertical w-100" id="analysis-buttons">
+                    <button class="btn btn-outline-primary" onclick="runAnalysis('report')" id="btn-report" disabled>
+                        Full Report
+                    </button>
+                    <button class="btn btn-outline-info" onclick="runAnalysis('shifts')" id="btn-shifts" disabled>
+                        Shift Analysis
+                    </button>
+                    <button class="btn btn-outline-info" onclick="runAnalysis('laps')" id="btn-laps" disabled>
+                        Lap Analysis
+                    </button>
+                    <button class="btn btn-outline-info" onclick="runAnalysis('gears')" id="btn-gears" disabled>
+                        Gear Usage
+                    </button>
+                    <button class="btn btn-outline-info" onclick="runAnalysis('power')" id="btn-power" disabled>
+                        Power Analysis
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Loading Overlay -->
+<div class="loading-overlay" id="loading" style="display: none;">
+    <div class="text-center">
+        <div class="spinner-border text-primary" style="width: 3rem; height: 3rem;"></div>
+        <p class="mt-3 text-white">Running analysis...</p>
+    </div>
+</div>
+
+<!-- Results Section -->
+<div id="results-section" style="display: none;">
+
+    <!-- Summary Row -->
+    <div class="row mb-4" id="summary-row">
+        <!-- Filled by JS -->
+    </div>
+
+    <!-- Recommendations -->
+    <div class="row mb-4" id="recommendations-section" style="display: none;">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">Recommendations</div>
+                <div class="card-body" id="recommendations-content">
+                    <!-- Filled by JS -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Detailed Results -->
+    <div class="row" id="details-section">
+        <!-- Filled by JS based on analysis type -->
+    </div>
+
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    let currentAnalysisType = null;
+    let currentData = null;
+    let charts = {};
+
+    // Load file list on page load
+    document.addEventListener('DOMContentLoaded', loadFileList);
+
+    async function loadFileList() {
+        try {
+            const response = await fetch('/api/parquet/list');
+            const data = await response.json();
+
+            const select = document.getElementById('file-select');
+            select.innerHTML = '<option value="">Select a session...</option>';
+
+            for (const file of data.parquet_files) {
+                if (!file.error) {
+                    const option = document.createElement('option');
+                    option.value = file.path;
+                    option.textContent = `${file.filename} (${file.rows.toLocaleString()} rows, ${file.columns} channels)`;
+                    select.appendChild(option);
+                }
+            }
+        } catch (error) {
+            showAlert('Failed to load session list: ' + error.message, 'danger');
+        }
+    }
+
+    function updateAnalysisButtons() {
+        const hasFile = document.getElementById('file-select').value !== '';
+        document.querySelectorAll('#analysis-buttons button').forEach(btn => {
+            btn.disabled = !hasFile;
+        });
+    }
+
+    async function runAnalysis(type) {
+        const filename = document.getElementById('file-select').value;
+        if (!filename) {
+            showAlert('Please select a session first', 'warning');
+            return;
+        }
+
+        currentAnalysisType = type;
+        document.getElementById('loading').style.display = 'flex';
+
+        // Destroy existing charts
+        Object.values(charts).forEach(chart => chart.destroy());
+        charts = {};
+
+        try {
+            const response = await fetch(`/api/analyze/${type}/${encodeURIComponent(filename)}`);
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.detail || 'Analysis failed');
+            }
+
+            currentData = await response.json();
+            displayResults(type, currentData);
+
+        } catch (error) {
+            showAlert('Analysis failed: ' + error.message, 'danger');
+            document.getElementById('results-section').style.display = 'none';
+        } finally {
+            document.getElementById('loading').style.display = 'none';
+        }
+    }
+
+    function displayResults(type, data) {
+        document.getElementById('results-section').style.display = 'block';
+
+        switch (type) {
+            case 'report':
+                displayFullReport(data);
+                break;
+            case 'shifts':
+                displayShiftAnalysis(data);
+                break;
+            case 'laps':
+                displayLapAnalysis(data);
+                break;
+            case 'gears':
+                displayGearAnalysis(data);
+                break;
+            case 'power':
+                displayPowerAnalysis(data);
+                break;
+        }
+    }
+
+    function displayFullReport(data) {
+        // Summary metrics
+        const summary = data.summary;
+        document.getElementById('summary-row').innerHTML = `
+            <div class="col-md-3 mb-3">
+                <div class="metric-box success">
+                    <div class="metric-value">${formatLapTime(summary.fastest_lap.lap_time)}</div>
+                    <div class="metric-label">Fastest Lap (Lap ${summary.fastest_lap.lap_number})</div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="metric-box info">
+                    <div class="metric-value">${summary.total_laps}</div>
+                    <div class="metric-label">Total Laps</div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="metric-box">
+                    <div class="metric-value">${summary.max_speed_mph.toFixed(0)} mph</div>
+                    <div class="metric-label">Max Speed</div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="metric-box warning">
+                    <div class="metric-value">${summary.total_shifts}</div>
+                    <div class="metric-label">Total Shifts</div>
+                </div>
+            </div>
+        `;
+
+        // Recommendations
+        displayRecommendations(data.combined_recommendations);
+
+        // Detailed sections
+        let detailsHtml = '';
+
+        // Lap times chart
+        if (data.lap_analysis && data.lap_analysis.laps && data.lap_analysis.laps.length > 0) {
+            detailsHtml += `
+                <div class="col-md-6 mb-4">
+                    <div class="card analysis-card laps">
+                        <div class="card-header">Lap Times</div>
+                        <div class="card-body">
+                            <div class="chart-container">
+                                <canvas id="lap-times-chart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Shift distribution
+        if (data.shift_analysis && data.shift_analysis.gear_stats) {
+            detailsHtml += `
+                <div class="col-md-6 mb-4">
+                    <div class="card analysis-card shifts">
+                        <div class="card-header">Shift RPM by Gear</div>
+                        <div class="card-body">
+                            <div class="chart-container">
+                                <canvas id="shift-rpm-chart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Metadata
+        detailsHtml += `
+            <div class="col-12 mb-4">
+                <div class="card">
+                    <div class="card-header">Session Information</div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-4"><strong>Session:</strong> ${data.metadata.session_id}</div>
+                            <div class="col-md-4"><strong>Track:</strong> ${data.metadata.track_name}</div>
+                            <div class="col-md-4"><strong>Duration:</strong> ${(data.metadata.total_duration_seconds / 60).toFixed(1)} minutes</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        document.getElementById('details-section').innerHTML = detailsHtml;
+
+        // Render charts after DOM update
+        setTimeout(() => {
+            if (data.lap_analysis && data.lap_analysis.laps) {
+                renderLapTimesChart(data.lap_analysis.laps);
+            }
+            if (data.shift_analysis && data.shift_analysis.gear_stats) {
+                renderShiftRpmChart(data.shift_analysis.gear_stats);
+            }
+        }, 100);
+    }
+
+    function displayShiftAnalysis(data) {
+        // Summary
+        document.getElementById('summary-row').innerHTML = `
+            <div class="col-md-3 mb-3">
+                <div class="metric-box">
+                    <div class="metric-value">${data.total_shifts}</div>
+                    <div class="metric-label">Total Shifts</div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="metric-box info">
+                    <div class="metric-value">${data.total_upshifts}</div>
+                    <div class="metric-label">Upshifts</div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="metric-box success">
+                    <div class="metric-value">${data.total_shifts - data.early_shifts - data.late_shifts - data.over_rev_shifts}</div>
+                    <div class="metric-label">Optimal Shifts</div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="metric-box warning">
+                    <div class="metric-value">${data.early_shifts + data.late_shifts}</div>
+                    <div class="metric-label">Suboptimal Shifts</div>
+                </div>
+            </div>
+        `;
+
+        displayRecommendations(data.recommendations);
+
+        // Shift details
+        let detailsHtml = `
+            <div class="col-md-6 mb-4">
+                <div class="card analysis-card shifts">
+                    <div class="card-header">Shift RPM by Gear</div>
+                    <div class="card-body">
+                        <div class="chart-container">
+                            <canvas id="shift-rpm-chart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6 mb-4">
+                <div class="card analysis-card shifts">
+                    <div class="card-header">Gear Statistics</div>
+                    <div class="card-body">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr><th>Gear</th><th>Upshifts</th><th>Avg RPM</th><th>Target</th></tr>
+                            </thead>
+                            <tbody>
+        `;
+
+        for (const [gear, stats] of Object.entries(data.gear_stats)) {
+            if (stats.upshift_count > 0) {
+                detailsHtml += `
+                    <tr>
+                        <td><strong>Gear ${gear}</strong></td>
+                        <td>${stats.upshift_count}</td>
+                        <td>${stats.avg_upshift_rpm.toFixed(0)} RPM</td>
+                        <td>${stats.optimal_upshift_rpm} RPM</td>
+                    </tr>
+                `;
+            }
+        }
+
+        detailsHtml += `
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="col-12 mb-4">
+                <div class="card">
+                    <div class="card-header">Recent Shifts</div>
+                    <div class="card-body" style="max-height: 400px; overflow-y: auto;">
+                        <table class="table table-sm table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Time</th>
+                                    <th>Type</th>
+                                    <th>Gear</th>
+                                    <th>RPM</th>
+                                    <th>Speed</th>
+                                    <th>Quality</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+        `;
+
+        const recentShifts = data.shifts.slice(-50);
+        for (const shift of recentShifts) {
+            const qualityClass = `shift-quality-${shift.shift_quality.replace('_', '-')}`;
+            detailsHtml += `
+                <tr>
+                    <td>${shift.time.toFixed(1)}s</td>
+                    <td>${shift.shift_type}</td>
+                    <td>${shift.from_gear} → ${shift.to_gear}</td>
+                    <td>${shift.rpm_at_shift.toFixed(0)}</td>
+                    <td>${shift.speed_mph.toFixed(0)} mph</td>
+                    <td class="${qualityClass}">${shift.shift_quality}</td>
+                </tr>
+            `;
+        }
+
+        detailsHtml += `
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        document.getElementById('details-section').innerHTML = detailsHtml;
+
+        setTimeout(() => {
+            renderShiftRpmChart(data.gear_stats);
+        }, 100);
+    }
+
+    function displayLapAnalysis(data) {
+        const fastest = data.fastest_lap || {};
+
+        document.getElementById('summary-row').innerHTML = `
+            <div class="col-md-3 mb-3">
+                <div class="metric-box success">
+                    <div class="metric-value">${formatLapTime(fastest.lap_time)}</div>
+                    <div class="metric-label">Fastest Lap</div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="metric-box info">
+                    <div class="metric-value">${data.total_laps}</div>
+                    <div class="metric-label">Total Laps</div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="metric-box">
+                    <div class="metric-value">${formatLapTime(data.average_lap_time)}</div>
+                    <div class="metric-label">Average Lap</div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="metric-box warning">
+                    <div class="metric-value">${data.consistency_pct?.toFixed(1) || 'N/A'}%</div>
+                    <div class="metric-label">Consistency</div>
+                </div>
+            </div>
+        `;
+
+        displayRecommendations(data.recommendations || []);
+
+        let detailsHtml = `
+            <div class="col-md-8 mb-4">
+                <div class="card analysis-card laps">
+                    <div class="card-header">Lap Times</div>
+                    <div class="card-body">
+                        <div class="chart-container" style="height: 300px;">
+                            <canvas id="lap-times-chart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4 mb-4">
+                <div class="card analysis-card laps">
+                    <div class="card-header">Lap Details</div>
+                    <div class="card-body" style="max-height: 350px; overflow-y: auto;">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr><th>Lap</th><th>Time</th><th>Delta</th></tr>
+                            </thead>
+                            <tbody>
+        `;
+
+        const bestTime = fastest.lap_time || 0;
+        for (const lap of (data.laps || [])) {
+            const delta = lap.lap_time - bestTime;
+            const deltaClass = delta === 0 ? 'text-success' : (delta < 2 ? '' : 'text-warning');
+            detailsHtml += `
+                <tr>
+                    <td>${lap.lap_number}</td>
+                    <td>${formatLapTime(lap.lap_time)}</td>
+                    <td class="${deltaClass}">${delta === 0 ? 'Best' : '+' + delta.toFixed(2)}</td>
+                </tr>
+            `;
+        }
+
+        detailsHtml += `
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        document.getElementById('details-section').innerHTML = detailsHtml;
+
+        setTimeout(() => {
+            if (data.laps) {
+                renderLapTimesChart(data.laps);
+            }
+        }, 100);
+    }
+
+    function displayGearAnalysis(data) {
+        document.getElementById('summary-row').innerHTML = `
+            <div class="col-md-3 mb-3">
+                <div class="metric-box">
+                    <div class="metric-value">${data.gears_used || Object.keys(data.gear_usage || {}).length}</div>
+                    <div class="metric-label">Gears Used</div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="metric-box info">
+                    <div class="metric-value">${data.most_used_gear || 'N/A'}</div>
+                    <div class="metric-label">Most Used Gear</div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="metric-box success">
+                    <div class="metric-value">${data.avg_gear?.toFixed(1) || 'N/A'}</div>
+                    <div class="metric-label">Avg Gear</div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="metric-box warning">
+                    <div class="metric-value">${(data.total_time_seconds / 60)?.toFixed(1) || 'N/A'} min</div>
+                    <div class="metric-label">Session Time</div>
+                </div>
+            </div>
+        `;
+
+        displayRecommendations(data.recommendations || []);
+
+        let detailsHtml = `
+            <div class="col-md-6 mb-4">
+                <div class="card analysis-card gears">
+                    <div class="card-header">Gear Distribution</div>
+                    <div class="card-body">
+                        <div class="chart-container">
+                            <canvas id="gear-distribution-chart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6 mb-4">
+                <div class="card analysis-card gears">
+                    <div class="card-header">Gear Statistics</div>
+                    <div class="card-body">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr><th>Gear</th><th>Time</th><th>%</th><th>Avg RPM</th></tr>
+                            </thead>
+                            <tbody>
+        `;
+
+        const gearUsage = data.gear_usage || {};
+        for (const [gear, stats] of Object.entries(gearUsage)) {
+            const pct = stats.time_pct || (stats.time_seconds / data.total_time_seconds * 100);
+            detailsHtml += `
+                <tr>
+                    <td><strong>Gear ${gear}</strong></td>
+                    <td>${stats.time_seconds?.toFixed(1) || 'N/A'}s</td>
+                    <td>
+                        <div class="progress" style="height: 20px;">
+                            <div class="progress-bar bg-info" style="width: ${pct}%">${pct.toFixed(1)}%</div>
+                        </div>
+                    </td>
+                    <td>${stats.avg_rpm?.toFixed(0) || 'N/A'}</td>
+                </tr>
+            `;
+        }
+
+        detailsHtml += `
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        document.getElementById('details-section').innerHTML = detailsHtml;
+
+        setTimeout(() => {
+            renderGearDistributionChart(gearUsage);
+        }, 100);
+    }
+
+    function displayPowerAnalysis(data) {
+        document.getElementById('summary-row').innerHTML = `
+            <div class="col-md-3 mb-3">
+                <div class="metric-box success">
+                    <div class="metric-value">${data.max_power_hp?.toFixed(0) || 'N/A'} hp</div>
+                    <div class="metric-label">Peak Power</div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="metric-box info">
+                    <div class="metric-value">${data.max_acceleration_g?.toFixed(2) || 'N/A'} g</div>
+                    <div class="metric-label">Max Accel</div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="metric-box warning">
+                    <div class="metric-value">${data.max_braking_g?.toFixed(2) || 'N/A'} g</div>
+                    <div class="metric-label">Max Braking</div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="metric-box">
+                    <div class="metric-value">${data.avg_power_hp?.toFixed(0) || 'N/A'} hp</div>
+                    <div class="metric-label">Avg Power</div>
+                </div>
+            </div>
+        `;
+
+        displayRecommendations(data.recommendations || []);
+
+        let detailsHtml = `
+            <div class="col-md-6 mb-4">
+                <div class="card analysis-card power">
+                    <div class="card-header">Acceleration Events</div>
+                    <div class="card-body" style="max-height: 350px; overflow-y: auto;">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr><th>Time</th><th>Type</th><th>G-Force</th><th>Duration</th></tr>
+                            </thead>
+                            <tbody>
+        `;
+
+        const events = data.events || [];
+        for (const event of events.slice(0, 30)) {
+            const typeClass = event.type === 'acceleration' ? 'text-success' : 'text-warning';
+            detailsHtml += `
+                <tr>
+                    <td>${event.time?.toFixed(1) || 'N/A'}s</td>
+                    <td class="${typeClass}">${event.type}</td>
+                    <td>${event.g_force?.toFixed(2) || 'N/A'} g</td>
+                    <td>${event.duration?.toFixed(1) || 'N/A'}s</td>
+                </tr>
+            `;
+        }
+
+        detailsHtml += `
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6 mb-4">
+                <div class="card analysis-card power">
+                    <div class="card-header">Power Summary</div>
+                    <div class="card-body">
+                        <ul class="list-unstyled">
+                            <li class="mb-2"><strong>Vehicle Mass:</strong> ${data.vehicle_mass_kg || 'N/A'} kg</li>
+                            <li class="mb-2"><strong>Peak Power RPM:</strong> ${data.peak_power_rpm?.toFixed(0) || 'N/A'} RPM</li>
+                            <li class="mb-2"><strong>Accel Events:</strong> ${data.acceleration_event_count || 0}</li>
+                            <li class="mb-2"><strong>Braking Events:</strong> ${data.braking_event_count || 0}</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        document.getElementById('details-section').innerHTML = detailsHtml;
+    }
+
+    function displayRecommendations(recommendations) {
+        const section = document.getElementById('recommendations-section');
+        const content = document.getElementById('recommendations-content');
+
+        if (!recommendations || recommendations.length === 0) {
+            section.style.display = 'none';
+            return;
+        }
+
+        section.style.display = 'block';
+        content.innerHTML = recommendations.map(rec =>
+            `<div class="recommendation-item">${rec}</div>`
+        ).join('');
+    }
+
+    // Chart rendering functions
+    function renderLapTimesChart(laps) {
+        const ctx = document.getElementById('lap-times-chart');
+        if (!ctx) return;
+
+        const labels = laps.map(l => `Lap ${l.lap_number}`);
+        const times = laps.map(l => l.lap_time);
+        const minTime = Math.min(...times);
+
+        charts['lap-times'] = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Lap Time (s)',
+                    data: times,
+                    backgroundColor: times.map(t => t === minTime ? '#00b894' : '#4a90e2'),
+                    borderColor: times.map(t => t === minTime ? '#00b894' : '#357abd'),
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: false,
+                        grid: { color: '#404040' },
+                        ticks: { color: '#a0a0a0' }
+                    },
+                    x: {
+                        grid: { color: '#404040' },
+                        ticks: { color: '#a0a0a0' }
+                    }
+                }
+            }
+        });
+    }
+
+    function renderShiftRpmChart(gearStats) {
+        const ctx = document.getElementById('shift-rpm-chart');
+        if (!ctx) return;
+
+        const gears = Object.keys(gearStats).filter(g => gearStats[g].upshift_count > 0).sort();
+        const avgRpms = gears.map(g => gearStats[g].avg_upshift_rpm);
+        const targetRpms = gears.map(g => gearStats[g].optimal_upshift_rpm);
+
+        charts['shift-rpm'] = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: gears.map(g => `Gear ${g}`),
+                datasets: [
+                    {
+                        label: 'Avg Shift RPM',
+                        data: avgRpms,
+                        backgroundColor: '#4a90e2',
+                        borderColor: '#357abd',
+                        borderWidth: 1
+                    },
+                    {
+                        label: 'Target RPM',
+                        data: targetRpms,
+                        backgroundColor: 'rgba(0, 184, 148, 0.3)',
+                        borderColor: '#00b894',
+                        borderWidth: 2,
+                        type: 'line',
+                        fill: false
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        labels: { color: '#a0a0a0' }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: false,
+                        min: 4000,
+                        grid: { color: '#404040' },
+                        ticks: { color: '#a0a0a0' }
+                    },
+                    x: {
+                        grid: { color: '#404040' },
+                        ticks: { color: '#a0a0a0' }
+                    }
+                }
+            }
+        });
+    }
+
+    function renderGearDistributionChart(gearUsage) {
+        const ctx = document.getElementById('gear-distribution-chart');
+        if (!ctx) return;
+
+        const gears = Object.keys(gearUsage).sort();
+        const times = gears.map(g => gearUsage[g].time_seconds || 0);
+
+        charts['gear-dist'] = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: gears.map(g => `Gear ${g}`),
+                datasets: [{
+                    data: times,
+                    backgroundColor: ['#e17055', '#fdcb6e', '#00b894', '#00cec9', '#0984e3', '#6c5ce7'],
+                    borderColor: '#2d2d2d',
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'right',
+                        labels: { color: '#a0a0a0' }
+                    }
+                }
+            }
+        });
+    }
+</script>
+{% endblock %}
