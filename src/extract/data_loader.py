@@ -172,8 +172,14 @@ class XRKDataLoader:
             times = np.array([times_array[i] for i in range(result)])
             values = np.array([values_array[i] for i in range(result)])
 
+            # Normalize time to seconds
+            # GPS channels are documented as milliseconds
+            # Regular channels: auto-detect based on magnitude
             if is_gps:
                 times = times / 1000.0  # ms → seconds
+            elif len(times) > 0 and times[-1] > 1000:
+                # If max time > 1000, assume milliseconds (a 16-min session would be ~1000s)
+                times = times / 1000.0
 
             return {"time": times, "values": values, "sample_count": result}
 
