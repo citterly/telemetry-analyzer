@@ -49,3 +49,25 @@ Features: 1/8 passing
 
 Next priority: feat-002 (XRK extraction queue)
 
+
+=== Session 1 continued (2025-01-29 01:30 UTC) ===
+Expanded features.json with full project scope.
+
+Categories defined:
+- bugfix: Bug fixes and corrections
+- core: Data extraction and processing pipeline  
+- analysis: Telemetry analysis features
+- ui: Web interface and visualization
+- infra: Infrastructure and configuration
+- testing: Test coverage and quality
+
+Features by category:
+- bugfix (2): gear_calculator imports, config path fix
+- core (4): Parquet export, extraction queue, Windows API, queue worker
+- analysis (6): shifts, transmission comparison, laps, gear usage, power, session report
+- ui (5): Parquet viewer, track map, analysis endpoints, results viewer, queue dashboard
+- infra (3): cross-machine workflow, track database, vehicle profiles
+- testing (2): unit tests, integration tests
+
+Status: 5/22 passing (23%)
+
