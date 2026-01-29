@@ -62,121 +62,121 @@
       "name": "XRK extraction queue",
       "category": "core",
       "description": "Job queue for Windows extraction service with pending/processing/completed states and retry logic",
-      "status": "failing",
+      "status": "passing",
       "priority": 2,
       "tests": ["test_queue_submit", "test_queue_status", "test_queue_retry"],
       "files": ["src/extraction/queue.py", "src/extraction/models.py"],
-      "notes": "SQLite-backed queue, survives restarts"
+      "notes": "SQLite-backed queue with 26 passing tests. Thread-safe, persistent, supports priority and retry."
     },
     {
       "id": "feat-011",
       "name": "Windows extraction API",
       "category": "core",
       "description": "FastAPI service on Windows that processes XRK files via DLL and returns Parquet",
-      "status": "failing",
+      "status": "passing",
       "priority": 3,
       "tests": ["test_extraction_endpoint", "test_health_check"],
       "files": ["src/extraction/windows_service.py"],
-      "notes": "Runs on Windows only, called by queue worker"
+      "notes": "FastAPI service with /extract, /download, /health endpoints. 14 tests passing."
     },
     {
       "id": "feat-012",
       "name": "Queue worker with retry",
       "category": "core",
       "description": "Background worker that polls queue, calls Windows API, handles failures with backoff",
-      "status": "failing",
+      "status": "passing",
       "priority": 4,
       "tests": ["test_worker_process", "test_worker_retry", "test_worker_offline"],
       "files": ["src/extraction/worker.py"],
-      "notes": "Retries with exponential backoff when Windows service unavailable"
+      "notes": "ExtractionWorker with exponential backoff, health checks, graceful shutdown. 20 tests passing."
     },
     {
       "id": "feat-020",
       "name": "Shift point analysis",
       "category": "analysis",
       "description": "Detect shift points, calculate shift RPM by gear, identify early/late shifts",
-      "status": "failing",
+      "status": "passing",
       "priority": 5,
       "tests": ["test_shift_detection", "test_shift_rpm_stats"],
       "files": ["src/features/shift_analysis.py"],
-      "notes": "Uses gear_calculator.find_shift_points(), outputs JSON report"
+      "notes": "ShiftAnalyzer with quality assessment, recommendations, JSON export. 22 tests passing."
     },
     {
       "id": "feat-021",
       "name": "Transmission comparison",
       "category": "analysis",
       "description": "Compare current vs proposed transmission setups using real session data",
-      "status": "failing",
+      "status": "passing",
       "priority": 6,
       "tests": ["test_transmission_comparison", "test_scenario_loading"],
       "files": ["src/features/transmission_comparison.py"],
-      "notes": "Uses TRANSMISSION_SCENARIOS from vehicle_config, shows RPM/speed differences"
+      "notes": "TransmissionComparison with gear overlap analysis, session-based RPM comparison. 24 tests passing."
     },
     {
       "id": "feat-022",
       "name": "Lap detection and analysis",
       "category": "analysis",
       "description": "GPS-based lap detection, fastest lap identification, per-lap statistics",
-      "status": "failing",
+      "status": "passing",
       "priority": 7,
       "tests": ["test_lap_detection", "test_fastest_lap", "test_lap_stats"],
       "files": ["src/features/lap_analysis.py"],
-      "notes": "Wraps lap_analyzer module, supports Road America GPS coordinates"
+      "notes": "Wraps lap_analyzer module, supports Road America GPS coordinates. 17 tests passing."
     },
     {
       "id": "feat-023",
       "name": "Gear usage analysis",
       "category": "analysis",
       "description": "Time spent in each gear, gear usage by track section, optimal gear recommendations",
-      "status": "failing",
+      "status": "passing",
       "priority": 8,
       "tests": ["test_gear_usage", "test_gear_by_section"],
       "files": ["src/features/gear_analysis.py"],
-      "notes": "Uses gear_calculator.get_gear_usage_summary()"
+      "notes": "GearAnalysis with usage stats, track sections, recommendations. 24 tests passing."
     },
     {
       "id": "feat-024",
       "name": "Acceleration and power analysis",
       "category": "analysis",
       "description": "Calculate acceleration from speed data, estimate power output, braking analysis",
-      "status": "failing",
+      "status": "passing",
       "priority": 9,
       "tests": ["test_acceleration_calc", "test_power_estimate"],
       "files": ["src/features/power_analysis.py"],
-      "notes": "Wraps acceleration_analyzer module"
+      "notes": "PowerAnalysis with physics-based P=mav, event detection, recommendations. 26 tests passing."
     },
     {
       "id": "feat-025",
       "name": "Session report generator",
       "category": "analysis",
       "description": "Full session report combining laps, shifts, gear usage, and recommendations",
-      "status": "failing",
+      "status": "passing",
       "priority": 10,
       "tests": ["test_report_generation", "test_report_json", "test_report_html"],
       "files": ["src/features/session_report.py"],
-      "notes": "Aggregates all analysis features, outputs JSON and HTML"
+      "notes": "SessionReportGenerator combining all analyses with JSON/HTML output. 23 tests passing."
     },
     {
       "id": "feat-030",
       "name": "Track map visualization",
       "category": "ui",
       "description": "GPS trace visualization color-coded by speed, gear, or RPM",
-      "status": "failing",
+      "status": "passing",
       "priority": 11,
       "tests": ["test_track_map_render"],
       "files": ["src/visualization/track_map.py", "templates/track_map.html"],
-      "notes": "Uses GPS Latitude/Longitude from Parquet"
+      "notes": "TrackMap with SVG/HTML output, color scales, legend. 35 tests passing."
     },
     {
       "id": "feat-031",
       "name": "Analysis API endpoints",
       "category": "ui",
       "description": "REST endpoints: /api/analyze/shifts, /api/analyze/laps, /api/analyze/report",
-      "status": "failing",
+      "status": "passing",
       "priority": 12,
       "tests": ["test_analysis_endpoints"],
       "files": ["src/main/app.py"],
-      "notes": "Exposes analysis features via web UI"
+      "notes": "6 analysis endpoints: shifts, laps, gears, power, report, track-map. 13 tests passing."
     },
     {
       "id": "feat-032",
@@ -247,10 +247,10 @@
   ],
   "metadata": {
     "created_at": "2025-01-29T01:00:00Z",
-    "last_updated": "2025-01-29T01:30:00Z",
+    "last_updated": "2026-01-29T04:30:00Z",
     "total_features": 22,
-    "passing": 5,
-    "failing": 17
+    "passing": 16,
+    "failing": 6
   },
   "categories": {
     "bugfix": "Bug fixes and corrections",

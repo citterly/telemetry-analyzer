@@ -1,0 +1,520 @@
+"""
+Track Map Visualization
+GPS trace visualization color-coded by speed, gear, or RPM.
+
+Generates SVG and HTML visualizations of telemetry data on track outline.
+"""
+
+import numpy as np
+from dataclasses import dataclass, field
+from typing import List, Dict, Optional, Tuple, Literal
+from pathlib import Path
+import json
+
+
+@dataclass
+class TrackMapConfig:
+    """Configuration for track map rendering"""
+    width: int = 800
+    height: int = 600
+    padding: int = 40
+    point_size: int = 3
+    line_width: int = 2
+    background_color: str = "#1a1a2e"
+    track_outline_color: str = "#333344"
+    title_color: str = "#ffffff"
+    legend_position: str = "bottom-right"
+    show_start_finish: bool = True
+    show_legend: bool = True
+    show_title: bool = True
+
+
+@dataclass
+class ColorScale:
+    """Color scale for value mapping"""
+    name: str
+    min_val: float
+    max_val: float
+    colors: List[str] = field(default_factory=list)
+    labels: List[str] = field(default_factory=list)
+
+    def __post_init__(self):
+        if not self.colors:
+            # Default blue -> green -> yellow -> red scale
+            self.colors = ["#3498db", "#2ecc71", "#f1c40f", "#e74c3c"]
+        if not self.labels:
+            step = (self.max_val - self.min_val) / (len(self.colors) - 1)
+            self.labels = [f"{self.min_val + i*step:.0f}" for i in range(len(self.colors))]
+
+    def get_color(self, value: float) -> str:
+        """Get interpolated color for a value"""
+        if value <= self.min_val:
+            return self.colors[0]
+        if value >= self.max_val:
+            return self.colors[-1]
+
+        # Normalize value to 0-1
+        normalized = (value - self.min_val) / (self.max_val - self.min_val)
+
+        # Find which color segment we're in
+        segments = len(self.colors) - 1
+        segment_idx = int(normalized * segments)
+        segment_idx = min(segment_idx, segments - 1)
+
+        # Interpolate within segment
+        segment_pos = (normalized * segments) - segment_idx
+
+        color1 = self.colors[segment_idx]
+        color2 = self.colors[segment_idx + 1]
+
+        return self._interpolate_colors(color1, color2, segment_pos)
+
+    def _interpolate_colors(self, color1: str, color2: str, t: float) -> str:
+        """Interpolate between two hex colors"""
+        r1, g1, b1 = int(color1[1:3], 16), int(color1[3:5], 16), int(color1[5:7], 16)
+        r2, g2, b2 = int(color2[1:3], 16), int(color2[3:5], 16), int(color2[5:7], 16)
+
+        r = int(r1 + (r2 - r1) * t)
+        g = int(g1 + (g2 - g1) * t)
+        b = int(b1 + (b2 - b1) * t)
+
+        return f"#{r:02x}{g:02x}{b:02x}"
+
+
+class TrackMap:
+    """
+    Generates track map visualizations from GPS telemetry data.
+
+    Supports coloring by speed, RPM, gear, or custom values.
+    Outputs SVG and HTML formats.
+    """
+
+    # Predefined color schemes
+    COLOR_SCHEMES = {
+        'speed': ColorScale(
+            name='Speed (mph)',
+            min_val=0,
+            max_val=150,
+            colors=['#3498db', '#2ecc71', '#f1c40f', '#e74c3c'],
+            labels=['0', '50', '100', '150']
+        ),
+        'rpm': ColorScale(
+            name='RPM',
+            min_val=2000,
+            max_val=7500,
+            colors=['#2ecc71', '#f1c40f', '#e67e22', '#e74c3c'],
+            labels=['2000', '4000', '6000', '7500']
+        ),
+        'gear': ColorScale(
+            name='Gear',
+            min_val=1,
+            max_val=4,
+            colors=['#e74c3c', '#f39c12', '#3498db', '#9b59b6'],
+            labels=['1', '2', '3', '4']
+        ),
+        'throttle': ColorScale(
+            name='Throttle %',
+            min_val=0,
+            max_val=100,
+            colors=['#e74c3c', '#f1c40f', '#2ecc71'],
+            labels=['0', '50', '100']
+        ),
+        'brake': ColorScale(
+            name='Brake',
+            min_val=0,
+            max_val=1,
+            colors=['#2ecc71', '#f1c40f', '#e74c3c'],
+            labels=['Off', '', 'Full']
+        )
+    }
+
+    def __init__(self, config: TrackMapConfig = None):
+        """
+        Initialize track map generator.
+
+        Args:
+            config: TrackMapConfig for rendering options
+        """
+        self.config = config or TrackMapConfig()
+
+    def render_svg(
+        self,
+        latitude_data: np.ndarray,
+        longitude_data: np.ndarray,
+        color_data: np.ndarray = None,
+        color_scheme: str = 'speed',
+        title: str = "Track Map",
+        custom_scale: ColorScale = None
+    ) -> str:
+        """
+        Render track map as SVG.
+
+        Args:
+            latitude_data: GPS latitude values
+            longitude_data: GPS longitude values
+            color_data: Values for color coding (e.g., speed, rpm)
+            color_scheme: Predefined scheme ('speed', 'rpm', 'gear', 'throttle', 'brake')
+            title: Map title
+            custom_scale: Custom ColorScale to use instead of predefined
+
+        Returns:
+            SVG string
+        """
+        # Get color scale
+        if custom_scale:
+            scale = custom_scale
+        elif color_scheme in self.COLOR_SCHEMES:
+            scale = self.COLOR_SCHEMES[color_scheme]
+        else:
+            scale = self.COLOR_SCHEMES['speed']
+
+        # Update scale based on actual data if provided
+        if color_data is not None and len(color_data) > 0:
+            scale = ColorScale(
+                name=scale.name,
+                min_val=float(np.min(color_data)),
+                max_val=float(np.max(color_data)),
+                colors=scale.colors
+            )
+
+        # Transform GPS to SVG coordinates
+        coords = self._transform_coordinates(latitude_data, longitude_data)
+
+        # Build SVG
+        svg = self._build_svg_header()
+
+        # Background
+        svg += f'<rect width="{self.config.width}" height="{self.config.height}" fill="{self.config.background_color}"/>\n'
+
+        # Track outline (faint)
+        svg += self._build_track_outline(coords)
+
+        # Colored track trace
+        svg += self._build_colored_trace(coords, color_data, scale)
+
+        # Start/finish marker
+        if self.config.show_start_finish and len(coords) > 0:
+            svg += self._build_start_finish_marker(coords[0])
+
+        # Legend
+        if self.config.show_legend:
+            svg += self._build_legend(scale)
+
+        # Title
+        if self.config.show_title:
+            svg += self._build_title(title)
+
+        svg += '</svg>'
+        return svg
+
+    def render_html(
+        self,
+        latitude_data: np.ndarray,
+        longitude_data: np.ndarray,
+        color_data: np.ndarray = None,
+        color_scheme: str = 'speed',
+        title: str = "Track Map",
+        custom_scale: ColorScale = None,
+        include_controls: bool = True
+    ) -> str:
+        """
+        Render track map as standalone HTML.
+
+        Args:
+            latitude_data: GPS latitude values
+            longitude_data: GPS longitude values
+            color_data: Values for color coding
+            color_scheme: Predefined scheme name
+            title: Map title
+            custom_scale: Custom color scale
+            include_controls: Include interactive controls
+
+        Returns:
+            HTML string
+        """
+        svg = self.render_svg(
+            latitude_data, longitude_data, color_data, color_scheme, title, custom_scale
+        )
+
+        html = f"""<!DOCTYPE html>
+<html>
+<head>
+    <title>{title}</title>
+    <style>
+        body {{
+            margin: 0;
+            padding: 20px;
+            background: {self.config.background_color};
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            color: #fff;
+        }}
+        .container {{
+            max-width: {self.config.width + 40}px;
+            margin: 0 auto;
+        }}
+        h1 {{
+            margin-bottom: 20px;
+        }}
+        .map-container {{
+            background: #16213e;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }}
+        svg {{
+            display: block;
+            margin: 0 auto;
+        }}
+"""
+
+        if include_controls:
+            html += """        .controls {{
+            margin-top: 20px;
+            padding: 15px;
+            background: #16213e;
+            border-radius: 8px;
+        }}
+        .controls label {{
+            margin-right: 10px;
+        }}
+        .controls select {{
+            padding: 5px 10px;
+            background: #1a1a2e;
+            color: #fff;
+            border: 1px solid #333;
+            border-radius: 4px;
+        }}
+"""
+
+        html += """    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="map-container">
+"""
+        html += svg
+        html += """        </div>
+"""
+
+        if include_controls:
+            html += f"""        <div class="controls">
+            <label for="colorScheme">Color by:</label>
+            <select id="colorScheme" disabled>
+                <option value="speed" {'selected' if color_scheme == 'speed' else ''}>Speed</option>
+                <option value="rpm" {'selected' if color_scheme == 'rpm' else ''}>RPM</option>
+                <option value="gear" {'selected' if color_scheme == 'gear' else ''}>Gear</option>
+            </select>
+            <small style="color: #666; margin-left: 10px;">(Interactive controls require JavaScript)</small>
+        </div>
+"""
+
+        html += """    </div>
+</body>
+</html>"""
+        return html
+
+    def _transform_coordinates(
+        self,
+        latitude_data: np.ndarray,
+        longitude_data: np.ndarray
+    ) -> List[Tuple[float, float]]:
+        """Transform GPS coordinates to SVG coordinates"""
+        if len(latitude_data) == 0:
+            return []
+
+        # Get bounds
+        lat_min, lat_max = np.min(latitude_data), np.max(latitude_data)
+        lon_min, lon_max = np.min(longitude_data), np.max(longitude_data)
+
+        # Calculate scale to fit in viewport
+        lat_range = lat_max - lat_min or 1
+        lon_range = lon_max - lon_min or 1
+
+        available_width = self.config.width - 2 * self.config.padding
+        available_height = self.config.height - 2 * self.config.padding
+
+        # Maintain aspect ratio
+        scale_x = available_width / lon_range
+        scale_y = available_height / lat_range
+        scale = min(scale_x, scale_y)
+
+        # Center the track
+        center_x = self.config.width / 2
+        center_y = self.config.height / 2
+        data_center_lon = (lon_min + lon_max) / 2
+        data_center_lat = (lat_min + lat_max) / 2
+
+        coords = []
+        for lat, lon in zip(latitude_data, longitude_data):
+            x = center_x + (lon - data_center_lon) * scale
+            y = center_y - (lat - data_center_lat) * scale  # Flip Y axis
+            coords.append((x, y))
+
+        return coords
+
+    def _build_svg_header(self) -> str:
+        """Build SVG header"""
+        return f'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {self.config.width} {self.config.height}" width="{self.config.width}" height="{self.config.height}">
+'''
+
+    def _build_track_outline(self, coords: List[Tuple[float, float]]) -> str:
+        """Build faint track outline"""
+        if len(coords) < 2:
+            return ""
+
+        points = " ".join(f"{x:.1f},{y:.1f}" for x, y in coords)
+        return f'<polyline points="{points}" fill="none" stroke="{self.config.track_outline_color}" stroke-width="{self.config.line_width + 4}" stroke-linecap="round" stroke-linejoin="round"/>\n'
+
+    def _build_colored_trace(
+        self,
+        coords: List[Tuple[float, float]],
+        color_data: np.ndarray,
+        scale: ColorScale
+    ) -> str:
+        """Build colored track trace"""
+        if len(coords) < 2:
+            return ""
+
+        svg = '<g class="track-trace">\n'
+
+        # If no color data, use single color
+        if color_data is None or len(color_data) == 0:
+            points = " ".join(f"{x:.1f},{y:.1f}" for x, y in coords)
+            svg += f'<polyline points="{points}" fill="none" stroke="#3498db" stroke-width="{self.config.line_width}" stroke-linecap="round" stroke-linejoin="round"/>\n'
+        else:
+            # Draw colored segments
+            for i in range(len(coords) - 1):
+                x1, y1 = coords[i]
+                x2, y2 = coords[i + 1]
+                color = scale.get_color(color_data[i])
+                svg += f'<line x1="{x1:.1f}" y1="{y1:.1f}" x2="{x2:.1f}" y2="{y2:.1f}" stroke="{color}" stroke-width="{self.config.line_width}" stroke-linecap="round"/>\n'
+
+        svg += '</g>\n'
+        return svg
+
+    def _build_start_finish_marker(self, coord: Tuple[float, float]) -> str:
+        """Build start/finish marker"""
+        x, y = coord
+        return f'''<g class="start-finish">
+    <circle cx="{x:.1f}" cy="{y:.1f}" r="8" fill="#ffffff" stroke="#1a1a2e" stroke-width="2"/>
+    <text x="{x:.1f}" y="{y + 20:.1f}" text-anchor="middle" fill="#ffffff" font-size="10" font-family="sans-serif">S/F</text>
+</g>
+'''
+
+    def _build_legend(self, scale: ColorScale) -> str:
+        """Build color legend"""
+        legend_width = 150
+        legend_height = 20
+
+        if self.config.legend_position == "bottom-right":
+            x = self.config.width - legend_width - self.config.padding
+            y = self.config.height - 50
+        elif self.config.legend_position == "top-right":
+            x = self.config.width - legend_width - self.config.padding
+            y = self.config.padding + 30
+        else:  # bottom-left
+            x = self.config.padding
+            y = self.config.height - 50
+
+        svg = f'<g class="legend" transform="translate({x}, {y})">\n'
+
+        # Legend title
+        svg += f'<text x="0" y="-5" fill="{self.config.title_color}" font-size="10" font-family="sans-serif">{scale.name}</text>\n'
+
+        # Gradient bar
+        gradient_id = f"legend-gradient-{id(scale)}"
+        svg += f'<defs><linearGradient id="{gradient_id}">\n'
+        for i, color in enumerate(scale.colors):
+            offset = i / (len(scale.colors) - 1) * 100
+            svg += f'<stop offset="{offset}%" stop-color="{color}"/>\n'
+        svg += '</linearGradient></defs>\n'
+
+        svg += f'<rect x="0" y="0" width="{legend_width}" height="{legend_height}" fill="url(#{gradient_id})" rx="3"/>\n'
+
+        # Labels
+        for i, label in enumerate(scale.labels):
+            label_x = i / (len(scale.labels) - 1) * legend_width
+            svg += f'<text x="{label_x}" y="{legend_height + 12}" fill="{self.config.title_color}" font-size="9" text-anchor="middle" font-family="sans-serif">{label}</text>\n'
+
+        svg += '</g>\n'
+        return svg
+
+    def _build_title(self, title: str) -> str:
+        """Build title"""
+        return f'<text x="{self.config.padding}" y="{self.config.padding - 10}" fill="{self.config.title_color}" font-size="16" font-weight="bold" font-family="sans-serif">{title}</text>\n'
+
+    def to_dict(
+        self,
+        latitude_data: np.ndarray,
+        longitude_data: np.ndarray,
+        color_data: np.ndarray = None,
+        color_scheme: str = 'speed'
+    ) -> Dict:
+        """
+        Convert track map data to dictionary format.
+
+        Useful for JSON serialization or passing to frontend.
+
+        Args:
+            latitude_data: GPS latitude values
+            longitude_data: GPS longitude values
+            color_data: Values for color coding
+            color_scheme: Color scheme name
+
+        Returns:
+            Dictionary with track data
+        """
+        scale = self.COLOR_SCHEMES.get(color_scheme, self.COLOR_SCHEMES['speed'])
+
+        if color_data is not None and len(color_data) > 0:
+            colors = [scale.get_color(v) for v in color_data]
+        else:
+            colors = ['#3498db'] * len(latitude_data)
+
+        return {
+            "coordinates": [
+                {"lat": float(lat), "lon": float(lon), "color": color}
+                for lat, lon, color in zip(latitude_data, longitude_data, colors)
+            ],
+            "bounds": {
+                "lat_min": float(np.min(latitude_data)),
+                "lat_max": float(np.max(latitude_data)),
+                "lon_min": float(np.min(longitude_data)),
+                "lon_max": float(np.max(longitude_data))
+            },
+            "color_scheme": color_scheme,
+            "config": {
+                "width": self.config.width,
+                "height": self.config.height
+            }
+        }
+
+    def save_svg(
+        self,
+        filepath: str,
+        latitude_data: np.ndarray,
+        longitude_data: np.ndarray,
+        color_data: np.ndarray = None,
+        color_scheme: str = 'speed',
+        title: str = "Track Map"
+    ):
+        """Save track map as SVG file"""
+        svg = self.render_svg(
+            latitude_data, longitude_data, color_data, color_scheme, title
+        )
+        Path(filepath).write_text(svg)
+
+    def save_html(
+        self,
+        filepath: str,
+        latitude_data: np.ndarray,
+        longitude_data: np.ndarray,
+        color_data: np.ndarray = None,
+        color_scheme: str = 'speed',
+        title: str = "Track Map"
+    ):
+        """Save track map as HTML file"""
+        html = self.render_html(
+            latitude_data, longitude_data, color_data, color_scheme, title
+        )
+        Path(filepath).write_text(html)
