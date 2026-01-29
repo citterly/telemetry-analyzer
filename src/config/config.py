@@ -30,14 +30,14 @@ EXPORTS_PATH    = DATA_ROOT / "exports"
 
 class Config:
     """Main configuration class with environment variable overrides"""
-    
-    # Data storage paths
-    BASE_DIR = Path(__file__).parent
-    DATA_DIR = os.getenv('DATA_DIR', str(BASE_DIR / 'data'))
-    UPLOAD_DIR = os.getenv('UPLOAD_DIR', f'{DATA_DIR}/uploads')
-    METADATA_DIR = os.getenv('METADATA_DIR', f'{DATA_DIR}/metadata')
-    CACHE_DIR = os.getenv('CACHE_DIR', f'{DATA_DIR}/cache')
-    EXPORTS_DIR = os.getenv('EXPORTS_DIR', f'{DATA_DIR}/exports')
+
+    # Data storage paths - use PROJECT_ROOT/data not src/config/data
+    BASE_DIR = PROJECT_ROOT
+    DATA_DIR = os.getenv('DATA_DIR', str(PROJECT_ROOT / 'data'))
+    UPLOAD_DIR = os.getenv('UPLOAD_DIR', str(PROJECT_ROOT / 'data' / 'uploads'))
+    METADATA_DIR = os.getenv('METADATA_DIR', str(PROJECT_ROOT / 'data' / 'metadata'))
+    CACHE_DIR = os.getenv('CACHE_DIR', str(PROJECT_ROOT / 'data' / 'cache'))
+    EXPORTS_DIR = os.getenv('EXPORTS_DIR', str(PROJECT_ROOT / 'data' / 'exports'))
     
     # Database (SQLite for portability, PostgreSQL for production)
     DATABASE_URL = os.getenv('DATABASE_URL', f'sqlite:///{DATA_DIR}/sessions.db')
