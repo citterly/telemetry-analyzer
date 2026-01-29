@@ -41,6 +41,7 @@ data/exports/processed/*
 *.png
 *.pdf
 *.json
+!features.json
 fastest_lap_analysis/
 physics_based_simulation_results.json
 simple_power_results.csv

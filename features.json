@@ -1,0 +1,93 @@
+{
+  "project_name": "aim-telemetry",
+  "description": "AIM XRK telemetry analysis with shift point, lap, and transmission comparison features",
+  "features": [
+    {
+      "id": "feat-001",
+      "name": "Fix gear_calculator imports",
+      "description": "Change import from non-existent config_analysis to vehicle_config",
+      "status": "passing",
+      "priority": 1,
+      "tests": ["test_gear_calculator_import"],
+      "files": ["src/analysis/gear_calculator.py"],
+      "notes": "Fixed: import from vehicle_config instead of config_analysis"
+    },
+    {
+      "id": "feat-002",
+      "name": "XRK extraction queue",
+      "description": "Job queue for Windows extraction service with pending/processing/completed states and retry logic",
+      "status": "failing",
+      "priority": 2,
+      "tests": ["test_queue_submit", "test_queue_status", "test_queue_retry"],
+      "files": ["src/extraction/queue.py", "src/extraction/worker.py"],
+      "notes": "Enables Linux UI to queue jobs for Windows extraction"
+    },
+    {
+      "id": "feat-003",
+      "name": "Windows extraction API",
+      "description": "FastAPI service on Windows that processes XRK files via DLL and returns Parquet",
+      "status": "failing",
+      "priority": 3,
+      "tests": ["test_extraction_endpoint", "test_health_check"],
+      "files": ["src/extraction/windows_service.py"],
+      "notes": "Runs on Windows only, called by queue worker"
+    },
+    {
+      "id": "feat-004",
+      "name": "Shift point analysis feature",
+      "description": "Runnable analysis that detects shift points, calculates optimal shift RPM, generates report",
+      "status": "failing",
+      "priority": 4,
+      "tests": ["test_shift_detection", "test_shift_report"],
+      "files": ["src/features/shift_analysis.py"],
+      "notes": "Wraps gear_calculator.find_shift_points()"
+    },
+    {
+      "id": "feat-005",
+      "name": "Transmission comparison feature",
+      "description": "Compare current vs proposed transmission setups using real session data",
+      "status": "failing",
+      "priority": 5,
+      "tests": ["test_transmission_comparison", "test_scenario_loading"],
+      "files": ["src/features/transmission_comparison.py"],
+      "notes": "Uses TRANSMISSION_SCENARIOS from vehicle_config"
+    },
+    {
+      "id": "feat-006",
+      "name": "Lap analysis feature",
+      "description": "Detect laps, find fastest lap, generate per-lap statistics",
+      "status": "failing",
+      "priority": 6,
+      "tests": ["test_lap_detection", "test_fastest_lap"],
+      "files": ["src/features/lap_analysis.py"],
+      "notes": "Wraps lap_analyzer module"
+    },
+    {
+      "id": "feat-007",
+      "name": "Session report generator",
+      "description": "Full session report combining laps, shifts, gear usage, and recommendations",
+      "status": "failing",
+      "priority": 7,
+      "tests": ["test_report_generation", "test_report_html_output"],
+      "files": ["src/features/session_report.py"],
+      "notes": "Aggregates all analysis features into one report"
+    },
+    {
+      "id": "feat-008",
+      "name": "Analysis API endpoints",
+      "description": "REST endpoints to run analyses: /api/analyze/shifts, /api/analyze/laps, /api/analyze/report",
+      "status": "failing",
+      "priority": 8,
+      "tests": ["test_analysis_endpoints"],
+      "files": ["src/main/app.py"],
+      "notes": "Exposes features via web UI"
+    }
+  ],
+  "metadata": {
+    "created_at": "2025-01-29T01:00:00Z",
+    "last_updated": "2025-01-29T01:15:00Z",
+    "total_features": 8,
+    "passing": 1,
+    "failing": 7
+  }
+}
