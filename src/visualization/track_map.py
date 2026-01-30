@@ -37,6 +37,13 @@ class ColorScale:
     max_val: float
     colors: List[str] = field(default_factory=list)
     labels: List[str] = field(default_factory=list)
+    # Discrete 3-color mode: thresholds as percentages (0-100)
+    discrete_mode: bool = False
+    low_threshold: float = 33.0  # Below this % = green
+    high_threshold: float = 66.0  # Above this % = red, between = yellow
+
+    # Discrete colors: green (low), yellow (mid), red (high)
+    DISCRETE_COLORS = ["#2ecc71", "#f1c40f", "#e74c3c"]
 
     def __post_init__(self):
         if not self.colors:
@@ -47,7 +54,28 @@ class ColorScale:
             self.labels = [f"{self.min_val + i*step:.0f}" for i in range(len(self.colors))]
 
     def get_color(self, value: float) -> str:
-        """Get interpolated color for a value"""
+        """Get color for a value (interpolated or discrete based on mode)"""
+        if self.discrete_mode:
+            return self._get_discrete_color(value)
+        return self._get_gradient_color(value)
+
+    def _get_discrete_color(self, value: float) -> str:
+        """Get discrete 3-color value (green/yellow/red based on thresholds)"""
+        if self.max_val == self.min_val:
+            return self.DISCRETE_COLORS[1]  # Yellow for no range
+
+        # Normalize to percentage
+        pct = (value - self.min_val) / (self.max_val - self.min_val) * 100
+
+        if pct <= self.low_threshold:
+            return self.DISCRETE_COLORS[0]  # Green
+        elif pct >= self.high_threshold:
+            return self.DISCRETE_COLORS[2]  # Red
+        else:
+            return self.DISCRETE_COLORS[1]  # Yellow
+
+    def _get_gradient_color(self, value: float) -> str:
+        """Get interpolated gradient color for a value"""
         if value <= self.min_val:
             return self.colors[0]
         if value >= self.max_val:
@@ -144,7 +172,10 @@ class TrackMap:
         color_data: np.ndarray = None,
         color_scheme: str = 'speed',
         title: str = "Track Map",
-        custom_scale: ColorScale = None
+        custom_scale: ColorScale = None,
+        discrete_mode: bool = True,
+        low_threshold: float = 33.0,
+        high_threshold: float = 66.0
     ) -> str:
         """
         Render track map as SVG.
@@ -156,6 +187,9 @@ class TrackMap:
             color_scheme: Predefined scheme ('speed', 'rpm', 'gear', 'throttle', 'brake')
             title: Map title
             custom_scale: Custom ColorScale to use instead of predefined
+            discrete_mode: Use 3-color discrete mode (green/yellow/red)
+            low_threshold: Percentage threshold for green (0-100)
+            high_threshold: Percentage threshold for red (0-100)
 
         Returns:
             SVG string
@@ -172,9 +206,12 @@ class TrackMap:
         if color_data is not None and len(color_data) > 0:
             scale = ColorScale(
                 name=scale.name,
-                min_val=float(np.min(color_data)),
-                max_val=float(np.max(color_data)),
-                colors=scale.colors
+                min_val=float(np.nanmin(color_data)),
+                max_val=float(np.nanmax(color_data)),
+                colors=scale.colors,
+                discrete_mode=discrete_mode,
+                low_threshold=low_threshold,
+                high_threshold=high_threshold
             )
 
         # Transform GPS to SVG coordinates
@@ -421,20 +458,47 @@ class TrackMap:
         # Legend title
         svg += f'<text x="0" y="-5" fill="{self.config.title_color}" font-size="10" font-family="sans-serif">{scale.name}</text>\n'
 
-        # Gradient bar
-        gradient_id = f"legend-gradient-{id(scale)}"
-        svg += f'<defs><linearGradient id="{gradient_id}">\n'
-        for i, color in enumerate(scale.colors):
-            offset = i / (len(scale.colors) - 1) * 100
-            svg += f'<stop offset="{offset}%" stop-color="{color}"/>\n'
-        svg += '</linearGradient></defs>\n'
+        if scale.discrete_mode:
+            # Discrete 3-band legend
+            low_pct = scale.low_threshold / 100
+            high_pct = scale.high_threshold / 100
 
-        svg += f'<rect x="0" y="0" width="{legend_width}" height="{legend_height}" fill="url(#{gradient_id})" rx="3"/>\n'
+            # Green band (0 to low_threshold)
+            green_width = low_pct * legend_width
+            svg += f'<rect x="0" y="0" width="{green_width:.1f}" height="{legend_height}" fill="{scale.DISCRETE_COLORS[0]}" rx="3" ry="3"/>\n'
 
-        # Labels
-        for i, label in enumerate(scale.labels):
-            label_x = i / (len(scale.labels) - 1) * legend_width
-            svg += f'<text x="{label_x}" y="{legend_height + 12}" fill="{self.config.title_color}" font-size="9" text-anchor="middle" font-family="sans-serif">{label}</text>\n'
+            # Yellow band (low_threshold to high_threshold)
+            yellow_width = (high_pct - low_pct) * legend_width
+            svg += f'<rect x="{green_width:.1f}" y="0" width="{yellow_width:.1f}" height="{legend_height}" fill="{scale.DISCRETE_COLORS[1]}"/>\n'
+
+            # Red band (high_threshold to 100)
+            red_width = (1 - high_pct) * legend_width
+            svg += f'<rect x="{green_width + yellow_width:.1f}" y="0" width="{red_width:.1f}" height="{legend_height}" fill="{scale.DISCRETE_COLORS[2]}" rx="3" ry="3"/>\n'
+
+            # Labels for discrete mode
+            val_range = scale.max_val - scale.min_val
+            low_val = scale.min_val + val_range * low_pct
+            high_val = scale.min_val + val_range * high_pct
+            labels = [f"{scale.min_val:.0f}", f"{low_val:.0f}", f"{high_val:.0f}", f"{scale.max_val:.0f}"]
+            positions = [0, green_width, green_width + yellow_width, legend_width]
+
+            for pos, label in zip(positions, labels):
+                svg += f'<text x="{pos:.1f}" y="{legend_height + 12}" fill="{self.config.title_color}" font-size="9" text-anchor="middle" font-family="sans-serif">{label}</text>\n'
+        else:
+            # Gradient bar
+            gradient_id = f"legend-gradient-{id(scale)}"
+            svg += f'<defs><linearGradient id="{gradient_id}">\n'
+            for i, color in enumerate(scale.colors):
+                offset = i / (len(scale.colors) - 1) * 100
+                svg += f'<stop offset="{offset}%" stop-color="{color}"/>\n'
+            svg += '</linearGradient></defs>\n'
+
+            svg += f'<rect x="0" y="0" width="{legend_width}" height="{legend_height}" fill="url(#{gradient_id})" rx="3"/>\n'
+
+            # Labels
+            for i, label in enumerate(scale.labels):
+                label_x = i / (len(scale.labels) - 1) * legend_width
+                svg += f'<text x="{label_x}" y="{legend_height + 12}" fill="{self.config.title_color}" font-size="9" text-anchor="middle" font-family="sans-serif">{label}</text>\n'
 
         svg += '</g>\n'
         return svg

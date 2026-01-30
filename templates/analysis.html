@@ -166,8 +166,28 @@
             <option value="gear">Gear</option>
         </select>
     </div>
-    <div class="card-body text-center" id="track-map-container">
-        <div class="text-muted">Loading track map...</div>
+    <div class="card-body">
+        <!-- Threshold Sliders -->
+        <div class="row mb-3" id="threshold-controls">
+            <div class="col-md-6">
+                <label for="low-threshold" class="form-label d-flex justify-content-between">
+                    <span><span class="badge" style="background:#2ecc71;">Green</span> threshold</span>
+                    <span id="low-threshold-value">33%</span>
+                </label>
+                <input type="range" class="form-range" id="low-threshold" min="10" max="50" value="33">
+            </div>
+            <div class="col-md-6">
+                <label for="high-threshold" class="form-label d-flex justify-content-between">
+                    <span><span class="badge" style="background:#e74c3c;">Red</span> threshold</span>
+                    <span id="high-threshold-value">66%</span>
+                </label>
+                <input type="range" class="form-range" id="high-threshold" min="50" max="90" value="66">
+            </div>
+        </div>
+        <!-- Track Map SVG Container -->
+        <div class="text-center" id="track-map-container">
+            <div class="text-muted">Loading track map...</div>
+        </div>
     </div>
 </div>
 
@@ -970,14 +990,18 @@
 
     // Track map functions
     let currentFile = null;
+    let trackMapDebounceTimer = null;
 
     async function loadTrackMap(filename, colorBy = 'speed') {
         const container = document.getElementById('track-map-container');
         const section = document.getElementById('track-map-section');
+        const lowThreshold = document.getElementById('low-threshold').value;
+        const highThreshold = document.getElementById('high-threshold').value;
 
         try {
             container.innerHTML = '<div class="text-muted">Loading track map...</div>';
-            const response = await fetch(`/api/track-map/${encodeURIComponent(filename)}?color_by=${colorBy}&format=svg`);
+            const url = `/api/track-map/${encodeURIComponent(filename)}?color_by=${colorBy}&format=svg&discrete=true&low_threshold=${lowThreshold}&high_threshold=${highThreshold}`;
+            const response = await fetch(url);
             if (response.ok) {
                 container.innerHTML = await response.text();
                 section.style.display = 'block';
@@ -990,11 +1014,44 @@
         }
     }
 
+    // Debounced track map reload for sliders
+    function reloadTrackMapDebounced() {
+        if (trackMapDebounceTimer) clearTimeout(trackMapDebounceTimer);
+        trackMapDebounceTimer = setTimeout(() => {
+            if (currentFile) {
+                loadTrackMap(currentFile, document.getElementById('track-map-color').value);
+            }
+        }, 300);
+    }
+
     // Initialize track map color selector
     document.getElementById('track-map-color').addEventListener('change', function() {
         if (currentFile) {
             loadTrackMap(currentFile, this.value);
         }
+    });
+
+    // Initialize threshold sliders
+    document.getElementById('low-threshold').addEventListener('input', function() {
+        document.getElementById('low-threshold-value').textContent = this.value + '%';
+        // Ensure low < high
+        const highSlider = document.getElementById('high-threshold');
+        if (parseInt(this.value) >= parseInt(highSlider.value)) {
+            highSlider.value = parseInt(this.value) + 10;
+            document.getElementById('high-threshold-value').textContent = highSlider.value + '%';
+        }
+        reloadTrackMapDebounced();
+    });
+
+    document.getElementById('high-threshold').addEventListener('input', function() {
+        document.getElementById('high-threshold-value').textContent = this.value + '%';
+        // Ensure high > low
+        const lowSlider = document.getElementById('low-threshold');
+        if (parseInt(this.value) <= parseInt(lowSlider.value)) {
+            lowSlider.value = parseInt(this.value) - 10;
+            document.getElementById('low-threshold-value').textContent = lowSlider.value + '%';
+        }
+        reloadTrackMapDebounced();
     });
 
     // Lap classification badge helper

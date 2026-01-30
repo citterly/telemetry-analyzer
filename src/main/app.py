@@ -691,7 +691,10 @@ async def analyze_full_report(filename: str):
 async def get_track_map(
     filename: str,
     color_by: str = "speed",
-    format: str = "svg"
+    format: str = "svg",
+    discrete: bool = True,
+    low_threshold: float = 33.0,
+    high_threshold: float = 66.0
 ):
     """Generate track map visualization"""
     import pandas as pd
@@ -731,7 +734,10 @@ async def get_track_map(
         else:
             return HTMLResponse(
                 content=track_map.render_svg(
-                    lat_data, lon_data, color_data, color_by, f"Track Map - {filename}"
+                    lat_data, lon_data, color_data, color_by, f"Track Map - {filename}",
+                    discrete_mode=discrete,
+                    low_threshold=low_threshold,
+                    high_threshold=high_threshold
                 ),
                 media_type="image/svg+xml"
             )
