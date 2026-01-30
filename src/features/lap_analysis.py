@@ -651,3 +651,216 @@ class LapAnalysis:
             }
             for i, lap in enumerate(sorted_laps[:top_n])
         ]
+
+
+@dataclass
+class LapComparisonResult:
+    """Result of comparing two laps"""
+    lap_a: int
+    lap_b: int
+    time_delta: float  # Positive = lap_b slower
+    speed_deltas: List[Dict]  # Speed difference at distance points
+    segments: List[Dict]  # Segment-by-segment comparison
+    summary: Dict
+
+    def to_dict(self) -> dict:
+        return {
+            "lap_a": self.lap_a,
+            "lap_b": self.lap_b,
+            "time_delta": round(self.time_delta, 3),
+            "faster_lap": self.lap_a if self.time_delta > 0 else self.lap_b,
+            "speed_deltas": self.speed_deltas,
+            "segments": self.segments,
+            "summary": self.summary
+        }
+
+
+def compare_laps_detailed(
+    parquet_path: str,
+    lap_a: int,
+    lap_b: int,
+    num_segments: int = 10
+) -> Optional[LapComparisonResult]:
+    """
+    Compare two laps in detail, showing where time/speed was gained or lost.
+
+    Args:
+        parquet_path: Path to the parquet file
+        lap_a: First lap number (reference)
+        lap_b: Second lap number (comparison)
+        num_segments: Number of segments to divide the lap into
+
+    Returns:
+        LapComparisonResult with detailed comparison data
+    """
+    df = pd.read_parquet(parquet_path)
+
+    # Find required columns
+    time_data = df.index.values
+    lat_col = None
+    lon_col = None
+    speed_col = None
+
+    for col in df.columns:
+        col_lower = col.lower()
+        if 'latitude' in col_lower:
+            lat_col = col
+        elif 'longitude' in col_lower:
+            lon_col = col
+        elif 'speed' in col_lower and speed_col is None:
+            speed_col = col
+
+    if lat_col is None or lon_col is None:
+        return None
+
+    lat_data = df[lat_col].values
+    lon_data = df[lon_col].values
+    speed_data = df[speed_col].values if speed_col else np.zeros(len(time_data))
+
+    # Convert speed to mph if needed
+    if speed_data.max() < 100:
+        speed_data = speed_data * 2.237
+
+    # Build session data for lap analyzer
+    session_data = {
+        'time': time_data,
+        'latitude': lat_data,
+        'longitude': lon_data,
+        'rpm': np.zeros(len(time_data)),
+        'speed_mph': speed_data,
+        'speed_ms': speed_data / 2.237
+    }
+
+    # Detect laps
+    analyzer = LapAnalyzer(session_data)
+    laps = analyzer.detect_laps()
+
+    if not laps:
+        return None
+
+    # Find the requested laps
+    lap_a_info = None
+    lap_b_info = None
+    for lap in laps:
+        if lap.lap_number == lap_a:
+            lap_a_info = lap
+        if lap.lap_number == lap_b:
+            lap_b_info = lap
+
+    if lap_a_info is None or lap_b_info is None:
+        return None
+
+    # Get lap data
+    lap_a_data = analyzer.get_lap_data(lap_a_info)
+    lap_b_data = analyzer.get_lap_data(lap_b_info)
+
+    # Calculate cumulative distance for each lap
+    def calc_distance(lat, lon):
+        """Calculate cumulative distance in meters"""
+        dist = [0.0]
+        for i in range(1, len(lat)):
+            # Haversine approximation (simple for small distances)
+            dlat = (lat[i] - lat[i-1]) * 111000  # ~111km per degree
+            dlon = (lon[i] - lon[i-1]) * 111000 * np.cos(np.radians(lat[i]))
+            d = np.sqrt(dlat**2 + dlon**2)
+            dist.append(dist[-1] + d)
+        return np.array(dist)
+
+    dist_a = calc_distance(lap_a_data['latitude'], lap_a_data['longitude'])
+    dist_b = calc_distance(lap_b_data['latitude'], lap_b_data['longitude'])
+
+    # Normalize distance to percentage of lap
+    dist_a_pct = dist_a / dist_a[-1] * 100 if dist_a[-1] > 0 else dist_a
+    dist_b_pct = dist_b / dist_b[-1] * 100 if dist_b[-1] > 0 else dist_b
+
+    # Interpolate lap B data to match lap A's distance points
+    speed_a = lap_a_data.get('speed_mph', np.zeros(len(lap_a_data['time'])))
+    speed_b = lap_b_data.get('speed_mph', np.zeros(len(lap_b_data['time'])))
+    time_a = lap_a_data['time']
+    time_b = lap_b_data['time']
+
+    # Sample at regular distance intervals
+    sample_points = np.linspace(0, 100, 50)  # 50 points along lap
+
+    speed_deltas = []
+    for pct in sample_points:
+        # Find speed at this percentage for each lap
+        idx_a = np.searchsorted(dist_a_pct, pct)
+        idx_b = np.searchsorted(dist_b_pct, pct)
+
+        idx_a = min(idx_a, len(speed_a) - 1)
+        idx_b = min(idx_b, len(speed_b) - 1)
+
+        spd_a = float(speed_a[idx_a]) if idx_a < len(speed_a) else 0
+        spd_b = float(speed_b[idx_b]) if idx_b < len(speed_b) else 0
+
+        speed_deltas.append({
+            "distance_pct": round(pct, 1),
+            "speed_a": round(spd_a, 1),
+            "speed_b": round(spd_b, 1),
+            "delta": round(spd_a - spd_b, 1)  # Positive = lap_a faster
+        })
+
+    # Segment analysis
+    segments = []
+    segment_size = 100 / num_segments
+
+    for i in range(num_segments):
+        seg_start = i * segment_size
+        seg_end = (i + 1) * segment_size
+
+        # Find time spent in this segment for each lap
+        mask_a = (dist_a_pct >= seg_start) & (dist_a_pct < seg_end)
+        mask_b = (dist_b_pct >= seg_start) & (dist_b_pct < seg_end)
+
+        time_in_seg_a = np.sum(np.diff(time_a[:-1][mask_a[:-1]])) if np.any(mask_a) else 0
+        time_in_seg_b = np.sum(np.diff(time_b[:-1][mask_b[:-1]])) if np.any(mask_b) else 0
+
+        # Average speed in segment
+        avg_speed_a = float(np.mean(speed_a[mask_a])) if np.any(mask_a) else 0
+        avg_speed_b = float(np.mean(speed_b[mask_b])) if np.any(mask_b) else 0
+
+        time_delta = time_in_seg_b - time_in_seg_a  # Positive = lap_a faster
+
+        segments.append({
+            "segment": i + 1,
+            "start_pct": round(seg_start, 1),
+            "end_pct": round(seg_end, 1),
+            "time_a": round(float(time_in_seg_a), 3),
+            "time_b": round(float(time_in_seg_b), 3),
+            "time_delta": round(float(time_delta), 3),
+            "avg_speed_a": round(avg_speed_a, 1),
+            "avg_speed_b": round(avg_speed_b, 1),
+            "faster": "A" if time_delta > 0.05 else ("B" if time_delta < -0.05 else "=")
+        })
+
+    # Summary
+    time_delta = lap_b_info.lap_time - lap_a_info.lap_time
+    segments_a_faster = sum(1 for s in segments if s["faster"] == "A")
+    segments_b_faster = sum(1 for s in segments if s["faster"] == "B")
+
+    avg_speed_a = float(np.mean(speed_a))
+    avg_speed_b = float(np.mean(speed_b))
+
+    summary = {
+        "lap_a_time": round(lap_a_info.lap_time, 2),
+        "lap_b_time": round(lap_b_info.lap_time, 2),
+        "lap_a_max_speed": round(lap_a_info.max_speed_mph, 1),
+        "lap_b_max_speed": round(lap_b_info.max_speed_mph, 1),
+        "lap_a_avg_speed": round(avg_speed_a, 1),
+        "lap_b_avg_speed": round(avg_speed_b, 1),
+        "segments_a_faster": segments_a_faster,
+        "segments_b_faster": segments_b_faster,
+        "segments_equal": num_segments - segments_a_faster - segments_b_faster,
+        "biggest_gain_segment": max(segments, key=lambda s: s["time_delta"])["segment"] if segments else 0,
+        "biggest_loss_segment": min(segments, key=lambda s: s["time_delta"])["segment"] if segments else 0
+    }
+
+    return LapComparisonResult(
+        lap_a=lap_a,
+        lap_b=lap_b,
+        time_delta=time_delta,
+        speed_deltas=speed_deltas,
+        segments=segments,
+        summary=summary
+    )

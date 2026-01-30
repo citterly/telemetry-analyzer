@@ -487,6 +487,7 @@ from src.features import (
     ShiftAnalyzer, LapAnalysis, GearAnalysis,
     PowerAnalysis, SessionReportGenerator
 )
+from src.features.lap_analysis import compare_laps_detailed
 from src.visualization.track_map import TrackMap
 
 
@@ -526,6 +527,25 @@ async def analyze_shifts(filename: str):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Shift analysis failed: {str(e)}")
+
+
+@app.get("/api/analyze/laps/compare/{filename:path}")
+async def compare_laps(filename: str, lap_a: int, lap_b: int, segments: int = 10):
+    """Compare two laps showing where time/speed was gained or lost"""
+    file_path = _find_parquet_file(filename)
+    if not file_path:
+        raise HTTPException(status_code=404, detail=f"Parquet file not found: {filename}")
+
+    try:
+        result = compare_laps_detailed(str(file_path), lap_a, lap_b, segments)
+        if result is None:
+            raise HTTPException(status_code=400, detail=f"Could not compare laps {lap_a} and {lap_b}")
+        return result.to_dict()
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Lap comparison failed: {str(e)}")
 
 
 @app.get("/api/analyze/laps/{filename:path}")

@@ -107,6 +107,28 @@
 
     /* Hidden lap rows when filtered */
     tr.lap-hidden { display: none; }
+
+    /* Lap selection */
+    .lap-checkbox { width: 18px; height: 18px; cursor: pointer; }
+    .lap-selected { background-color: rgba(0, 184, 148, 0.15) !important; }
+
+    /* Comparison view */
+    .comparison-section { display: none; }
+    .delta-positive { color: #00b894; }
+    .delta-negative { color: #e74c3c; }
+    .delta-neutral { color: #636e72; }
+    .segment-bar {
+        height: 24px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.8rem;
+        font-weight: bold;
+        border-radius: 3px;
+    }
+    .segment-a { background-color: rgba(0, 184, 148, 0.7); }
+    .segment-b { background-color: rgba(231, 76, 60, 0.7); }
+    .segment-equal { background-color: rgba(99, 110, 114, 0.5); }
 </style>
 {% endblock %}
 
@@ -210,21 +232,77 @@
 
     <!-- Lap Filter Buttons -->
     <div id="lap-filter-section" class="mb-3" style="display: none;">
-        <div class="btn-group btn-group-sm lap-filter-group" role="group">
-            <input type="checkbox" class="btn-check" id="filter-hot" checked autocomplete="off">
-            <label class="btn btn-outline-success" for="filter-hot">Hot Laps</label>
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <div class="btn-group btn-group-sm lap-filter-group" role="group">
+                <input type="checkbox" class="btn-check" id="filter-hot" checked autocomplete="off">
+                <label class="btn btn-outline-success" for="filter-hot">Hot Laps</label>
 
-            <input type="checkbox" class="btn-check" id="filter-race" checked autocomplete="off">
-            <label class="btn btn-outline-primary" for="filter-race">Race Pace</label>
+                <input type="checkbox" class="btn-check" id="filter-race" checked autocomplete="off">
+                <label class="btn btn-outline-primary" for="filter-race">Race Pace</label>
 
-            <input type="checkbox" class="btn-check" id="filter-warmup" autocomplete="off">
-            <label class="btn btn-outline-warning" for="filter-warmup">Warm-up</label>
+                <input type="checkbox" class="btn-check" id="filter-warmup" autocomplete="off">
+                <label class="btn btn-outline-warning" for="filter-warmup">Warm-up</label>
 
-            <input type="checkbox" class="btn-check" id="filter-cooldown" autocomplete="off">
-            <label class="btn btn-outline-secondary" for="filter-cooldown">Cool-down</label>
+                <input type="checkbox" class="btn-check" id="filter-cooldown" autocomplete="off">
+                <label class="btn btn-outline-secondary" for="filter-cooldown">Cool-down</label>
 
-            <input type="checkbox" class="btn-check" id="filter-outlap" autocomplete="off">
-            <label class="btn btn-outline-info" for="filter-outlap">Out Laps</label>
+                <input type="checkbox" class="btn-check" id="filter-outlap" autocomplete="off">
+                <label class="btn btn-outline-info" for="filter-outlap">Out Laps</label>
+            </div>
+            <button class="btn btn-sm btn-success" id="compare-laps-btn" style="display: none;" onclick="compareLaps()">
+                Compare Selected (<span id="selected-count">0</span>)
+            </button>
+        </div>
+    </div>
+
+    <!-- Lap Comparison Section -->
+    <div id="lap-comparison-section" class="comparison-section mb-4">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <strong>Lap Comparison: <span id="comparison-title">Lap X vs Lap Y</span></strong>
+                <button class="btn btn-sm btn-outline-secondary" onclick="hideComparison()">Close</button>
+            </div>
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <div class="card bg-dark">
+                            <div class="card-body text-center">
+                                <h5 id="comp-lap-a-label">Lap A</h5>
+                                <div class="h3" id="comp-lap-a-time">--</div>
+                                <small class="text-muted">Avg: <span id="comp-lap-a-avg">--</span> mph | Max: <span id="comp-lap-a-max">--</span> mph</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card bg-dark">
+                            <div class="card-body text-center">
+                                <h5 id="comp-lap-b-label">Lap B</h5>
+                                <div class="h3" id="comp-lap-b-time">--</div>
+                                <small class="text-muted">Avg: <span id="comp-lap-b-avg">--</span> mph | Max: <span id="comp-lap-b-max">--</span> mph</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-12">
+                        <div class="text-center mb-2">
+                            <span id="comp-delta-summary" class="h4">--</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-8">
+                        <h6>Speed Delta (Lap A - Lap B)</h6>
+                        <div class="chart-container" style="height: 200px;">
+                            <canvas id="speed-delta-chart"></canvas>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <h6>Segment Analysis</h6>
+                        <div id="segment-bars" style="max-height: 200px; overflow-y: auto;"></div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -633,11 +711,14 @@
             </div>
             <div class="col-md-4 mb-4">
                 <div class="card analysis-card laps">
-                    <div class="card-header">Lap Details</div>
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <span>Lap Details</span>
+                        <small class="text-muted">Select 2 to compare</small>
+                    </div>
                     <div class="card-body" style="max-height: 350px; overflow-y: auto;">
                         <table class="table table-sm">
                             <thead>
-                                <tr><th>Lap</th><th>Time</th><th>Delta</th><th>Type</th></tr>
+                                <tr><th style="width:30px;"></th><th>Lap</th><th>Time</th><th>Delta</th><th>Type</th></tr>
                             </thead>
                             <tbody id="lap-table-body">
         `;
@@ -654,6 +735,7 @@
 
             detailsHtml += `
                 <tr class="${rowClass}" data-classification="${classification}" data-lap="${lap.lap_number}">
+                    <td><input type="checkbox" class="lap-checkbox" data-lap="${lap.lap_number}" onchange="updateLapSelection()"></td>
                     <td>${lap.lap_number}${isRecommended ? ' *' : ''}</td>
                     <td>${formatLapTime(lap.lap_time)}</td>
                     <td class="${deltaClass}">${delta === 0 ? 'Best' : '+' + delta.toFixed(2)}</td>
@@ -1139,5 +1221,206 @@
 
     // Initialize filters on page load
     document.addEventListener('DOMContentLoaded', setupLapFilters);
+
+    // Lap selection for comparison
+    let selectedLaps = [];
+
+    function updateLapSelection() {
+        selectedLaps = [];
+        document.querySelectorAll('.lap-checkbox:checked').forEach(cb => {
+            selectedLaps.push(parseInt(cb.dataset.lap));
+        });
+
+        // Update row highlighting
+        document.querySelectorAll('#lap-table-body tr').forEach(row => {
+            const lapNum = parseInt(row.dataset.lap);
+            if (selectedLaps.includes(lapNum)) {
+                row.classList.add('lap-selected');
+            } else {
+                row.classList.remove('lap-selected');
+            }
+        });
+
+        // Show/hide compare button
+        const compareBtn = document.getElementById('compare-laps-btn');
+        const countSpan = document.getElementById('selected-count');
+        countSpan.textContent = selectedLaps.length;
+
+        if (selectedLaps.length === 2) {
+            compareBtn.style.display = 'inline-block';
+            compareBtn.classList.remove('btn-secondary');
+            compareBtn.classList.add('btn-success');
+        } else if (selectedLaps.length > 0) {
+            compareBtn.style.display = 'inline-block';
+            compareBtn.classList.remove('btn-success');
+            compareBtn.classList.add('btn-secondary');
+        } else {
+            compareBtn.style.display = 'none';
+        }
+    }
+
+    async function compareLaps() {
+        if (selectedLaps.length !== 2) {
+            showAlert('Please select exactly 2 laps to compare', 'warning');
+            return;
+        }
+
+        const lapA = Math.min(...selectedLaps);
+        const lapB = Math.max(...selectedLaps);
+
+        document.getElementById('loading').style.display = 'flex';
+
+        try {
+            const url = `/api/analyze/laps/compare/${encodeURIComponent(currentFile)}?lap_a=${lapA}&lap_b=${lapB}`;
+            const response = await fetch(url);
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.detail || 'Comparison failed');
+            }
+
+            const data = await response.json();
+            displayComparison(data);
+
+        } catch (error) {
+            showAlert('Lap comparison failed: ' + error.message, 'danger');
+        } finally {
+            document.getElementById('loading').style.display = 'none';
+        }
+    }
+
+    function displayComparison(data) {
+        const section = document.getElementById('lap-comparison-section');
+        section.style.display = 'block';
+
+        // Scroll to comparison
+        section.scrollIntoView({ behavior: 'smooth' });
+
+        // Update title
+        document.getElementById('comparison-title').textContent = `Lap ${data.lap_a} vs Lap ${data.lap_b}`;
+
+        // Update lap cards
+        document.getElementById('comp-lap-a-label').textContent = `Lap ${data.lap_a}`;
+        document.getElementById('comp-lap-b-label').textContent = `Lap ${data.lap_b}`;
+        document.getElementById('comp-lap-a-time').textContent = formatLapTime(data.summary.lap_a_time);
+        document.getElementById('comp-lap-b-time').textContent = formatLapTime(data.summary.lap_b_time);
+        document.getElementById('comp-lap-a-avg').textContent = data.summary.lap_a_avg_speed;
+        document.getElementById('comp-lap-b-avg').textContent = data.summary.lap_b_avg_speed;
+        document.getElementById('comp-lap-a-max').textContent = data.summary.lap_a_max_speed;
+        document.getElementById('comp-lap-b-max').textContent = data.summary.lap_b_max_speed;
+
+        // Delta summary
+        const deltaEl = document.getElementById('comp-delta-summary');
+        const delta = data.time_delta;
+        if (delta > 0) {
+            deltaEl.className = 'h4 delta-positive';
+            deltaEl.textContent = `Lap ${data.lap_a} faster by ${delta.toFixed(2)}s`;
+        } else if (delta < 0) {
+            deltaEl.className = 'h4 delta-negative';
+            deltaEl.textContent = `Lap ${data.lap_b} faster by ${Math.abs(delta).toFixed(2)}s`;
+        } else {
+            deltaEl.className = 'h4 delta-neutral';
+            deltaEl.textContent = 'Laps are equal';
+        }
+
+        // Speed delta chart
+        renderSpeedDeltaChart(data.speed_deltas, data.lap_a, data.lap_b);
+
+        // Segment bars
+        renderSegmentBars(data.segments, data.lap_a, data.lap_b);
+    }
+
+    function renderSpeedDeltaChart(speedDeltas, lapA, lapB) {
+        const ctx = document.getElementById('speed-delta-chart');
+        if (!ctx) return;
+
+        // Destroy existing chart
+        if (charts['speed-delta']) {
+            charts['speed-delta'].destroy();
+        }
+
+        const labels = speedDeltas.map(d => d.distance_pct + '%');
+        const deltas = speedDeltas.map(d => d.delta);
+
+        charts['speed-delta'] = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: `Speed Delta (Lap ${lapA} - Lap ${lapB})`,
+                    data: deltas,
+                    borderColor: deltas.map(d => d >= 0 ? '#00b894' : '#e74c3c'),
+                    backgroundColor: 'transparent',
+                    segment: {
+                        borderColor: ctx2 => {
+                            const val = ctx2.p1.parsed.y;
+                            return val >= 0 ? '#00b894' : '#e74c3c';
+                        }
+                    },
+                    tension: 0.3,
+                    pointRadius: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: (ctx) => {
+                                const val = ctx.raw;
+                                return val >= 0 ? `+${val.toFixed(1)} mph (Lap ${lapA} faster)` : `${val.toFixed(1)} mph (Lap ${lapB} faster)`;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        grid: { color: '#404040' },
+                        ticks: { color: '#a0a0a0' },
+                        title: { display: true, text: 'Speed Δ (mph)', color: '#a0a0a0' }
+                    },
+                    x: {
+                        grid: { color: '#404040' },
+                        ticks: { color: '#a0a0a0', maxTicksLimit: 10 },
+                        title: { display: true, text: 'Distance %', color: '#a0a0a0' }
+                    }
+                }
+            }
+        });
+    }
+
+    function renderSegmentBars(segments, lapA, lapB) {
+        const container = document.getElementById('segment-bars');
+        let html = '';
+
+        for (const seg of segments) {
+            let barClass, label;
+            if (seg.faster === 'A') {
+                barClass = 'segment-a';
+                label = `+${seg.time_delta.toFixed(2)}s`;
+            } else if (seg.faster === 'B') {
+                barClass = 'segment-b';
+                label = `${seg.time_delta.toFixed(2)}s`;
+            } else {
+                barClass = 'segment-equal';
+                label = '=';
+            }
+
+            html += `
+                <div class="d-flex align-items-center mb-1">
+                    <small class="text-muted me-2" style="width: 40px;">S${seg.segment}</small>
+                    <div class="flex-grow-1 segment-bar ${barClass}">${label}</div>
+                </div>
+            `;
+        }
+
+        container.innerHTML = html;
+    }
+
+    function hideComparison() {
+        document.getElementById('lap-comparison-section').style.display = 'none';
+    }
 </script>
 {% endblock %}
