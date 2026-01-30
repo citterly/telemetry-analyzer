@@ -10,10 +10,28 @@ import pandas as pd
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional, Tuple
 from datetime import datetime
+from enum import Enum
 import json
 
 from ..analysis.lap_analyzer import LapAnalyzer, LapInfo, analyze_session_laps
 from ..config.vehicle_config import TRACK_CONFIG, PROCESSING_CONFIG
+
+
+def _safe_float(value: float, default: float = 0.0) -> float:
+    """Convert a float to a JSON-safe value, replacing NaN/inf with default."""
+    if np.isnan(value) or np.isinf(value):
+        return default
+    return float(value)
+
+
+class LapClassification(str, Enum):
+    """Classification of lap types based on timing patterns"""
+    HOT_LAP = "hot_lap"
+    RACE_PACE = "race_pace"
+    WARM_UP = "warm_up"
+    COOL_DOWN = "cool_down"
+    OUT_LAP = "out_lap"
+    INCOMPLETE = "incomplete"
 
 
 @dataclass
@@ -29,6 +47,31 @@ class LapStatistics:
     avg_rpm: float
     distance_meters: float
     sector_times: List[float] = field(default_factory=list)
+    classification: str = "race_pace"
+    classification_reason: str = ""
+
+
+@dataclass
+class LapRecommendation:
+    """Recommended laps for analysis based on detected patterns"""
+    recommended_laps: List[int]  # Lap numbers to analyze
+    reason: str  # Why these laps are recommended
+    pattern_detected: str  # "warming", "consistent", "full_session", "degrading"
+    best_representative_lap: int  # Most representative hot lap
+    best_3_lap_average: float  # Best 3 consecutive lap average
+    warm_up_detected: bool
+    cool_down_detected: bool
+
+    def to_dict(self) -> dict:
+        return {
+            "recommended_laps": self.recommended_laps,
+            "reason": self.reason,
+            "pattern_detected": self.pattern_detected,
+            "best_representative_lap": self.best_representative_lap,
+            "best_3_lap_average": round(_safe_float(self.best_3_lap_average), 2),
+            "warm_up_detected": self.warm_up_detected,
+            "cool_down_detected": self.cool_down_detected
+        }
 
 
 @dataclass
@@ -46,37 +89,51 @@ class LapAnalysisReport:
     improvement_trend: str
     recommendations: List[str]
     summary: Dict
+    lap_recommendations: Optional[LapRecommendation] = None
 
     def to_dict(self) -> dict:
         """Convert to dictionary"""
-        return {
+        # Sanitize summary dict for NaN/inf values
+        safe_summary = {}
+        for key, value in self.summary.items():
+            if isinstance(value, float):
+                safe_summary[key] = _safe_float(value)
+            else:
+                safe_summary[key] = value
+
+        result = {
             "session_id": self.session_id,
             "track_name": self.track_name,
             "analysis_timestamp": self.analysis_timestamp,
             "total_laps": self.total_laps,
             "fastest_lap": {
                 "lap_number": self.fastest_lap_number,
-                "lap_time": round(self.fastest_lap_time, 2)
+                "lap_time": round(_safe_float(self.fastest_lap_time), 2)
             },
-            "average_lap_time": round(self.average_lap_time, 2),
-            "lap_time_consistency": round(self.lap_time_consistency, 2),
+            "average_lap_time": round(_safe_float(self.average_lap_time), 2),
+            "lap_time_consistency": round(_safe_float(self.lap_time_consistency), 2),
             "laps": [
                 {
                     "lap_number": lap.lap_number,
-                    "lap_time": round(lap.lap_time, 2),
-                    "gap_to_fastest": round(lap.gap_to_fastest, 2),
-                    "gap_to_previous": round(lap.gap_to_previous, 2),
-                    "max_speed_mph": round(lap.max_speed_mph, 1),
-                    "avg_speed_mph": round(lap.avg_speed_mph, 1),
-                    "max_rpm": round(lap.max_rpm, 0),
-                    "avg_rpm": round(lap.avg_rpm, 0)
+                    "lap_time": round(_safe_float(lap.lap_time), 2),
+                    "gap_to_fastest": round(_safe_float(lap.gap_to_fastest), 2),
+                    "gap_to_previous": round(_safe_float(lap.gap_to_previous), 2),
+                    "max_speed_mph": round(_safe_float(lap.max_speed_mph), 1),
+                    "avg_speed_mph": round(_safe_float(lap.avg_speed_mph), 1),
+                    "max_rpm": round(_safe_float(lap.max_rpm), 0),
+                    "avg_rpm": round(_safe_float(lap.avg_rpm), 0),
+                    "classification": lap.classification,
+                    "classification_reason": lap.classification_reason
                 }
                 for lap in self.laps
             ],
             "improvement_trend": self.improvement_trend,
             "recommendations": self.recommendations,
-            "summary": self.summary
+            "summary": safe_summary
         }
+        if self.lap_recommendations:
+            result["lap_recommendations"] = self.lap_recommendations.to_dict()
+        return result
 
     def to_json(self, indent: int = 2) -> str:
         """Convert to JSON string"""
@@ -262,6 +319,10 @@ class LapAnalysis:
         # Generate recommendations
         recommendations = self._generate_recommendations(lap_stats, fastest_time)
 
+        # Classify laps and get lap recommendations
+        self.classify_laps(lap_stats, fastest_time)
+        lap_recs = self.get_lap_recommendations(lap_stats)
+
         # Build summary
         summary = {
             "session_duration_seconds": float(session_data['time'][-1] - session_data['time'][0]),
@@ -283,7 +344,8 @@ class LapAnalysis:
             laps=lap_stats,
             improvement_trend=trend,
             recommendations=recommendations,
-            summary=summary
+            summary=summary,
+            lap_recommendations=lap_recs
         )
 
     def _calculate_trend(self, lap_times: List[float]) -> str:
@@ -366,6 +428,157 @@ class LapAnalysis:
             )
 
         return recommendations
+
+    def classify_laps(self, lap_stats: List[LapStatistics], fastest_time: float) -> None:
+        """
+        Classify each lap based on timing patterns.
+
+        Modifies lap_stats in place, setting classification and classification_reason.
+
+        Classification rules:
+        - Hot lap: gap_to_fastest <= 1.5s
+        - Warm-up: first 2-3 laps with improving times
+        - Cool-down: last 2 laps with degrading times
+        - Out lap: first lap or gap_to_previous > 5s (came out of pits)
+        - Race pace: everything else
+        """
+        if not lap_stats:
+            return
+
+        n = len(lap_stats)
+
+        # First pass: detect warm-up pattern (first laps with improving times)
+        warm_up_laps = set()
+        if n >= 3:
+            # Check if first 2-3 laps show improvement pattern
+            improving = True
+            for i in range(min(3, n - 1)):
+                if i > 0 and lap_stats[i].lap_time >= lap_stats[i - 1].lap_time:
+                    # Times not consistently improving
+                    if i == 1:
+                        improving = False
+                    break
+                if lap_stats[i].gap_to_fastest > 3.0:  # More than 3s off pace
+                    warm_up_laps.add(lap_stats[i].lap_number)
+
+            # If first lap is significantly slower, it's warm-up
+            if lap_stats[0].gap_to_fastest > 2.0:
+                warm_up_laps.add(lap_stats[0].lap_number)
+                if n > 1 and lap_stats[1].gap_to_fastest > 1.5:
+                    warm_up_laps.add(lap_stats[1].lap_number)
+
+        # Second pass: detect cool-down (last 2 laps with degrading times)
+        cool_down_laps = set()
+        if n >= 4:
+            # Check if last 2 laps are slower than the middle laps
+            middle_avg = np.mean([ls.lap_time for ls in lap_stats[2:-2]]) if n > 4 else fastest_time
+            last_2_avg = np.mean([ls.lap_time for ls in lap_stats[-2:]])
+
+            if last_2_avg > middle_avg + 1.5:
+                for ls in lap_stats[-2:]:
+                    cool_down_laps.add(ls.lap_number)
+
+        # Third pass: classify each lap
+        for i, lap in enumerate(lap_stats):
+            # Out lap: first lap or big gap from previous (pit exit)
+            if i == 0 or lap.gap_to_previous > 5.0:
+                lap.classification = LapClassification.OUT_LAP.value
+                if i == 0:
+                    lap.classification_reason = "First lap of session"
+                else:
+                    lap.classification_reason = f"Large gap from previous (+{lap.gap_to_previous:.1f}s)"
+                continue
+
+            # Warm-up
+            if lap.lap_number in warm_up_laps:
+                lap.classification = LapClassification.WARM_UP.value
+                lap.classification_reason = f"Early session, {lap.gap_to_fastest:.1f}s off pace"
+                continue
+
+            # Cool-down
+            if lap.lap_number in cool_down_laps:
+                lap.classification = LapClassification.COOL_DOWN.value
+                lap.classification_reason = "End of session, times degrading"
+                continue
+
+            # Hot lap: within 1.5s of fastest
+            if lap.gap_to_fastest <= 1.5:
+                lap.classification = LapClassification.HOT_LAP.value
+                if lap.gap_to_fastest == 0:
+                    lap.classification_reason = "Fastest lap"
+                else:
+                    lap.classification_reason = f"Within {lap.gap_to_fastest:.1f}s of fastest"
+                continue
+
+            # Race pace: everything else
+            lap.classification = LapClassification.RACE_PACE.value
+            lap.classification_reason = f"{lap.gap_to_fastest:.1f}s off pace"
+
+    def get_lap_recommendations(self, lap_stats: List[LapStatistics]) -> Optional[LapRecommendation]:
+        """
+        Generate lap recommendations for analysis.
+
+        Identifies the best laps to analyze based on patterns in the data.
+
+        Returns:
+            LapRecommendation with suggested laps and reasoning
+        """
+        if not lap_stats or len(lap_stats) < 2:
+            return None
+
+        # Get hot laps (top 3 by time)
+        sorted_laps = sorted(lap_stats, key=lambda x: x.lap_time)
+        hot_laps = [ls.lap_number for ls in sorted_laps[:min(3, len(sorted_laps))]]
+
+        # Find best 3 consecutive lap average
+        best_3_avg = float('inf')
+        best_3_start = 0
+        if len(lap_stats) >= 3:
+            for i in range(len(lap_stats) - 2):
+                avg = np.mean([lap_stats[i + j].lap_time for j in range(3)])
+                if avg < best_3_avg:
+                    best_3_avg = avg
+                    best_3_start = i
+        else:
+            best_3_avg = np.mean([ls.lap_time for ls in lap_stats])
+
+        # Detect patterns
+        warm_up_detected = any(ls.classification == LapClassification.WARM_UP.value for ls in lap_stats)
+        cool_down_detected = any(ls.classification == LapClassification.COOL_DOWN.value for ls in lap_stats)
+
+        # Determine pattern type
+        hot_lap_count = sum(1 for ls in lap_stats if ls.classification == LapClassification.HOT_LAP.value)
+        race_pace_count = sum(1 for ls in lap_stats if ls.classification == LapClassification.RACE_PACE.value)
+
+        if hot_lap_count >= 3:
+            pattern = "consistent"
+            reason = f"Consistent session with {hot_lap_count} hot laps. Focus on laps {', '.join(map(str, hot_laps))} for detailed analysis."
+        elif warm_up_detected and hot_lap_count >= 1:
+            pattern = "warming"
+            reason = f"Warm-up pattern detected. Best performance in laps {', '.join(map(str, hot_laps))}."
+        elif cool_down_detected:
+            pattern = "degrading"
+            reason = f"Performance degraded toward end. Analyze hot laps {', '.join(map(str, hot_laps))} from early-mid session."
+        else:
+            pattern = "full_session"
+            reason = f"Mixed session. Recommended laps for analysis: {', '.join(map(str, hot_laps))}."
+
+        # Best representative lap: the hot lap closest to the average of hot laps
+        best_rep = hot_laps[0] if hot_laps else lap_stats[0].lap_number
+        if len(hot_laps) >= 2:
+            hot_lap_stats = [ls for ls in lap_stats if ls.lap_number in hot_laps]
+            avg_hot = np.mean([ls.lap_time for ls in hot_lap_stats])
+            best_rep = min(hot_lap_stats, key=lambda x: abs(x.lap_time - avg_hot)).lap_number
+
+        return LapRecommendation(
+            recommended_laps=hot_laps,
+            reason=reason,
+            pattern_detected=pattern,
+            best_representative_lap=best_rep,
+            best_3_lap_average=best_3_avg,
+            warm_up_detected=warm_up_detected,
+            cool_down_detected=cool_down_detected
+        )
 
     def get_lap_comparison(
         self,

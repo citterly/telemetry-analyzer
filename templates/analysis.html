@@ -60,6 +60,53 @@
         height: 250px;
         margin-bottom: 1rem;
     }
+
+    /* Lap classification badges */
+    .badge-hot-lap { background-color: #00b894; }
+    .badge-race-pace { background-color: #0984e3; }
+    .badge-warm-up { background-color: #fdcb6e; color: #2d2d2d; }
+    .badge-cool-down { background-color: #636e72; }
+    .badge-out-lap { background-color: #a29bfe; }
+
+    /* Lap filter buttons */
+    .lap-filter-group .btn-check:checked + .btn-outline-success {
+        background-color: #00b894; border-color: #00b894; color: white;
+    }
+    .lap-filter-group .btn-check:checked + .btn-outline-primary {
+        background-color: #0984e3; border-color: #0984e3; color: white;
+    }
+    .lap-filter-group .btn-check:checked + .btn-outline-warning {
+        background-color: #fdcb6e; border-color: #fdcb6e; color: #2d2d2d;
+    }
+    .lap-filter-group .btn-check:checked + .btn-outline-secondary {
+        background-color: #636e72; border-color: #636e72; color: white;
+    }
+
+    /* Track map styling */
+    #track-map-container svg {
+        max-width: 100%;
+        height: auto;
+    }
+
+    /* Lap recommendations */
+    .lap-recommendation {
+        background: rgba(0, 184, 148, 0.1);
+        border-left: 4px solid #00b894;
+        padding: 0.75rem;
+        margin-bottom: 1rem;
+    }
+    .recommended-lap-badge {
+        display: inline-block;
+        background: #00b894;
+        color: white;
+        padding: 0.25rem 0.5rem;
+        border-radius: 4px;
+        margin-right: 0.25rem;
+        font-weight: bold;
+    }
+
+    /* Hidden lap rows when filtered */
+    tr.lap-hidden { display: none; }
 </style>
 {% endblock %}
 
@@ -109,6 +156,21 @@
     </div>
 </div>
 
+<!-- Track Map Section -->
+<div class="card mb-4" id="track-map-section" style="display: none;">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span><strong>Track Map</strong></span>
+        <select id="track-map-color" class="form-select form-select-sm" style="width: 150px;">
+            <option value="speed">Speed</option>
+            <option value="rpm">RPM</option>
+            <option value="gear">Gear</option>
+        </select>
+    </div>
+    <div class="card-body text-center" id="track-map-container">
+        <div class="text-muted">Loading track map...</div>
+    </div>
+</div>
+
 <!-- Loading Overlay -->
 <div class="loading-overlay" id="loading" style="display: none;">
     <div class="text-center">
@@ -119,6 +181,32 @@
 
 <!-- Results Section -->
 <div id="results-section" style="display: none;">
+
+    <!-- Lap Recommendations Panel -->
+    <div id="lap-recommendations" class="lap-recommendation" style="display: none;">
+        <strong>Recommended Laps:</strong> <span id="recommended-laps"></span>
+        <br><small id="recommendation-reason" class="text-muted"></small>
+    </div>
+
+    <!-- Lap Filter Buttons -->
+    <div id="lap-filter-section" class="mb-3" style="display: none;">
+        <div class="btn-group btn-group-sm lap-filter-group" role="group">
+            <input type="checkbox" class="btn-check" id="filter-hot" checked autocomplete="off">
+            <label class="btn btn-outline-success" for="filter-hot">Hot Laps</label>
+
+            <input type="checkbox" class="btn-check" id="filter-race" checked autocomplete="off">
+            <label class="btn btn-outline-primary" for="filter-race">Race Pace</label>
+
+            <input type="checkbox" class="btn-check" id="filter-warmup" autocomplete="off">
+            <label class="btn btn-outline-warning" for="filter-warmup">Warm-up</label>
+
+            <input type="checkbox" class="btn-check" id="filter-cooldown" autocomplete="off">
+            <label class="btn btn-outline-secondary" for="filter-cooldown">Cool-down</label>
+
+            <input type="checkbox" class="btn-check" id="filter-outlap" autocomplete="off">
+            <label class="btn btn-outline-info" for="filter-outlap">Out Laps</label>
+        </div>
+    </div>
 
     <!-- Summary Row -->
     <div class="row mb-4" id="summary-row">
@@ -191,11 +279,17 @@
         }
 
         currentAnalysisType = type;
+        currentFile = filename;
         document.getElementById('loading').style.display = 'flex';
 
         // Destroy existing charts
         Object.values(charts).forEach(chart => chart.destroy());
         charts = {};
+
+        // Hide previous UI elements
+        document.getElementById('lap-filter-section').style.display = 'none';
+        document.getElementById('lap-recommendations').style.display = 'none';
+        document.getElementById('track-map-section').style.display = 'none';
 
         try {
             const response = await fetch(`/api/analyze/${type}/${encodeURIComponent(filename)}`);
@@ -206,6 +300,11 @@
 
             currentData = await response.json();
             displayResults(type, currentData);
+
+            // Load track map for lap analysis
+            if (type === 'laps' || type === 'report') {
+                loadTrackMap(filename, document.getElementById('track-map-color').value);
+            }
 
         } catch (error) {
             showAlert('Analysis failed: ' + error.message, 'danger');
@@ -458,11 +557,17 @@
     function displayLapAnalysis(data) {
         const fastest = data.fastest_lap || {};
 
+        // Count laps by classification
+        const hotLaps = (data.laps || []).filter(l => l.classification === 'hot_lap').length;
+        const consistencyPct = data.lap_time_consistency !== undefined
+            ? (100 - (data.lap_time_consistency / data.average_lap_time * 100)).toFixed(1)
+            : 'N/A';
+
         document.getElementById('summary-row').innerHTML = `
             <div class="col-md-3 mb-3">
                 <div class="metric-box success">
                     <div class="metric-value">${formatLapTime(fastest.lap_time)}</div>
-                    <div class="metric-label">Fastest Lap</div>
+                    <div class="metric-label">Fastest Lap (Lap ${fastest.lap_number || '?'})</div>
                 </div>
             </div>
             <div class="col-md-3 mb-3">
@@ -473,19 +578,27 @@
             </div>
             <div class="col-md-3 mb-3">
                 <div class="metric-box">
-                    <div class="metric-value">${formatLapTime(data.average_lap_time)}</div>
-                    <div class="metric-label">Average Lap</div>
+                    <div class="metric-value">${hotLaps}</div>
+                    <div class="metric-label">Hot Laps</div>
                 </div>
             </div>
             <div class="col-md-3 mb-3">
                 <div class="metric-box warning">
-                    <div class="metric-value">${data.consistency_pct?.toFixed(1) || 'N/A'}%</div>
-                    <div class="metric-label">Consistency</div>
+                    <div class="metric-value">${formatLapTime(data.average_lap_time)}</div>
+                    <div class="metric-label">Average Lap</div>
                 </div>
             </div>
         `;
 
         displayRecommendations(data.recommendations || []);
+
+        // Show lap recommendations if available
+        if (data.lap_recommendations) {
+            displayLapRecommendations(data.lap_recommendations);
+        }
+
+        // Show lap filter section
+        document.getElementById('lap-filter-section').style.display = 'block';
 
         let detailsHtml = `
             <div class="col-md-8 mb-4">
@@ -504,20 +617,27 @@
                     <div class="card-body" style="max-height: 350px; overflow-y: auto;">
                         <table class="table table-sm">
                             <thead>
-                                <tr><th>Lap</th><th>Time</th><th>Delta</th></tr>
+                                <tr><th>Lap</th><th>Time</th><th>Delta</th><th>Type</th></tr>
                             </thead>
-                            <tbody>
+                            <tbody id="lap-table-body">
         `;
 
         const bestTime = fastest.lap_time || 0;
+        const recommendedLaps = data.lap_recommendations?.recommended_laps || [];
+
         for (const lap of (data.laps || [])) {
             const delta = lap.lap_time - bestTime;
             const deltaClass = delta === 0 ? 'text-success' : (delta < 2 ? '' : 'text-warning');
+            const classification = lap.classification || 'race_pace';
+            const isRecommended = recommendedLaps.includes(lap.lap_number);
+            const rowClass = isRecommended ? 'table-active' : '';
+
             detailsHtml += `
-                <tr>
-                    <td>${lap.lap_number}</td>
+                <tr class="${rowClass}" data-classification="${classification}" data-lap="${lap.lap_number}">
+                    <td>${lap.lap_number}${isRecommended ? ' *' : ''}</td>
                     <td>${formatLapTime(lap.lap_time)}</td>
                     <td class="${deltaClass}">${delta === 0 ? 'Best' : '+' + delta.toFixed(2)}</td>
+                    <td>${getClassificationBadge(classification)}</td>
                 </tr>
             `;
         }
@@ -525,6 +645,7 @@
         detailsHtml += `
                             </tbody>
                         </table>
+                        <small class="text-muted">* Recommended for analysis</small>
                     </div>
                 </div>
             </div>
@@ -535,6 +656,8 @@
         setTimeout(() => {
             if (data.laps) {
                 renderLapTimesChart(data.laps);
+                // Apply initial filters
+                applyLapFilters();
             }
         }, 100);
     }
@@ -844,5 +967,120 @@
             }
         });
     }
+
+    // Track map functions
+    let currentFile = null;
+
+    async function loadTrackMap(filename, colorBy = 'speed') {
+        const container = document.getElementById('track-map-container');
+        const section = document.getElementById('track-map-section');
+
+        try {
+            container.innerHTML = '<div class="text-muted">Loading track map...</div>';
+            const response = await fetch(`/api/track-map/${encodeURIComponent(filename)}?color_by=${colorBy}&format=svg`);
+            if (response.ok) {
+                container.innerHTML = await response.text();
+                section.style.display = 'block';
+            } else {
+                container.innerHTML = '<div class="text-muted">Track map not available (no GPS data)</div>';
+            }
+        } catch (e) {
+            console.error('Track map error:', e);
+            container.innerHTML = '<div class="text-muted">Failed to load track map</div>';
+        }
+    }
+
+    // Initialize track map color selector
+    document.getElementById('track-map-color').addEventListener('change', function() {
+        if (currentFile) {
+            loadTrackMap(currentFile, this.value);
+        }
+    });
+
+    // Lap classification badge helper
+    function getClassificationBadge(classification) {
+        const badges = {
+            'hot_lap': '<span class="badge badge-hot-lap">Hot</span>',
+            'race_pace': '<span class="badge badge-race-pace">Race</span>',
+            'warm_up': '<span class="badge badge-warm-up">Warm-up</span>',
+            'cool_down': '<span class="badge badge-cool-down">Cool-down</span>',
+            'out_lap': '<span class="badge badge-out-lap">Out</span>',
+            'incomplete': '<span class="badge bg-dark">Incomplete</span>'
+        };
+        return badges[classification] || '';
+    }
+
+    // Display lap recommendations
+    function displayLapRecommendations(recommendations) {
+        const panel = document.getElementById('lap-recommendations');
+        if (!recommendations) {
+            panel.style.display = 'none';
+            return;
+        }
+
+        const lapsSpan = document.getElementById('recommended-laps');
+        const reasonSpan = document.getElementById('recommendation-reason');
+
+        lapsSpan.innerHTML = recommendations.recommended_laps
+            .map(lap => `<span class="recommended-lap-badge">Lap ${lap}</span>`)
+            .join(' ');
+        reasonSpan.textContent = recommendations.reason;
+        panel.style.display = 'block';
+    }
+
+    // Lap filtering
+    function setupLapFilters() {
+        const filterCheckboxes = ['filter-hot', 'filter-race', 'filter-warmup', 'filter-cooldown', 'filter-outlap'];
+        filterCheckboxes.forEach(id => {
+            document.getElementById(id).addEventListener('change', applyLapFilters);
+        });
+    }
+
+    function applyLapFilters() {
+        const showHot = document.getElementById('filter-hot').checked;
+        const showRace = document.getElementById('filter-race').checked;
+        const showWarmup = document.getElementById('filter-warmup').checked;
+        const showCooldown = document.getElementById('filter-cooldown').checked;
+        const showOutlap = document.getElementById('filter-outlap').checked;
+
+        const classificationMap = {
+            'hot_lap': showHot,
+            'race_pace': showRace,
+            'warm_up': showWarmup,
+            'cool_down': showCooldown,
+            'out_lap': showOutlap
+        };
+
+        // Filter table rows
+        document.querySelectorAll('#lap-table-body tr').forEach(row => {
+            const classification = row.dataset.classification;
+            if (classificationMap[classification]) {
+                row.classList.remove('lap-hidden');
+            } else {
+                row.classList.add('lap-hidden');
+            }
+        });
+
+        // Update chart with filtered data
+        updateLapChartWithFilters(classificationMap);
+    }
+
+    function updateLapChartWithFilters(classificationMap) {
+        if (!currentData || !currentData.laps || !charts['lap-times']) return;
+
+        const filteredLaps = currentData.laps.filter(lap => classificationMap[lap.classification]);
+        const labels = filteredLaps.map(l => `Lap ${l.lap_number}`);
+        const times = filteredLaps.map(l => l.lap_time);
+        const minTime = times.length > 0 ? Math.min(...times) : 0;
+
+        charts['lap-times'].data.labels = labels;
+        charts['lap-times'].data.datasets[0].data = times;
+        charts['lap-times'].data.datasets[0].backgroundColor = times.map(t => t === minTime ? '#00b894' : '#4a90e2');
+        charts['lap-times'].data.datasets[0].borderColor = times.map(t => t === minTime ? '#00b894' : '#357abd');
+        charts['lap-times'].update();
+    }
+
+    // Initialize filters on page load
+    document.addEventListener('DOMContentLoaded', setupLapFilters);
 </script>
 {% endblock %}
