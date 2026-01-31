@@ -1,0 +1,376 @@
+{% extends "base.html" %}
+
+{% block title %}G-G Diagram - {{ super() }}{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+    .gg-container {
+        background: #16213e;
+        border-radius: 8px;
+        padding: 20px;
+    }
+    .stats-card {
+        background: linear-gradient(135deg, #4a90e2 0%, #6c5ce7 100%);
+        border-radius: 8px;
+        padding: 1rem;
+        text-align: center;
+        color: white;
+        margin-bottom: 1rem;
+    }
+    .stats-card.success { background: linear-gradient(135deg, #00b894 0%, #00cec9 100%); }
+    .stats-card.warning { background: linear-gradient(135deg, #fdcb6e 0%, #e17055 100%); }
+    .stats-value { font-size: 1.8rem; font-weight: bold; }
+    .stats-label { font-size: 0.85rem; opacity: 0.9; }
+
+    #gg-chart-container {
+        position: relative;
+        height: 500px;
+        max-width: 600px;
+        margin: 0 auto;
+    }
+
+    .control-panel {
+        background: #2d2d2d;
+        border-radius: 8px;
+        padding: 15px;
+        margin-bottom: 20px;
+    }
+
+    .low-util-zone {
+        padding: 0.5rem;
+        margin-bottom: 0.5rem;
+        background: rgba(231, 76, 60, 0.1);
+        border-left: 3px solid #e74c3c;
+        border-radius: 0 4px 4px 0;
+    }
+
+    .svg-container {
+        text-align: center;
+    }
+    .svg-container svg {
+        max-width: 100%;
+        height: auto;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4">G-G Diagram (Friction Circle)</h1>
+        <p class="text-muted">Visualize lateral vs longitudinal acceleration to analyze grip utilization</p>
+    </div>
+</div>
+
+<!-- File Selection -->
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="control-panel">
+            <label for="file-select" class="form-label">Select Session</label>
+            <select class="form-select" id="file-select" onchange="loadGGDiagram()">
+                <option value="">Loading sessions...</option>
+            </select>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="control-panel">
+            <label for="color-select" class="form-label">Color By</label>
+            <select class="form-select" id="color-select" onchange="updateColorScheme()">
+                <option value="speed">Speed</option>
+                <option value="throttle">Throttle</option>
+                <option value="lap">Lap Number</option>
+            </select>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="control-panel">
+            <label for="lap-select" class="form-label">Lap Filter</label>
+            <select class="form-select" id="lap-select" onchange="filterByLap()">
+                <option value="all">All Laps</option>
+            </select>
+        </div>
+    </div>
+</div>
+
+<!-- Loading -->
+<div class="row" id="loading" style="display: none;">
+    <div class="col-12 text-center py-5">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+        <p class="mt-2 text-muted">Analyzing G-G data...</p>
+    </div>
+</div>
+
+<!-- Results -->
+<div id="results-section" style="display: none;">
+    <!-- Stats Row -->
+    <div class="row mb-4">
+        <div class="col-md-2">
+            <div class="stats-card">
+                <div class="stats-value" id="stat-max-lat">--</div>
+                <div class="stats-label">Max Lateral G</div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="stats-card warning">
+                <div class="stats-value" id="stat-max-brake">--</div>
+                <div class="stats-label">Max Braking G</div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="stats-card success">
+                <div class="stats-value" id="stat-max-accel">--</div>
+                <div class="stats-label">Max Accel G</div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="stats-card">
+                <div class="stats-value" id="stat-max-combined">--</div>
+                <div class="stats-label">Max Combined G</div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="stats-card success">
+                <div class="stats-value" id="stat-utilization">--</div>
+                <div class="stats-label">Grip Utilization</div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="stats-card">
+                <div class="stats-value" id="stat-points">--</div>
+                <div class="stats-label">Data Points</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Diagram -->
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <strong>G-G Diagram</strong>
+                    <div class="btn-group btn-group-sm">
+                        <button class="btn btn-outline-secondary" onclick="toggleView('chart')" id="btn-chart">Chart.js</button>
+                        <button class="btn btn-outline-secondary active" onclick="toggleView('svg')" id="btn-svg">SVG</button>
+                    </div>
+                </div>
+                <div class="card-body gg-container">
+                    <div id="chart-view" style="display: none;">
+                        <div id="gg-chart-container">
+                            <canvas id="gg-chart"></canvas>
+                        </div>
+                    </div>
+                    <div id="svg-view" class="svg-container">
+                        <div class="text-muted">Loading diagram...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">
+                    <strong>Low Utilization Zones</strong>
+                    <br><small class="text-muted">Corners with grip left on the table</small>
+                </div>
+                <div class="card-body" style="max-height: 400px; overflow-y: auto;" id="low-util-zones">
+                    <p class="text-muted">Select a session to see analysis</p>
+                </div>
+            </div>
+            <div class="card mt-3">
+                <div class="card-header"><strong>Reference Circles</strong></div>
+                <div class="card-body">
+                    <div class="d-flex align-items-center mb-2">
+                        <span style="width: 20px; height: 20px; border: 2px solid #e74c3c; border-radius: 50%; margin-right: 10px;"></span>
+                        <span>Max G (Vehicle Config): <strong id="ref-max-g">1.30g</strong></span>
+                    </div>
+                    <div class="d-flex align-items-center">
+                        <span style="width: 20px; height: 20px; border: 2px solid #f1c40f; border-radius: 50%; margin-right: 10px;"></span>
+                        <span>95th Percentile: <strong id="ref-data-g">--</strong></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    let currentData = null;
+    let ggChart = null;
+
+    document.addEventListener('DOMContentLoaded', loadFileList);
+
+    async function loadFileList() {
+        try {
+            const response = await fetch('/api/parquet/list');
+            const data = await response.json();
+
+            const select = document.getElementById('file-select');
+            select.innerHTML = '<option value="">Select a session...</option>';
+
+            for (const file of data.parquet_files) {
+                if (!file.error) {
+                    const option = document.createElement('option');
+                    option.value = file.path;
+                    option.textContent = `${file.filename} (${file.rows.toLocaleString()} rows)`;
+                    select.appendChild(option);
+                }
+            }
+        } catch (error) {
+            console.error('Failed to load file list:', error);
+        }
+    }
+
+    async function loadGGDiagram() {
+        const filename = document.getElementById('file-select').value;
+        if (!filename) return;
+
+        document.getElementById('loading').style.display = 'block';
+        document.getElementById('results-section').style.display = 'none';
+
+        try {
+            // Load JSON data
+            const response = await fetch(`/api/gg-diagram/${encodeURIComponent(filename)}?format=json`);
+            if (!response.ok) throw new Error('Failed to load G-G data');
+            currentData = await response.json();
+
+            // Update stats
+            updateStats(currentData.stats);
+            updateLowUtilZones(currentData.low_utilization_zones);
+            document.getElementById('ref-max-g').textContent = currentData.reference_max_g.toFixed(2) + 'g';
+            document.getElementById('ref-data-g').textContent = currentData.stats.data_derived_max_g.toFixed(2) + 'g';
+
+            // Load SVG
+            await loadSVG(filename);
+
+            document.getElementById('results-section').style.display = 'block';
+        } catch (error) {
+            alert('Failed to load G-G diagram: ' + error.message);
+        } finally {
+            document.getElementById('loading').style.display = 'none';
+        }
+    }
+
+    async function loadSVG(filename) {
+        const colorBy = document.getElementById('color-select').value;
+        const response = await fetch(`/api/gg-diagram/${encodeURIComponent(filename)}?format=svg&color_by=${colorBy}`);
+        if (response.ok) {
+            document.getElementById('svg-view').innerHTML = await response.text();
+        }
+    }
+
+    function updateStats(stats) {
+        document.getElementById('stat-max-lat').textContent = stats.max_lateral_g.toFixed(2) + 'g';
+        document.getElementById('stat-max-brake').textContent = stats.max_braking_g.toFixed(2) + 'g';
+        document.getElementById('stat-max-accel').textContent = stats.max_acceleration_g.toFixed(2) + 'g';
+        document.getElementById('stat-max-combined').textContent = stats.max_combined_g.toFixed(2) + 'g';
+        document.getElementById('stat-utilization').textContent = stats.utilization_pct.toFixed(0) + '%';
+        document.getElementById('stat-points').textContent = stats.points_count.toLocaleString();
+    }
+
+    function updateLowUtilZones(zones) {
+        const container = document.getElementById('low-util-zones');
+        if (!zones || zones.length === 0) {
+            container.innerHTML = '<p class="text-success">No significant low utilization zones found. Good grip usage!</p>';
+            return;
+        }
+
+        let html = '';
+        for (const zone of zones) {
+            html += `
+                <div class="low-util-zone">
+                    <strong>Time: ${zone.start_time.toFixed(1)}s - ${zone.end_time.toFixed(1)}s</strong>
+                    <br>
+                    <small>
+                        Duration: ${zone.duration.toFixed(1)}s |
+                        Avg Lat G: ${zone.avg_lat_g.toFixed(2)} |
+                        Utilization: ${zone.utilization_pct.toFixed(0)}%
+                    </small>
+                </div>
+            `;
+        }
+        container.innerHTML = html;
+    }
+
+    function toggleView(view) {
+        if (view === 'chart') {
+            document.getElementById('chart-view').style.display = 'block';
+            document.getElementById('svg-view').style.display = 'none';
+            document.getElementById('btn-chart').classList.add('active');
+            document.getElementById('btn-svg').classList.remove('active');
+            renderChart();
+        } else {
+            document.getElementById('chart-view').style.display = 'none';
+            document.getElementById('svg-view').style.display = 'block';
+            document.getElementById('btn-svg').classList.add('active');
+            document.getElementById('btn-chart').classList.remove('active');
+        }
+    }
+
+    function renderChart() {
+        if (!currentData) return;
+
+        const ctx = document.getElementById('gg-chart');
+        if (ggChart) ggChart.destroy();
+
+        const points = currentData.points.map(p => ({x: p.lat_acc, y: p.lon_acc}));
+        const maxG = Math.max(
+            Math.abs(currentData.stats.max_lateral_g),
+            Math.abs(currentData.stats.max_braking_g),
+            currentData.reference_max_g
+        ) * 1.1;
+
+        ggChart = new Chart(ctx, {
+            type: 'scatter',
+            data: {
+                datasets: [{
+                    label: 'G-G Data',
+                    data: points,
+                    backgroundColor: 'rgba(52, 152, 219, 0.5)',
+                    pointRadius: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                aspectRatio: 1,
+                plugins: {
+                    legend: { display: false },
+                    title: { display: false }
+                },
+                scales: {
+                    x: {
+                        min: -maxG,
+                        max: maxG,
+                        title: { display: true, text: 'Lateral G (+ = Right)', color: '#a0a0a0' },
+                        grid: { color: '#404040' },
+                        ticks: { color: '#a0a0a0' }
+                    },
+                    y: {
+                        min: -maxG,
+                        max: maxG,
+                        title: { display: true, text: 'Longitudinal G (+ = Accel)', color: '#a0a0a0' },
+                        grid: { color: '#404040' },
+                        ticks: { color: '#a0a0a0' }
+                    }
+                }
+            }
+        });
+    }
+
+    async function updateColorScheme() {
+        const filename = document.getElementById('file-select').value;
+        if (filename) {
+            await loadSVG(filename);
+        }
+    }
+
+    function filterByLap() {
+        // TODO: Implement lap filtering
+    }
+</script>
+{% endblock %}

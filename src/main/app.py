@@ -888,6 +888,98 @@ async def get_delta_track_map(
 
 
 # ============================================================
+# G-G Diagram Endpoints
+# ============================================================
+
+from src.features.gg_analysis import GGAnalyzer
+from src.visualization.gg_diagram import GGDiagram
+
+
+@app.get("/gg-diagram")
+async def gg_diagram_page(request: Request):
+    """G-G Diagram page"""
+    return templates.TemplateResponse("gg_diagram.html", {"request": request})
+
+
+@app.get("/api/gg-diagram/{filename:path}")
+async def get_gg_diagram(
+    filename: str,
+    format: str = "json",
+    color_by: str = "speed",
+    max_g: float = 1.3
+):
+    """
+    Generate G-G diagram data or visualization.
+
+    Args:
+        filename: Parquet file path
+        format: Output format ('json', 'svg')
+        color_by: Color scheme ('speed', 'throttle', 'lap')
+        max_g: Reference max g from vehicle config
+    """
+    import pandas as pd
+    import numpy as np
+
+    file_path = _find_parquet_file(filename)
+    if not file_path:
+        raise HTTPException(status_code=404, detail=f"Parquet file not found: {filename}")
+
+    try:
+        df = pd.read_parquet(file_path)
+
+        # Find acceleration columns
+        lat_acc = _find_column(df, ['GPS LatAcc', 'LatAcc'])
+        lon_acc = _find_column(df, ['GPS LonAcc', 'LonAcc'])
+
+        if lat_acc is None or lon_acc is None:
+            raise HTTPException(status_code=400, detail="Acceleration data (GPS LatAcc/LonAcc) not found")
+
+        # Find optional columns for coloring
+        speed_data = _find_column(df, ['GPS Speed', 'speed', 'Speed'])
+        if speed_data is not None and speed_data.max() < 100:
+            speed_data = speed_data * 2.237
+
+        throttle_data = _find_column(df, ['PedalPos', 'throttle', 'Throttle'])
+
+        # Run analysis
+        analyzer = GGAnalyzer(max_g_reference=max_g)
+        result = analyzer.analyze_from_arrays(
+            df.index.values, lat_acc, lon_acc,
+            speed_data=speed_data,
+            throttle_data=throttle_data,
+            session_id=filename
+        )
+
+        if format == 'json':
+            return result.to_dict()
+        else:
+            # Generate SVG
+            diagram = GGDiagram()
+
+            # Get color data based on selection
+            color_data = None
+            if color_by == 'speed' and speed_data is not None:
+                color_data = speed_data
+            elif color_by == 'throttle' and throttle_data is not None:
+                color_data = throttle_data
+
+            svg = diagram.render_svg(
+                lat_acc, lon_acc,
+                color_data=color_data,
+                color_scheme=color_by,
+                reference_max_g=result.reference_max_g,
+                data_max_g=result.stats.data_derived_max_g,
+                title=f"G-G Diagram - {Path(filename).stem}"
+            )
+            return HTMLResponse(content=svg, media_type="image/svg+xml")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"G-G diagram generation failed: {str(e)}")
+
+
+# ============================================================
 # Queue Dashboard Endpoints
 # ============================================================
 

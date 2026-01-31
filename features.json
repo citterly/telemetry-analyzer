@@ -260,25 +260,26 @@
       "name": "G-G diagram / friction circle",
       "category": "analysis, ui",
       "description": "Scatter plot of GPS LatAcc vs LonAcc showing friction circle utilization. Calculate grip percentage used, identify corners leaving grip on table. Essential metric for chassis/tire analysis.",
-      "status": "planned",
+      "status": "passing",
       "priority": 19,
-      "tests": [],
+      "tests": ["test_gg_analysis.py (25 tests)"],
       "files": [
         "src/features/gg_analysis.py",
         "src/visualization/gg_diagram.py",
         "templates/gg_diagram.html",
-        "src/main/app.py"
+        "src/main/app.py",
+        "data/vehicles.json"
       ],
-      "notes": "Output: Matplotlib static + Chart.js interactive. Scope: User-selectable (full session, per-lap, per-corner drill-down). Reference circles: (1) vehicle config max_g from vehicles.json (add max_lateral_g field ~1.1-1.3g for R-compounds), (2) data-derived 95th percentile. Utilization metric: actual_g / max_g averaged. Color toggle: speed, throttle, gear, or lap. Standalone endpoint: /gg-diagram. Uses GPS LatAcc and GPS LonAcc channels at 10 Hz."
+      "notes": "Added GGAnalyzer for friction circle analysis, GGDiagram for SVG/Chart.js output, /gg-diagram page, /api/gg-diagram endpoint, max_lateral_g field in vehicles.json. 25 tests passing."
     }
   ],
   "metadata": {
     "created_at": "2025-01-29T01:00:00Z",
-    "last_updated": "2026-01-31T16:00:00Z",
+    "last_updated": "2026-01-31T17:00:00Z",
     "total_features": 24,
-    "passing": 23,
+    "passing": 24,
     "failing": 0,
-    "planned": 1
+    "planned": 0
   },
   "categories": {
     "bugfix": "Bug fixes and corrections",
