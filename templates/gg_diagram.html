@@ -183,6 +183,13 @@
 
 <!-- Results -->
 <div id="results-section" style="display: none;">
+    <!-- Warnings Section -->
+    <div class="row mb-3" id="warnings-section" style="display: none;">
+        <div class="col-12">
+            <div class="alert alert-warning mb-0" id="warnings-content"></div>
+        </div>
+    </div>
+
     <!-- Stats Row -->
     <div class="row mb-4">
         <div class="col-md-2">
@@ -204,15 +211,15 @@
             </div>
         </div>
         <div class="col-md-2">
-            <div class="stats-card">
-                <div class="stats-value" id="stat-max-combined">--</div>
-                <div class="stats-label">Max Combined G</div>
+            <div class="stats-card" id="stat-braking-ratio-card">
+                <div class="stats-value" id="stat-braking-ratio">--</div>
+                <div class="stats-label">Brake/Lateral Ratio</div>
             </div>
         </div>
         <div class="col-md-2">
             <div class="stats-card success">
-                <div class="stats-value" id="stat-utilization">--</div>
-                <div class="stats-label">Grip Utilization</div>
+                <div class="stats-value" id="stat-corner-util">--</div>
+                <div class="stats-label">Corner Grip Used</div>
             </div>
         </div>
         <div class="col-md-2">
@@ -359,6 +366,7 @@
 
             // Update stats
             updateStats(currentData.stats);
+            updateWarnings(currentData);
             updateQuadrants(currentData.quadrants);
             updateLowUtilZones(currentData.low_utilization_zones);
             updatePowerLimitedZones(currentData.power_limited_zones, currentData.power_limited_pct);
@@ -396,8 +404,37 @@
         document.getElementById('stat-max-lat').textContent = stats.max_lateral_g.toFixed(2) + 'g';
         document.getElementById('stat-max-brake').textContent = stats.max_braking_g.toFixed(2) + 'g';
         document.getElementById('stat-max-accel').textContent = stats.max_acceleration_g.toFixed(2) + 'g';
-        document.getElementById('stat-max-combined').textContent = stats.max_combined_g.toFixed(2) + 'g';
-        document.getElementById('stat-utilization').textContent = stats.utilization_pct.toFixed(0) + '%';
+
+        // Braking ratio with color coding
+        const brakingRatio = stats.braking_to_lateral_ratio || (stats.max_braking_g / stats.max_lateral_g);
+        document.getElementById('stat-braking-ratio').textContent = (brakingRatio * 100).toFixed(0) + '%';
+        const ratioCard = document.getElementById('stat-braking-ratio-card');
+        if (brakingRatio < 0.85) {
+            ratioCard.style.background = 'linear-gradient(135deg, #e74c3c 0%, #c0392b 100%)';
+        } else {
+            ratioCard.style.background = 'linear-gradient(135deg, #4a90e2 0%, #6c5ce7 100%)';
+        }
+
+        // Corner grip utilization (more meaningful than overall)
+        const cornerUtil = stats.corner_utilization_pct || stats.utilization_pct;
+        document.getElementById('stat-corner-util').textContent = cornerUtil.toFixed(0) + '%';
+    }
+
+    function updateWarnings(data) {
+        const section = document.getElementById('warnings-section');
+        const content = document.getElementById('warnings-content');
+
+        if (data.warnings && data.warnings.length > 0) {
+            let html = '<strong>Analysis Notes:</strong><ul class="mb-0 mt-2">';
+            for (const w of data.warnings) {
+                html += `<li>${w}</li>`;
+            }
+            html += '</ul>';
+            content.innerHTML = html;
+            section.style.display = 'block';
+        } else {
+            section.style.display = 'none';
+        }
     }
 
     function updateQuadrants(quadrants) {
@@ -512,28 +549,40 @@
         }
 
         const bounds = currentData.gps_bounds;
-        if (!bounds.min_lat) {
+        if (!bounds.min_lat || !bounds.max_lat || !bounds.min_lon || !bounds.max_lon) {
             container.innerHTML = '<div class="text-muted text-center">No GPS data available</div>';
             return;
         }
 
-        const width = container.clientWidth - 20;
+        // Ensure container has visible dimensions
+        const width = Math.max(container.clientWidth - 20, 400);
         const height = 200;
-        const padding = 10;
+        const padding = 15;
 
-        // Scale functions
-        const latRange = bounds.max_lat - bounds.min_lat;
-        const lonRange = bounds.max_lon - bounds.min_lon;
-        const scale = Math.min(
-            (width - 2 * padding) / lonRange,
-            (height - 2 * padding) / latRange
-        );
+        // Scale functions - maintain aspect ratio
+        const latRange = bounds.max_lat - bounds.min_lat || 0.001;
+        const lonRange = bounds.max_lon - bounds.min_lon || 0.001;
+
+        // Convert to approximate meters for proper aspect ratio (lat ~111km/deg, lon ~85km/deg at 44N)
+        const latMeters = latRange * 111000;
+        const lonMeters = lonRange * 85000;
+
+        // Scale to fit container while maintaining aspect ratio
+        const scaleX = (width - 2 * padding) / lonMeters;
+        const scaleY = (height - 2 * padding) / latMeters;
+        const scale = Math.min(scaleX, scaleY);
+
+        // Center the track
+        const trackWidth = lonMeters * scale;
+        const trackHeight = latMeters * scale;
+        const offsetX = padding + (width - 2 * padding - trackWidth) / 2;
+        const offsetY = padding + (height - 2 * padding - trackHeight) / 2;
 
         function toX(lon) {
-            return padding + (lon - bounds.min_lon) * scale;
+            return offsetX + (lon - bounds.min_lon) * 85000 * scale;
         }
         function toY(lat) {
-            return height - padding - (lat - bounds.min_lat) * scale;
+            return height - offsetY - (lat - bounds.min_lat) * 111000 * scale;
         }
 
         // Build track path from points
@@ -566,8 +615,9 @@
         }
 
         container.innerHTML = `
-            <svg width="${width}" height="${height}">
-                <path d="${pathD}" stroke="#666" stroke-width="2" fill="none" />
+            <svg width="${width}" height="${height}" style="display: block; margin: 0 auto;">
+                <rect width="${width}" height="${height}" fill="#1a1a1a" rx="4"/>
+                <path d="${pathD}" stroke="#4a90e2" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
                 ${markers}
             </svg>
         `;
@@ -718,7 +768,26 @@
 
     async function filterByLap() {
         const filename = document.getElementById('file-select').value;
+        const lap = document.getElementById('lap-select').value;
         if (filename) {
+            // Re-fetch JSON data with lap filter to update stats
+            try {
+                let url = `/api/gg-diagram/${encodeURIComponent(filename)}?format=json`;
+                if (lap !== 'all') {
+                    url += `&lap=${lap}`;
+                }
+                const response = await fetch(url);
+                if (response.ok) {
+                    const data = await response.json();
+                    // Update stats for filtered lap
+                    updateStats(data.stats);
+                    updateQuadrants(data.quadrants);
+                    // Keep current points for track map (don't reload full data)
+                }
+            } catch (error) {
+                console.error('Failed to update lap data:', error);
+            }
+
             await loadSVG(filename);
             if (document.getElementById('btn-chart').classList.contains('active')) {
                 renderChart();
@@ -729,6 +798,7 @@
     async function compareLaps() {
         const lapA = document.getElementById('compare-lap-a').value;
         const lapB = document.getElementById('compare-lap-b').value;
+        const filename = document.getElementById('file-select').value;
 
         if (!lapA || !lapB) {
             alert('Please select two laps to compare');
@@ -740,9 +810,157 @@
             return;
         }
 
-        // For now, just show an overlay with different colors
-        // This could be enhanced with a dedicated comparison view
-        alert(`Comparison between Lap ${lapA} and Lap ${lapB} - Feature coming soon!`);
+        if (!filename) {
+            alert('Please select a session first');
+            return;
+        }
+
+        try {
+            // Fetch data for both laps
+            const [responseA, responseB] = await Promise.all([
+                fetch(`/api/gg-diagram/${encodeURIComponent(filename)}?format=json&lap=${lapA}`),
+                fetch(`/api/gg-diagram/${encodeURIComponent(filename)}?format=json&lap=${lapB}`)
+            ]);
+
+            if (!responseA.ok || !responseB.ok) {
+                throw new Error('Failed to fetch lap data');
+            }
+
+            const dataA = await responseA.json();
+            const dataB = await responseB.json();
+
+            // Switch to Chart.js view for comparison
+            toggleView('chart');
+
+            // Render comparison chart
+            renderComparisonChart(dataA, dataB, lapA, lapB);
+
+            // Show comparison stats
+            showComparisonStats(dataA.stats, dataB.stats, lapA, lapB);
+
+        } catch (error) {
+            alert('Failed to compare laps: ' + error.message);
+        }
+    }
+
+    function renderComparisonChart(dataA, dataB, lapA, lapB) {
+        const ctx = document.getElementById('gg-chart');
+        if (ggChart) ggChart.destroy();
+
+        const pointsA = dataA.points.map(p => ({x: p.lat_acc, y: p.lon_acc}));
+        const pointsB = dataB.points.map(p => ({x: p.lat_acc, y: p.lon_acc}));
+
+        const maxG = Math.max(
+            Math.abs(dataA.stats.max_lateral_g),
+            Math.abs(dataB.stats.max_lateral_g),
+            Math.abs(dataA.stats.max_braking_g),
+            Math.abs(dataB.stats.max_braking_g),
+            currentData.reference_max_g
+        ) * 1.1;
+
+        ggChart = new Chart(ctx, {
+            type: 'scatter',
+            data: {
+                datasets: [
+                    {
+                        label: `Lap ${lapA}`,
+                        data: pointsA,
+                        backgroundColor: 'rgba(52, 152, 219, 0.6)',
+                        pointRadius: 2
+                    },
+                    {
+                        label: `Lap ${lapB}`,
+                        data: pointsB,
+                        backgroundColor: 'rgba(231, 76, 60, 0.6)',
+                        pointRadius: 2
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                aspectRatio: 1,
+                plugins: {
+                    legend: {
+                        display: true,
+                        labels: { color: '#a0a0a0' }
+                    },
+                    title: {
+                        display: true,
+                        text: `Lap ${lapA} vs Lap ${lapB}`,
+                        color: '#ffffff'
+                    }
+                },
+                scales: {
+                    x: {
+                        min: -maxG,
+                        max: maxG,
+                        title: { display: true, text: 'Lateral G (+ = Right)', color: '#a0a0a0' },
+                        grid: { color: '#404040' },
+                        ticks: { color: '#a0a0a0' }
+                    },
+                    y: {
+                        min: -maxG,
+                        max: maxG,
+                        title: { display: true, text: 'Longitudinal G (+ = Accel)', color: '#a0a0a0' },
+                        grid: { color: '#404040' },
+                        ticks: { color: '#a0a0a0' }
+                    }
+                }
+            }
+        });
+    }
+
+    function showComparisonStats(statsA, statsB, lapA, lapB) {
+        const details = document.getElementById('zone-details');
+        const content = document.getElementById('zone-details-content');
+
+        const diff = (a, b) => {
+            const d = a - b;
+            const sign = d >= 0 ? '+' : '';
+            return `${sign}${d.toFixed(2)}g`;
+        };
+
+        content.innerHTML = `
+            <h6>Lap Comparison</h6>
+            <table class="table table-sm table-dark mb-0">
+                <thead>
+                    <tr>
+                        <th>Metric</th>
+                        <th style="color: #3498db;">Lap ${lapA}</th>
+                        <th style="color: #e74c3c;">Lap ${lapB}</th>
+                        <th>Diff</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Max Lateral G</td>
+                        <td>${statsA.max_lateral_g.toFixed(2)}g</td>
+                        <td>${statsB.max_lateral_g.toFixed(2)}g</td>
+                        <td>${diff(statsA.max_lateral_g, statsB.max_lateral_g)}</td>
+                    </tr>
+                    <tr>
+                        <td>Max Braking G</td>
+                        <td>${statsA.max_braking_g.toFixed(2)}g</td>
+                        <td>${statsB.max_braking_g.toFixed(2)}g</td>
+                        <td>${diff(statsA.max_braking_g, statsB.max_braking_g)}</td>
+                    </tr>
+                    <tr>
+                        <td>Avg Utilized G</td>
+                        <td>${statsA.avg_utilized_g.toFixed(2)}g</td>
+                        <td>${statsB.avg_utilized_g.toFixed(2)}g</td>
+                        <td>${diff(statsA.avg_utilized_g, statsB.avg_utilized_g)}</td>
+                    </tr>
+                    <tr>
+                        <td>Corner Utilization</td>
+                        <td>${(statsA.corner_utilization_pct || statsA.utilization_pct).toFixed(0)}%</td>
+                        <td>${(statsB.corner_utilization_pct || statsB.utilization_pct).toFixed(0)}%</td>
+                        <td>${((statsA.corner_utilization_pct || statsA.utilization_pct) - (statsB.corner_utilization_pct || statsB.utilization_pct)).toFixed(0)}%</td>
+                    </tr>
+                </tbody>
+            </table>
+        `;
+        details.style.display = 'block';
     }
 </script>
 {% endblock %}

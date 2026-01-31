@@ -40,6 +40,10 @@ class GGStats:
     utilization_pct: float  # How much of max grip is being used on average
     data_derived_max_g: float  # 95th percentile of actual data
     points_count: int
+    # New actionable metrics
+    corner_utilization_pct: float = 0.0  # Grip utilization in corners only (lat_g > 0.3)
+    non_power_limited_utilization_pct: float = 0.0  # Utilization excluding power-limited zones
+    braking_to_lateral_ratio: float = 0.0  # max_braking / max_lateral - flag if < 0.9
 
 
 @dataclass
@@ -102,6 +106,10 @@ class GGAnalysisResult:
     power_limited_pct: float = 0.0
     lap_numbers: List[int] = field(default_factory=list)
     gps_bounds: Dict = field(default_factory=dict)
+    # Warnings and flags
+    warnings: List[str] = field(default_factory=list)
+    max_g_exceeds_config: bool = False  # True if data exceeds vehicle config (config wrong or GPS noise)
+    braking_opportunity: bool = False  # True if braking << lateral (could brake harder)
 
     def to_dict(self) -> dict:
         """Convert to dictionary for JSON serialization"""
@@ -116,7 +124,11 @@ class GGAnalysisResult:
                 "avg_utilized_g": round(self.stats.avg_utilized_g, 3),
                 "utilization_pct": round(self.stats.utilization_pct, 1),
                 "data_derived_max_g": round(self.stats.data_derived_max_g, 3),
-                "points_count": self.stats.points_count
+                "points_count": self.stats.points_count,
+                # New actionable metrics
+                "corner_utilization_pct": round(self.stats.corner_utilization_pct, 1),
+                "non_power_limited_utilization_pct": round(self.stats.non_power_limited_utilization_pct, 1),
+                "braking_to_lateral_ratio": round(self.stats.braking_to_lateral_ratio, 2)
             },
             "reference_max_g": round(self.reference_max_g, 3),
             "low_utilization_zones": [z.to_dict() for z in self.low_utilization_zones],
@@ -137,6 +149,10 @@ class GGAnalysisResult:
             ],
             "lap_numbers": self.lap_numbers,
             "gps_bounds": self.gps_bounds,
+            # Warnings and flags
+            "warnings": self.warnings,
+            "max_g_exceeds_config": self.max_g_exceeds_config,
+            "braking_opportunity": self.braking_opportunity,
             # Include downsampled points for Chart.js (every 5th point to reduce data size)
             "points": [
                 {
@@ -169,15 +185,22 @@ class GGAnalyzer:
     POWER_LIMITED_THROTTLE = 95.0  # % throttle
     POWER_LIMITED_LAT_G = 0.2      # Max lateral g to be considered on straight
 
-    def __init__(self, max_g_reference: float = 1.3, power_limited_accel_g: float = 0.4):
+    def __init__(
+        self,
+        max_g_reference: float = 1.3,
+        max_braking_g: float = None,
+        power_limited_accel_g: float = 0.4
+    ):
         """
         Initialize analyzer.
 
         Args:
-            max_g_reference: Reference max g from vehicle config (default 1.3g for R-compounds)
+            max_g_reference: Reference max lateral g from vehicle config (default 1.3g for R-compounds)
+            max_braking_g: Reference max braking g (defaults to max_g_reference * 1.1 if not set)
             power_limited_accel_g: Expected acceleration g when power-limited (based on power/weight)
         """
         self.max_g_reference = max_g_reference
+        self.max_braking_g = max_braking_g if max_braking_g is not None else max_g_reference * 1.1
         self.power_limited_accel_g = power_limited_accel_g
 
     def analyze_from_arrays(
@@ -262,8 +285,13 @@ class GGAnalyzer:
             )
             points.append(p)
 
-        # Calculate quadrant breakdown
-        quadrants = self._calculate_quadrants(lat_acc, lon_acc, total_g, reference_max_g)
+        # Calculate quadrant breakdown with per-quadrant reference values
+        quadrants = self._calculate_quadrants(
+            lat_acc, lon_acc, total_g,
+            max_lateral_g=self.max_g_reference,
+            max_braking_g=self.max_braking_g,
+            power_limited_accel_g=self.power_limited_accel_g
+        )
 
         # Find power-limited zones
         power_limited_zones, power_limited_pct = self._find_power_limited_zones(
@@ -295,6 +323,51 @@ class GGAnalyzer:
                     "max_lon": float(np.max(valid_lon))
                 }
 
+        # Calculate new actionable metrics
+        # 1. Corner-only utilization (lat_g > 0.3g = in a corner)
+        in_corner_mask = np.abs(lat_acc) > 0.3
+        if np.sum(in_corner_mask) > 0:
+            corner_total_g = total_g[in_corner_mask]
+            corner_utilization_pct = float(np.mean(corner_total_g) / reference_max_g * 100)
+        else:
+            corner_utilization_pct = 0.0
+
+        # 2. Non-power-limited utilization (exclude straights with full throttle)
+        power_limited_mask = (
+            (throttle >= self.POWER_LIMITED_THROTTLE) &
+            (np.abs(lat_acc) < self.POWER_LIMITED_LAT_G)
+        )
+        non_power_limited_mask = ~power_limited_mask
+        if np.sum(non_power_limited_mask) > 0:
+            non_pl_total_g = total_g[non_power_limited_mask]
+            non_power_limited_utilization_pct = float(np.mean(non_pl_total_g) / reference_max_g * 100)
+        else:
+            non_power_limited_utilization_pct = utilization_pct
+
+        # 3. Braking to lateral ratio
+        braking_to_lateral_ratio = max_braking_g / max_lateral_g if max_lateral_g > 0 else 0.0
+
+        # 4. Warnings and flags
+        warnings = []
+        max_g_exceeds_config = False
+        braking_opportunity = False
+
+        # Check if max lateral exceeds vehicle config (possible GPS noise or wrong config)
+        if max_lateral_g > self.max_g_reference * 1.1:
+            max_g_exceeds_config = True
+            warnings.append(
+                f"Max lateral G ({max_lateral_g:.2f}g) exceeds vehicle config ({self.max_g_reference:.2f}g). "
+                "Check vehicle settings or possible GPS noise."
+            )
+
+        # Check if braking is significantly lower than lateral (opportunity to brake harder)
+        if braking_to_lateral_ratio < 0.85:
+            braking_opportunity = True
+            warnings.append(
+                f"Braking G ({max_braking_g:.2f}g) is only {braking_to_lateral_ratio:.0%} of lateral G ({max_lateral_g:.2f}g). "
+                "You may be able to brake harder."
+            )
+
         stats = GGStats(
             max_lateral_g=max_lateral_g,
             max_braking_g=max_braking_g,
@@ -303,7 +376,10 @@ class GGAnalyzer:
             avg_utilized_g=avg_utilized_g,
             utilization_pct=utilization_pct,
             data_derived_max_g=data_derived_max_g,
-            points_count=len(points)
+            points_count=len(points),
+            corner_utilization_pct=corner_utilization_pct,
+            non_power_limited_utilization_pct=non_power_limited_utilization_pct,
+            braking_to_lateral_ratio=braking_to_lateral_ratio
         )
 
         return GGAnalysisResult(
@@ -317,7 +393,10 @@ class GGAnalyzer:
             power_limited_zones=power_limited_zones,
             power_limited_pct=power_limited_pct,
             lap_numbers=lap_numbers,
-            gps_bounds=gps_bounds
+            gps_bounds=gps_bounds,
+            warnings=warnings,
+            max_g_exceeds_config=max_g_exceeds_config,
+            braking_opportunity=braking_opportunity
         )
 
     def analyze_from_parquet(
@@ -408,27 +487,48 @@ class GGAnalyzer:
         lat_acc: np.ndarray,
         lon_acc: np.ndarray,
         total_g: np.ndarray,
-        max_g: float
+        max_lateral_g: float,
+        max_braking_g: float,
+        power_limited_accel_g: float
     ) -> List[QuadrantStats]:
-        """Calculate statistics for each quadrant of the G-G diagram."""
+        """
+        Calculate statistics for each quadrant of the G-G diagram.
+
+        Uses per-quadrant reference values for accurate utilization:
+        - Lateral (left/right): uses max_lateral_g
+        - Braking: uses max_braking_g (often higher than lateral due to weight transfer)
+        - Acceleration: uses power_limited_accel_g (engine/traction limited)
+        """
         quadrants = []
 
+        # Each quadrant has its own reference g value
         definitions = [
-            ("lat_left", "Left Corners", lat_acc < -0.1, "#e74c3c"),
-            ("lat_right", "Right Corners", lat_acc > 0.1, "#3498db"),
-            ("braking", "Braking", lon_acc < -0.1, "#f39c12"),
-            ("acceleration", "Acceleration", lon_acc > 0.1, "#2ecc71")
+            ("lat_left", "Left Corners", lat_acc < -0.1, "#e74c3c",
+             np.abs(lat_acc), max_lateral_g),
+            ("lat_right", "Right Corners", lat_acc > 0.1, "#3498db",
+             np.abs(lat_acc), max_lateral_g),
+            ("braking", "Braking", lon_acc < -0.1, "#f39c12",
+             np.abs(lon_acc), max_braking_g),
+            ("acceleration", "Acceleration", lon_acc > 0.1, "#2ecc71",
+             lon_acc, power_limited_accel_g)
         ]
 
-        for name, display_name, mask, color in definitions:
+        for name, display_name, mask, color, g_values, ref_g in definitions:
             if np.sum(mask) > 0:
-                q_total_g = total_g[mask]
+                q_g_values = g_values[mask]
+                max_g_in_quadrant = float(np.max(q_g_values))
+                avg_g_in_quadrant = float(np.mean(q_g_values))
+                # Utilization is based on the appropriate reference for this quadrant
+                utilization = float(avg_g_in_quadrant / ref_g * 100) if ref_g > 0 else 0.0
+                # Cap at 100% for display (can exceed if driver is exceeding expected limits)
+                utilization_capped = min(utilization, 100.0)
+
                 quadrants.append(QuadrantStats(
                     name=name,
                     display_name=display_name,
-                    max_g=float(np.max(q_total_g)),
-                    avg_g=float(np.mean(q_total_g)),
-                    utilization_pct=float(np.mean(q_total_g) / max_g * 100),
+                    max_g=max_g_in_quadrant,
+                    avg_g=avg_g_in_quadrant,
+                    utilization_pct=utilization_capped,
                     time_spent_pct=float(np.sum(mask) / len(lat_acc) * 100),
                     points_count=int(np.sum(mask)),
                     color=color

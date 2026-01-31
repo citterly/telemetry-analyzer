@@ -11,6 +11,8 @@
       "tire_circumference_meters": 2.026,
       "weight_lbs": 3450,
       "max_lateral_g": 1.3,
+      "max_braking_g": 1.4,
+      "power_limited_accel_g": 0.5,
       "engine": {
         "max_rpm": 8000,
         "safe_rpm_limit": 7000,
@@ -57,6 +59,8 @@
       "tire_circumference_meters": 1.946,
       "weight_lbs": 2550,
       "max_lateral_g": 1.2,
+      "max_braking_g": 1.3,
+      "power_limited_accel_g": 0.4,
       "engine": {
         "max_rpm": 7500,
         "safe_rpm_limit": 7000,
@@ -91,6 +95,8 @@
       "tire_circumference_meters": 1.986,
       "weight_lbs": 3075,
       "max_lateral_g": 1.4,
+      "max_braking_g": 1.5,
+      "power_limited_accel_g": 0.6,
       "engine": {
         "max_rpm": 8200,
         "safe_rpm_limit": 7800,
@@ -125,6 +131,8 @@
       "tire_circumference_meters": 1.940,
       "weight_lbs": 2850,
       "max_lateral_g": 1.2,
+      "max_braking_g": 1.3,
+      "power_limited_accel_g": 0.45,
       "engine": {
         "max_rpm": 9000,
         "safe_rpm_limit": 8500,
@@ -159,6 +167,8 @@
       "tire_circumference_meters": 1.910,
       "weight_lbs": 2700,
       "max_lateral_g": 1.1,
+      "max_braking_g": 1.2,
+      "power_limited_accel_g": 0.4,
       "engine": {
         "max_rpm": 6500,
         "safe_rpm_limit": 6200,

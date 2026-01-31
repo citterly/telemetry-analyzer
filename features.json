@@ -310,9 +310,9 @@
       "name": "G-G diagram bug fixes and refinements",
       "category": "bugfix, ui",
       "description": "Fix non-functional features and improve metric accuracy in G-G diagram.",
-      "status": "planned",
+      "status": "passing",
       "priority": 19,
-      "tests": [],
+      "tests": ["tests/test_gg_analysis.py"],
       "files": [
         "src/features/gg_analysis.py",
         "src/visualization/gg_diagram.py",
@@ -320,16 +320,16 @@
         "src/main/app.py",
         "data/vehicles.json"
       ],
-      "notes": "BUGS: (1) Lap filter selection doesn't update data - API not filtering or frontend not re-fetching. (2) Track Position box blank - GPS trace not rendering. (3) Click zone to highlight does nothing - needs JS event handler. (4) Compare Laps shows 'future feature' - implement or remove from UI. QUADRANT REFERENCE FIX: Each quadrant needs different reference value in vehicles.json: lat_left and lat_right use max_lateral_g, braking uses max_braking_g (often higher than lateral), acceleration uses power_limited_accel_g (based on power/weight). Current implementation compares all to same 1.30g which makes accel look bad when it's physics-limited. NEW METRICS: (1) Flag when max lateral exceeds vehicle config - either config wrong or GPS noise, show warning. (2) Braking vs Lateral ratio - if braking << lateral, flag as opportunity (could brake harder). (3) Grip Utilization excluding power-limited zones - the 'real' utilization number, not diluted by straights. (4) Corner-only utilization - % of grip used specifically in corners (lat_g > 0.3g threshold). REMOVE/REPLACE: Max Combined G - not useful, just echoes max lateral. Replace with something actionable. VEHICLE CONFIG ADDITIONS: Add to vehicles.json: max_braking_g (~1.2-1.5g depending on brakes/tires), power_limited_accel_g (~0.4-0.6g based on hp/weight calculation)."
+      "notes": "FIXED: (1) Lap filter now re-fetches data and updates stats. (2) Track map GPS trace renders correctly with proper aspect ratio. (3) Zone click highlighting works. (4) Lap comparison implemented with overlay chart and stats table. IMPLEMENTED: (1) Per-quadrant reference values in vehicles.json (max_braking_g, power_limited_accel_g). (2) Quadrant utilization uses correct reference for each type. (3) New metrics: corner_utilization_pct, non_power_limited_utilization_pct, braking_to_lateral_ratio. (4) Warnings when max_g exceeds config or braking ratio is low. (5) Replaced 'Max Combined G' with 'Brake/Lateral Ratio' in UI."
     }
   ],
   "metadata": {
     "created_at": "2025-01-29T01:00:00Z",
-    "last_updated": "2026-01-31T20:15:00Z",
+    "last_updated": "2026-01-31T21:00:00Z",
     "total_features": 27,
-    "passing": 26,
+    "passing": 27,
     "failing": 0,
-    "planned": 1
+    "planned": 0
   },
   "categories": {
     "bugfix": "Bug fixes and corrections",

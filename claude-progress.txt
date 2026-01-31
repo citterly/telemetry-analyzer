@@ -454,3 +454,48 @@ Features: 26/26 passing (100%)
 === ALL FEATURES COMPLETE ===
 Project aim-telemetry now has all 26 features implemented and tested!
 
+
+=== Session 8 (2026-01-31 21:00 UTC) ===
+Working on: feat-061b (G-G diagram bug fixes and refinements)
+
+Work completed:
+- Added max_braking_g and power_limited_accel_g to all vehicles in vehicles.json
+  - BMW M3: max_braking_g=1.4, power_limited_accel_g=0.5
+  - NC Miata: max_braking_g=1.3, power_limited_accel_g=0.4
+  - GT3: max_braking_g=1.5, power_limited_accel_g=0.6
+  - S2000: max_braking_g=1.3, power_limited_accel_g=0.45
+  - Spec E30: max_braking_g=1.2, power_limited_accel_g=0.4
+
+- Fixed per-quadrant utilization in GGAnalyzer
+  - lat_left/lat_right: uses max_lateral_g
+  - braking: uses max_braking_g (higher due to weight transfer)
+  - acceleration: uses power_limited_accel_g (engine limited)
+
+- Fixed lap filter to re-fetch data
+  - API now accepts lap parameter for filtering
+  - Frontend re-fetches JSON with lap filter to update stats
+  - Stats are recalculated for filtered lap
+
+- Fixed mini track map GPS trace
+  - Added minimum width fallback
+  - Fixed aspect ratio calculation for proper track shape
+  - Improved styling with blue track line
+
+- Added new actionable metrics
+  - corner_utilization_pct: Grip used in corners only (lat_g > 0.3g)
+  - non_power_limited_utilization_pct: Utilization excluding straights
+  - braking_to_lateral_ratio: Flag if braking << lateral
+  - Warnings when max_g exceeds config or braking opportunity exists
+  - Replaced "Max Combined G" with "Brake/Lateral Ratio" in UI
+
+- Implemented lap comparison feature
+  - Overlay two laps on Chart.js G-G diagram
+  - Show comparison stats table with differences
+  - Different colors for each lap
+
+Status: feat-061b marked PASSING
+Features: 27/27 passing (100%)
+
+=== ALL FEATURES COMPLETE ===
+Project aim-telemetry now has all 27 features implemented and tested!
+

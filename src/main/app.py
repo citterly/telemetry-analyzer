@@ -894,6 +894,7 @@ async def get_delta_track_map(
 from src.features.gg_analysis import GGAnalyzer
 from src.visualization.gg_diagram import GGDiagram
 from src.features.corner_analysis import CornerAnalyzer
+from src.config.vehicles import get_active_vehicle
 
 
 @app.get("/gg-diagram")
@@ -907,7 +908,7 @@ async def get_gg_diagram(
     filename: str,
     format: str = "json",
     color_by: str = "speed",
-    max_g: float = 1.3
+    lap: str = None
 ):
     """
     Generate G-G diagram data or visualization.
@@ -916,7 +917,7 @@ async def get_gg_diagram(
         filename: Parquet file path
         format: Output format ('json', 'svg')
         color_by: Color scheme ('speed', 'throttle', 'lap')
-        max_g: Reference max g from vehicle config
+        lap: Filter to specific lap number (optional)
     """
     import pandas as pd
     import numpy as np
@@ -926,9 +927,18 @@ async def get_gg_diagram(
         raise HTTPException(status_code=404, detail=f"Parquet file not found: {filename}")
 
     try:
+        # Get vehicle config values for accurate per-quadrant reference
+        vehicle = get_active_vehicle()
+        max_lateral_g = getattr(vehicle, 'max_lateral_g', 1.3)
+        max_braking_g = getattr(vehicle, 'max_braking_g', max_lateral_g * 1.1)
+        power_limited_accel_g = getattr(vehicle, 'power_limited_accel_g', 0.4)
+
         # Run analysis using analyze_from_parquet for full feature support
-        # (includes lap detection, GPS coordinates for track map, etc.)
-        analyzer = GGAnalyzer(max_g_reference=max_g)
+        analyzer = GGAnalyzer(
+            max_g_reference=max_lateral_g,
+            max_braking_g=max_braking_g,
+            power_limited_accel_g=power_limited_accel_g
+        )
         result = analyzer.analyze_from_parquet(file_path, session_id=filename)
 
         # Get arrays for SVG rendering
@@ -944,6 +954,43 @@ async def get_gg_diagram(
             speed_data = speed_data * 2.237
 
         throttle_data = _find_column(df, ['PedalPos', 'throttle', 'Throttle'])
+
+        # Filter by lap if specified
+        lap_filter = None
+        if lap and lap != 'all':
+            try:
+                lap_filter = int(lap)
+            except ValueError:
+                pass
+
+        if lap_filter is not None and result.lap_numbers:
+            # Filter points to specified lap
+            filtered_points = [p for p in result.points if p.lap_number == lap_filter]
+            if filtered_points:
+                result.points = filtered_points
+                # Recalculate stats for filtered data
+                lat_acc_filtered = np.array([p.lat_acc for p in filtered_points])
+                lon_acc_filtered = np.array([p.lon_acc for p in filtered_points])
+                total_g_filtered = np.sqrt(lat_acc_filtered**2 + lon_acc_filtered**2)
+
+                result.stats.max_lateral_g = float(np.max(np.abs(lat_acc_filtered)))
+                result.stats.max_braking_g = float(np.abs(np.min(lon_acc_filtered)))
+                result.stats.max_acceleration_g = float(np.max(lon_acc_filtered))
+                result.stats.max_combined_g = float(np.max(total_g_filtered))
+                result.stats.avg_utilized_g = float(np.mean(total_g_filtered))
+                result.stats.utilization_pct = float(np.mean(total_g_filtered) / result.reference_max_g * 100)
+                result.stats.points_count = len(filtered_points)
+
+                # Also filter arrays for SVG
+                lap_data = np.array([p.lap_number for p in result.points])
+                mask = lap_data == lap_filter
+                if len(mask) == len(lat_acc):
+                    lat_acc = lat_acc[mask]
+                    lon_acc = lon_acc[mask]
+                    if speed_data is not None:
+                        speed_data = speed_data[mask]
+                    if throttle_data is not None:
+                        throttle_data = throttle_data[mask]
 
         if format == 'json':
             return result.to_dict()
@@ -964,7 +1011,7 @@ async def get_gg_diagram(
                 color_scheme=color_by,
                 reference_max_g=result.reference_max_g,
                 data_max_g=result.stats.data_derived_max_g,
-                title=f"G-G Diagram - {Path(filename).stem}"
+                title=f"G-G Diagram - {Path(filename).stem}" + (f" (Lap {lap_filter})" if lap_filter else "")
             )
             return HTMLResponse(content=svg, media_type="image/svg+xml")
 
