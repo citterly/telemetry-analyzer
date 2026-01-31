@@ -243,14 +243,26 @@
       "tests": ["pytest tests/integration/"],
       "files": ["tests/integration/test_full_analysis.py"],
       "notes": "25 tests: parquet loading, GPS validation, track detection, lap analysis, track map. All using real Road America data."
+    },
+    {
+      "id": "feat-060",
+      "name": "Delta track map for lap comparison",
+      "category": "ui",
+      "description": "Show track map colored by time gained/lost when comparing two laps. Green sections = reference lap faster, Red sections = comparison lap faster. Replaces abstract segment bars with intuitive visual track overlay showing exactly where on track time was gained or lost.",
+      "status": "planned",
+      "priority": 19,
+      "tests": [],
+      "files": ["src/visualization/track_map.py", "templates/analysis.html", "src/main/app.py"],
+      "notes": "Enhancement request: Make lap comparison more intuitive by showing gains/losses on actual track layout instead of segment bar chart."
     }
   ],
   "metadata": {
     "created_at": "2025-01-29T01:00:00Z",
-    "last_updated": "2026-01-29T09:00:00Z",
-    "total_features": 22,
+    "last_updated": "2026-01-31T14:30:00Z",
+    "total_features": 23,
     "passing": 22,
-    "failing": 0
+    "failing": 0,
+    "planned": 1
   },
   "categories": {
     "bugfix": "Bug fixes and corrections",
