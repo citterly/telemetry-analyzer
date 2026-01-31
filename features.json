@@ -271,15 +271,33 @@
         "data/vehicles.json"
       ],
       "notes": "Added GGAnalyzer for friction circle analysis, GGDiagram for SVG/Chart.js output, /gg-diagram page, /api/gg-diagram endpoint, max_lateral_g field in vehicles.json. 25 tests passing."
+    },
+    {
+      "id": "feat-062",
+      "name": "Corner detection and basic analysis",
+      "category": "analysis, ui",
+      "description": "Auto-detect corners from GPS radius and speed patterns. Extract per-corner metrics: entry speed, min speed (apex), exit speed, time in corner, throttle application point, lift detection. Admin screen for manual corner zone refinement.",
+      "status": "planned",
+      "priority": 20,
+      "tests": [],
+      "files": [
+        "src/features/corner_analysis.py",
+        "src/features/corner_detection.py",
+        "templates/corner_admin.html",
+        "templates/corner_analysis.html",
+        "src/main/app.py",
+        "data/tracks.json"
+      ],
+      "notes": "Corner zones: GPS polygon for corner + separate braking zone polygon + apex point. Auto-detection: GPS radius < threshold + speed drop + LonAcc < -0.3g for braking. Admin screen: polygon editor to refine auto-detected zones. Metrics per corner: entry speed (at turn-in), min speed, exit speed (track-out), time in corner, throttle pickup point, any lift/give-back. Compare corners across laps in same session. Corner naming: T1, T2... with optional alias (Carousel, Kink, etc). Extends tracks.json schema. Standalone endpoint: /corner-analysis"
     }
   ],
   "metadata": {
     "created_at": "2025-01-29T01:00:00Z",
-    "last_updated": "2026-01-31T17:00:00Z",
-    "total_features": 24,
+    "last_updated": "2026-01-31T18:00:00Z",
+    "total_features": 25,
     "passing": 24,
     "failing": 0,
-    "planned": 0
+    "planned": 1
   },
   "categories": {
     "bugfix": "Bug fixes and corrections",
