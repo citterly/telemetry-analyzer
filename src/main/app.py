@@ -926,30 +926,24 @@ async def get_gg_diagram(
         raise HTTPException(status_code=404, detail=f"Parquet file not found: {filename}")
 
     try:
-        df = pd.read_parquet(file_path)
+        # Run analysis using analyze_from_parquet for full feature support
+        # (includes lap detection, GPS coordinates for track map, etc.)
+        analyzer = GGAnalyzer(max_g_reference=max_g)
+        result = analyzer.analyze_from_parquet(file_path, session_id=filename)
 
-        # Find acceleration columns
+        # Get arrays for SVG rendering
+        df = pd.read_parquet(file_path)
         lat_acc = _find_column(df, ['GPS LatAcc', 'LatAcc'])
         lon_acc = _find_column(df, ['GPS LonAcc', 'LonAcc'])
 
         if lat_acc is None or lon_acc is None:
             raise HTTPException(status_code=400, detail="Acceleration data (GPS LatAcc/LonAcc) not found")
 
-        # Find optional columns for coloring
         speed_data = _find_column(df, ['GPS Speed', 'speed', 'Speed'])
         if speed_data is not None and speed_data.max() < 100:
             speed_data = speed_data * 2.237
 
         throttle_data = _find_column(df, ['PedalPos', 'throttle', 'Throttle'])
-
-        # Run analysis
-        analyzer = GGAnalyzer(max_g_reference=max_g)
-        result = analyzer.analyze_from_arrays(
-            df.index.values, lat_acc, lon_acc,
-            speed_data=speed_data,
-            throttle_data=throttle_data,
-            session_id=filename
-        )
 
         if format == 'json':
             return result.to_dict()

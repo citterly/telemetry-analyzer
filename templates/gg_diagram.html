@@ -20,6 +20,7 @@
     }
     .stats-card.success { background: linear-gradient(135deg, #00b894 0%, #00cec9 100%); }
     .stats-card.warning { background: linear-gradient(135deg, #fdcb6e 0%, #e17055 100%); }
+    .stats-card.purple { background: linear-gradient(135deg, #9b59b6 0%, #8e44ad 100%); }
     .stats-value { font-size: 1.8rem; font-weight: bold; }
     .stats-label { font-size: 0.85rem; opacity: 0.9; }
 
@@ -43,6 +44,21 @@
         background: rgba(231, 76, 60, 0.1);
         border-left: 3px solid #e74c3c;
         border-radius: 0 4px 4px 0;
+        cursor: pointer;
+        transition: background 0.2s;
+    }
+    .low-util-zone:hover {
+        background: rgba(231, 76, 60, 0.2);
+    }
+    .low-util-zone.power-limited {
+        background: rgba(155, 89, 182, 0.1);
+        border-left-color: #9b59b6;
+    }
+    .low-util-zone.power-limited:hover {
+        background: rgba(155, 89, 182, 0.2);
+    }
+    .low-util-zone.selected {
+        background: rgba(231, 76, 60, 0.3);
     }
 
     .svg-container {
@@ -51,6 +67,53 @@
     .svg-container svg {
         max-width: 100%;
         height: auto;
+    }
+
+    /* Quadrant cards */
+    .quadrant-card {
+        border-radius: 8px;
+        padding: 12px;
+        text-align: center;
+        margin-bottom: 10px;
+    }
+    .quadrant-card .q-name { font-weight: bold; margin-bottom: 5px; }
+    .quadrant-card .q-value { font-size: 1.5rem; font-weight: bold; }
+    .quadrant-card .q-label { font-size: 0.75rem; opacity: 0.8; }
+    .quadrant-card.lat_left { background: rgba(231, 76, 60, 0.2); border: 2px solid #e74c3c; }
+    .quadrant-card.lat_right { background: rgba(52, 152, 219, 0.2); border: 2px solid #3498db; }
+    .quadrant-card.braking { background: rgba(243, 156, 18, 0.2); border: 2px solid #f39c12; }
+    .quadrant-card.acceleration { background: rgba(46, 204, 113, 0.2); border: 2px solid #2ecc71; }
+
+    /* Mini track map */
+    #mini-track-map {
+        background: #1a1a1a;
+        border-radius: 8px;
+        padding: 10px;
+        min-height: 200px;
+    }
+    .zone-marker {
+        transition: all 0.2s;
+    }
+    .zone-marker.low-grip { fill: #e74c3c; }
+    .zone-marker.power-limited { fill: #9b59b6; }
+    .zone-marker.selected {
+        stroke: #fff;
+        stroke-width: 3;
+    }
+
+    /* Zone details */
+    .zone-details {
+        background: #2d2d2d;
+        border-radius: 8px;
+        padding: 15px;
+        margin-top: 10px;
+    }
+
+    /* Comparison mode */
+    .lap-compare-select {
+        display: flex;
+        gap: 10px;
+        align-items: center;
     }
 </style>
 {% endblock %}
@@ -65,7 +128,7 @@
 
 <!-- File Selection -->
 <div class="row mb-4">
-    <div class="col-md-6">
+    <div class="col-md-4">
         <div class="control-panel">
             <label for="file-select" class="form-label">Select Session</label>
             <select class="form-select" id="file-select" onchange="loadGGDiagram()">
@@ -73,7 +136,7 @@
             </select>
         </div>
     </div>
-    <div class="col-md-3">
+    <div class="col-md-2">
         <div class="control-panel">
             <label for="color-select" class="form-label">Color By</label>
             <select class="form-select" id="color-select" onchange="updateColorScheme()">
@@ -83,12 +146,27 @@
             </select>
         </div>
     </div>
-    <div class="col-md-3">
+    <div class="col-md-2">
         <div class="control-panel">
             <label for="lap-select" class="form-label">Lap Filter</label>
             <select class="form-select" id="lap-select" onchange="filterByLap()">
                 <option value="all">All Laps</option>
             </select>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="control-panel">
+            <label class="form-label">Compare Laps</label>
+            <div class="lap-compare-select">
+                <select class="form-select form-select-sm" id="compare-lap-a" disabled>
+                    <option value="">Lap A</option>
+                </select>
+                <span>vs</span>
+                <select class="form-select form-select-sm" id="compare-lap-b" disabled>
+                    <option value="">Lap B</option>
+                </select>
+                <button class="btn btn-sm btn-outline-primary" onclick="compareLaps()" id="btn-compare" disabled>Compare</button>
+            </div>
         </div>
     </div>
 </div>
@@ -138,16 +216,31 @@
             </div>
         </div>
         <div class="col-md-2">
-            <div class="stats-card">
-                <div class="stats-value" id="stat-points">--</div>
-                <div class="stats-label">Data Points</div>
+            <div class="stats-card purple">
+                <div class="stats-value" id="stat-power-limited">--</div>
+                <div class="stats-label">Power Limited</div>
             </div>
         </div>
     </div>
 
-    <!-- Diagram -->
+    <!-- Quadrant Breakdown -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header"><strong>Quadrant Breakdown</strong></div>
+                <div class="card-body">
+                    <div class="row" id="quadrant-cards">
+                        <!-- Populated by JavaScript -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
     <div class="row">
-        <div class="col-md-8">
+        <!-- G-G Diagram -->
+        <div class="col-md-6">
             <div class="card">
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <strong>G-G Diagram</strong>
@@ -167,17 +260,6 @@
                     </div>
                 </div>
             </div>
-        </div>
-        <div class="col-md-4">
-            <div class="card">
-                <div class="card-header">
-                    <strong>Low Utilization Zones</strong>
-                    <br><small class="text-muted">Corners with grip left on the table</small>
-                </div>
-                <div class="card-body" style="max-height: 400px; overflow-y: auto;" id="low-util-zones">
-                    <p class="text-muted">Select a session to see analysis</p>
-                </div>
-            </div>
             <div class="card mt-3">
                 <div class="card-header"><strong>Reference Circles</strong></div>
                 <div class="card-body">
@@ -192,6 +274,40 @@
                 </div>
             </div>
         </div>
+
+        <!-- Right Panel: Track Map + Zones -->
+        <div class="col-md-6">
+            <!-- Mini Track Map -->
+            <div class="card mb-3">
+                <div class="card-header"><strong>Track Position</strong></div>
+                <div class="card-body" id="mini-track-map">
+                    <div class="text-muted text-center">Select a session to see track map</div>
+                </div>
+            </div>
+
+            <!-- Utilization Zones -->
+            <div class="card">
+                <div class="card-header">
+                    <strong>Utilization Zones</strong>
+                    <br><small class="text-muted">Click zone to highlight on map</small>
+                </div>
+                <div class="card-body" style="max-height: 300px; overflow-y: auto;">
+                    <div id="low-util-zones">
+                        <p class="text-muted">Select a session to see analysis</p>
+                    </div>
+                    <hr>
+                    <div id="power-limited-zones">
+                        <!-- Power limited zones -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Zone Details (shown when clicking a zone) -->
+            <div class="zone-details" id="zone-details" style="display: none;">
+                <h6>Zone Details</h6>
+                <div id="zone-details-content"></div>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -201,6 +317,8 @@
 <script>
     let currentData = null;
     let ggChart = null;
+    let selectedZone = null;
+    let allPoints = [];
 
     document.addEventListener('DOMContentLoaded', loadFileList);
 
@@ -237,10 +355,16 @@
             const response = await fetch(`/api/gg-diagram/${encodeURIComponent(filename)}?format=json`);
             if (!response.ok) throw new Error('Failed to load G-G data');
             currentData = await response.json();
+            allPoints = currentData.points;
 
             // Update stats
             updateStats(currentData.stats);
+            updateQuadrants(currentData.quadrants);
             updateLowUtilZones(currentData.low_utilization_zones);
+            updatePowerLimitedZones(currentData.power_limited_zones, currentData.power_limited_pct);
+            populateLapFilters(currentData.lap_numbers);
+            renderMiniTrackMap();
+
             document.getElementById('ref-max-g').textContent = currentData.reference_max_g.toFixed(2) + 'g';
             document.getElementById('ref-data-g').textContent = currentData.stats.data_derived_max_g.toFixed(2) + 'g';
 
@@ -257,7 +381,12 @@
 
     async function loadSVG(filename) {
         const colorBy = document.getElementById('color-select').value;
-        const response = await fetch(`/api/gg-diagram/${encodeURIComponent(filename)}?format=svg&color_by=${colorBy}`);
+        const lap = document.getElementById('lap-select').value;
+        let url = `/api/gg-diagram/${encodeURIComponent(filename)}?format=svg&color_by=${colorBy}`;
+        if (lap !== 'all') {
+            url += `&lap=${lap}`;
+        }
+        const response = await fetch(url);
         if (response.ok) {
             document.getElementById('svg-view').innerHTML = await response.text();
         }
@@ -269,31 +398,241 @@
         document.getElementById('stat-max-accel').textContent = stats.max_acceleration_g.toFixed(2) + 'g';
         document.getElementById('stat-max-combined').textContent = stats.max_combined_g.toFixed(2) + 'g';
         document.getElementById('stat-utilization').textContent = stats.utilization_pct.toFixed(0) + '%';
-        document.getElementById('stat-points').textContent = stats.points_count.toLocaleString();
+    }
+
+    function updateQuadrants(quadrants) {
+        const container = document.getElementById('quadrant-cards');
+        if (!quadrants || quadrants.length === 0) {
+            container.innerHTML = '<p class="text-muted">No quadrant data</p>';
+            return;
+        }
+
+        let html = '';
+        for (const q of quadrants) {
+            html += `
+                <div class="col-md-3">
+                    <div class="quadrant-card ${q.name}">
+                        <div class="q-name">${q.display_name}</div>
+                        <div class="q-value">${q.utilization_pct.toFixed(0)}%</div>
+                        <div class="q-label">
+                            Max: ${q.max_g.toFixed(2)}g | Avg: ${q.avg_g.toFixed(2)}g<br>
+                            Time: ${q.time_spent_pct.toFixed(0)}% of session
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        container.innerHTML = html;
     }
 
     function updateLowUtilZones(zones) {
         const container = document.getElementById('low-util-zones');
         if (!zones || zones.length === 0) {
-            container.innerHTML = '<p class="text-success">No significant low utilization zones found. Good grip usage!</p>';
+            container.innerHTML = '<p class="text-success">No low utilization zones found. Good grip usage!</p>';
             return;
         }
 
-        let html = '';
-        for (const zone of zones) {
+        let html = '<h6 class="text-danger">Low Grip Utilization</h6>';
+        for (let i = 0; i < zones.length; i++) {
+            const zone = zones[i];
             html += `
-                <div class="low-util-zone">
+                <div class="low-util-zone" data-zone-type="low_grip" data-zone-idx="${i}" onclick="selectZone(${i}, 'low_grip')">
                     <strong>Time: ${zone.start_time.toFixed(1)}s - ${zone.end_time.toFixed(1)}s</strong>
                     <br>
                     <small>
                         Duration: ${zone.duration.toFixed(1)}s |
-                        Avg Lat G: ${zone.avg_lat_g.toFixed(2)} |
+                        Avg G: ${zone.avg_total_g.toFixed(2)} |
                         Utilization: ${zone.utilization_pct.toFixed(0)}%
+                    </small>
+                    <br>
+                    <small class="text-muted">${zone.recommendation}</small>
+                </div>
+            `;
+        }
+        container.innerHTML = html;
+    }
+
+    function updatePowerLimitedZones(zones, pct) {
+        document.getElementById('stat-power-limited').textContent = pct.toFixed(0) + '%';
+
+        const container = document.getElementById('power-limited-zones');
+        if (!zones || zones.length === 0) {
+            container.innerHTML = '';
+            return;
+        }
+
+        let html = '<h6 class="text-purple" style="color: #9b59b6;">Power Limited Zones</h6>';
+        for (let i = 0; i < zones.length; i++) {
+            const zone = zones[i];
+            html += `
+                <div class="low-util-zone power-limited" data-zone-type="power_limited" data-zone-idx="${i}" onclick="selectZone(${i}, 'power_limited')">
+                    <strong>Time: ${zone.start_time.toFixed(1)}s - ${zone.end_time.toFixed(1)}s</strong>
+                    <br>
+                    <small>
+                        Duration: ${zone.duration.toFixed(1)}s |
+                        Full throttle, low accel
                     </small>
                 </div>
             `;
         }
         container.innerHTML = html;
+    }
+
+    function populateLapFilters(lapNumbers) {
+        const lapSelect = document.getElementById('lap-select');
+        const compareA = document.getElementById('compare-lap-a');
+        const compareB = document.getElementById('compare-lap-b');
+
+        lapSelect.innerHTML = '<option value="all">All Laps</option>';
+        compareA.innerHTML = '<option value="">Lap A</option>';
+        compareB.innerHTML = '<option value="">Lap B</option>';
+
+        if (lapNumbers && lapNumbers.length > 0) {
+            for (const lap of lapNumbers) {
+                lapSelect.innerHTML += `<option value="${lap}">Lap ${lap}</option>`;
+                compareA.innerHTML += `<option value="${lap}">Lap ${lap}</option>`;
+                compareB.innerHTML += `<option value="${lap}">Lap ${lap}</option>`;
+            }
+            compareA.disabled = false;
+            compareB.disabled = false;
+            document.getElementById('btn-compare').disabled = false;
+        } else {
+            compareA.disabled = true;
+            compareB.disabled = true;
+            document.getElementById('btn-compare').disabled = true;
+        }
+    }
+
+    function renderMiniTrackMap() {
+        const container = document.getElementById('mini-track-map');
+
+        if (!currentData || !currentData.gps_bounds || !currentData.points) {
+            container.innerHTML = '<div class="text-muted text-center">No GPS data available</div>';
+            return;
+        }
+
+        const bounds = currentData.gps_bounds;
+        if (!bounds.min_lat) {
+            container.innerHTML = '<div class="text-muted text-center">No GPS data available</div>';
+            return;
+        }
+
+        const width = container.clientWidth - 20;
+        const height = 200;
+        const padding = 10;
+
+        // Scale functions
+        const latRange = bounds.max_lat - bounds.min_lat;
+        const lonRange = bounds.max_lon - bounds.min_lon;
+        const scale = Math.min(
+            (width - 2 * padding) / lonRange,
+            (height - 2 * padding) / latRange
+        );
+
+        function toX(lon) {
+            return padding + (lon - bounds.min_lon) * scale;
+        }
+        function toY(lat) {
+            return height - padding - (lat - bounds.min_lat) * scale;
+        }
+
+        // Build track path from points
+        let pathD = '';
+        let pointCount = 0;
+        for (const p of currentData.points) {
+            if (p.lat && p.lon) {
+                const x = toX(p.lon);
+                const y = toY(p.lat);
+                if (pointCount === 0) {
+                    pathD += `M ${x} ${y}`;
+                } else {
+                    pathD += ` L ${x} ${y}`;
+                }
+                pointCount++;
+            }
+        }
+
+        // Build zone markers
+        let markers = '';
+        const zones = [...(currentData.low_utilization_zones || []), ...(currentData.power_limited_zones || [])];
+        for (let i = 0; i < zones.length; i++) {
+            const zone = zones[i];
+            if (zone.lat && zone.lon) {
+                const x = toX(zone.lon);
+                const y = toY(zone.lat);
+                const cls = zone.zone_type === 'power_limited' ? 'power-limited' : 'low-grip';
+                markers += `<circle class="zone-marker ${cls}" cx="${x}" cy="${y}" r="8" data-idx="${i}" />`;
+            }
+        }
+
+        container.innerHTML = `
+            <svg width="${width}" height="${height}">
+                <path d="${pathD}" stroke="#666" stroke-width="2" fill="none" />
+                ${markers}
+            </svg>
+        `;
+
+        // Add click handlers to markers
+        container.querySelectorAll('.zone-marker').forEach(marker => {
+            marker.addEventListener('click', () => {
+                const idx = parseInt(marker.dataset.idx);
+                const isLowGrip = idx < (currentData.low_utilization_zones || []).length;
+                const zoneType = isLowGrip ? 'low_grip' : 'power_limited';
+                const zoneIdx = isLowGrip ? idx : idx - (currentData.low_utilization_zones || []).length;
+                selectZone(zoneIdx, zoneType);
+            });
+        });
+    }
+
+    function selectZone(idx, zoneType) {
+        // Clear previous selection
+        document.querySelectorAll('.low-util-zone.selected, .zone-marker.selected').forEach(el => {
+            el.classList.remove('selected');
+        });
+
+        // Select new zone
+        const zoneEl = document.querySelector(`.low-util-zone[data-zone-type="${zoneType}"][data-zone-idx="${idx}"]`);
+        if (zoneEl) {
+            zoneEl.classList.add('selected');
+            zoneEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+
+        // Select on map
+        const zones = zoneType === 'low_grip' ? currentData.low_utilization_zones : currentData.power_limited_zones;
+        const absoluteIdx = zoneType === 'low_grip' ? idx : idx + (currentData.low_utilization_zones || []).length;
+        const markerEl = document.querySelector(`.zone-marker[data-idx="${absoluteIdx}"]`);
+        if (markerEl) {
+            markerEl.classList.add('selected');
+        }
+
+        // Show zone details
+        showZoneDetails(zones[idx]);
+    }
+
+    function showZoneDetails(zone) {
+        const container = document.getElementById('zone-details');
+        const content = document.getElementById('zone-details-content');
+
+        if (!zone) {
+            container.style.display = 'none';
+            return;
+        }
+
+        content.innerHTML = `
+            <div class="row">
+                <div class="col-6">
+                    <strong>Time:</strong> ${zone.start_time.toFixed(1)}s - ${zone.end_time.toFixed(1)}s<br>
+                    <strong>Duration:</strong> ${zone.duration.toFixed(1)}s
+                </div>
+                <div class="col-6">
+                    <strong>Avg Lateral G:</strong> ${zone.avg_lat_g.toFixed(2)}g<br>
+                    <strong>Avg Total G:</strong> ${zone.avg_total_g.toFixed(2)}g
+                </div>
+            </div>
+            <hr>
+            <strong>Recommendation:</strong> ${zone.recommendation}
+        `;
+        container.style.display = 'block';
     }
 
     function toggleView(view) {
@@ -317,7 +656,15 @@
         const ctx = document.getElementById('gg-chart');
         if (ggChart) ggChart.destroy();
 
-        const points = currentData.points.map(p => ({x: p.lat_acc, y: p.lon_acc}));
+        // Filter by lap if selected
+        const lapFilter = document.getElementById('lap-select').value;
+        let points = currentData.points;
+        if (lapFilter !== 'all') {
+            const lapNum = parseInt(lapFilter);
+            points = points.filter(p => p.lap_number === lapNum);
+        }
+
+        const chartPoints = points.map(p => ({x: p.lat_acc, y: p.lon_acc}));
         const maxG = Math.max(
             Math.abs(currentData.stats.max_lateral_g),
             Math.abs(currentData.stats.max_braking_g),
@@ -329,7 +676,7 @@
             data: {
                 datasets: [{
                     label: 'G-G Data',
-                    data: points,
+                    data: chartPoints,
                     backgroundColor: 'rgba(52, 152, 219, 0.5)',
                     pointRadius: 2
                 }]
@@ -369,8 +716,33 @@
         }
     }
 
-    function filterByLap() {
-        // TODO: Implement lap filtering
+    async function filterByLap() {
+        const filename = document.getElementById('file-select').value;
+        if (filename) {
+            await loadSVG(filename);
+            if (document.getElementById('btn-chart').classList.contains('active')) {
+                renderChart();
+            }
+        }
+    }
+
+    async function compareLaps() {
+        const lapA = document.getElementById('compare-lap-a').value;
+        const lapB = document.getElementById('compare-lap-b').value;
+
+        if (!lapA || !lapB) {
+            alert('Please select two laps to compare');
+            return;
+        }
+
+        if (lapA === lapB) {
+            alert('Please select different laps');
+            return;
+        }
+
+        // For now, just show an overlay with different colors
+        // This could be enhanced with a dedicated comparison view
+        alert(`Comparison between Lap ${lapA} and Lap ${lapB} - Feature coming soon!`);
     }
 </script>
 {% endblock %}

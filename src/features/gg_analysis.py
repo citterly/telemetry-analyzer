@@ -3,6 +3,7 @@ G-G Diagram Analysis
 Friction circle analysis showing lateral vs longitudinal acceleration.
 
 Calculates grip utilization and identifies where grip is not fully used.
+Enhanced with quadrant breakdown, power-limited detection, and lap comparison.
 """
 
 import numpy as np
@@ -24,6 +25,8 @@ class GGPoint:
     throttle_pct: float = 0.0
     gear: int = 0
     lap_number: int = 0
+    lat: float = 0.0  # GPS latitude for track map
+    lon: float = 0.0  # GPS longitude for track map
 
 
 @dataclass
@@ -40,6 +43,52 @@ class GGStats:
 
 
 @dataclass
+class QuadrantStats:
+    """Statistics for a single quadrant of the G-G diagram"""
+    name: str  # "lat_left", "lat_right", "braking", "acceleration"
+    display_name: str
+    max_g: float
+    avg_g: float
+    utilization_pct: float
+    time_spent_pct: float
+    points_count: int
+    color: str  # For UI display
+
+
+@dataclass
+class LowUtilizationZone:
+    """A zone where grip is not fully utilized"""
+    start_time: float
+    end_time: float
+    start_idx: int
+    end_idx: int
+    duration: float
+    avg_lat_g: float
+    avg_lon_g: float
+    avg_total_g: float
+    utilization_pct: float
+    avg_lat: float  # GPS latitude for track map
+    avg_lon: float  # GPS longitude for track map
+    zone_type: str  # "low_grip" or "power_limited"
+    recommendation: str
+
+    def to_dict(self) -> dict:
+        return {
+            "start_time": round(self.start_time, 2),
+            "end_time": round(self.end_time, 2),
+            "duration": round(self.duration, 2),
+            "avg_lat_g": round(self.avg_lat_g, 3),
+            "avg_lon_g": round(self.avg_lon_g, 3),
+            "avg_total_g": round(self.avg_total_g, 3),
+            "utilization_pct": round(self.utilization_pct, 1),
+            "lat": round(self.avg_lat, 6),
+            "lon": round(self.avg_lon, 6),
+            "zone_type": self.zone_type,
+            "recommendation": self.recommendation
+        }
+
+
+@dataclass
 class GGAnalysisResult:
     """Complete G-G analysis result"""
     session_id: str
@@ -47,7 +96,12 @@ class GGAnalysisResult:
     stats: GGStats
     points: List[GGPoint]
     reference_max_g: float  # From vehicle config or data-derived
-    low_utilization_zones: List[Dict]  # Corners with grip left on table
+    low_utilization_zones: List[LowUtilizationZone]
+    quadrants: List[QuadrantStats] = field(default_factory=list)
+    power_limited_zones: List[LowUtilizationZone] = field(default_factory=list)
+    power_limited_pct: float = 0.0
+    lap_numbers: List[int] = field(default_factory=list)
+    gps_bounds: Dict = field(default_factory=dict)
 
     def to_dict(self) -> dict:
         """Convert to dictionary for JSON serialization"""
@@ -65,7 +119,24 @@ class GGAnalysisResult:
                 "points_count": self.stats.points_count
             },
             "reference_max_g": round(self.reference_max_g, 3),
-            "low_utilization_zones": self.low_utilization_zones,
+            "low_utilization_zones": [z.to_dict() for z in self.low_utilization_zones],
+            "power_limited_zones": [z.to_dict() for z in self.power_limited_zones],
+            "power_limited_pct": round(self.power_limited_pct, 1),
+            "quadrants": [
+                {
+                    "name": q.name,
+                    "display_name": q.display_name,
+                    "max_g": round(q.max_g, 3),
+                    "avg_g": round(q.avg_g, 3),
+                    "utilization_pct": round(q.utilization_pct, 1),
+                    "time_spent_pct": round(q.time_spent_pct, 1),
+                    "points_count": q.points_count,
+                    "color": q.color
+                }
+                for q in self.quadrants
+            ],
+            "lap_numbers": self.lap_numbers,
+            "gps_bounds": self.gps_bounds,
             # Include downsampled points for Chart.js (every 5th point to reduce data size)
             "points": [
                 {
@@ -73,7 +144,9 @@ class GGAnalysisResult:
                     "lon_acc": round(p.lon_acc, 3),
                     "total_g": round(p.total_g, 3),
                     "speed_mph": round(p.speed_mph, 1),
-                    "lap_number": p.lap_number
+                    "lap_number": p.lap_number,
+                    "lat": round(p.lat, 6) if p.lat != 0 else None,
+                    "lon": round(p.lon, 6) if p.lon != 0 else None
                 }
                 for i, p in enumerate(self.points) if i % 5 == 0
             ]
@@ -89,16 +162,23 @@ class GGAnalyzer:
     Analyzes G-G (friction circle) data from telemetry.
 
     Calculates grip utilization and identifies areas for improvement.
+    Enhanced with quadrant breakdown and power-limited detection.
     """
 
-    def __init__(self, max_g_reference: float = 1.3):
+    # Power-limited detection threshold
+    POWER_LIMITED_THROTTLE = 95.0  # % throttle
+    POWER_LIMITED_LAT_G = 0.2      # Max lateral g to be considered on straight
+
+    def __init__(self, max_g_reference: float = 1.3, power_limited_accel_g: float = 0.4):
         """
         Initialize analyzer.
 
         Args:
             max_g_reference: Reference max g from vehicle config (default 1.3g for R-compounds)
+            power_limited_accel_g: Expected acceleration g when power-limited (based on power/weight)
         """
         self.max_g_reference = max_g_reference
+        self.power_limited_accel_g = power_limited_accel_g
 
     def analyze_from_arrays(
         self,
@@ -109,6 +189,8 @@ class GGAnalyzer:
         throttle_data: np.ndarray = None,
         gear_data: np.ndarray = None,
         lap_data: np.ndarray = None,
+        lat_gps: np.ndarray = None,
+        lon_gps: np.ndarray = None,
         session_id: str = "unknown"
     ) -> GGAnalysisResult:
         """
@@ -122,6 +204,8 @@ class GGAnalyzer:
             throttle_data: Throttle position 0-100 (optional)
             gear_data: Gear number (optional)
             lap_data: Lap number for each point (optional)
+            lat_gps: GPS latitude (optional, for track map)
+            lon_gps: GPS longitude (optional, for track map)
             session_id: Session identifier
 
         Returns:
@@ -154,6 +238,13 @@ class GGAnalyzer:
         avg_utilized_g = float(np.mean(total_g))
         utilization_pct = float(np.mean(utilization) * 100)
 
+        # Get GPS data if available
+        gps_lat = lat_gps[valid_mask] if lat_gps is not None else np.zeros(len(time))
+        gps_lon = lon_gps[valid_mask] if lon_gps is not None else np.zeros(len(time))
+
+        # Get throttle data if available
+        throttle = throttle_data[valid_mask] if throttle_data is not None else np.zeros(len(time))
+
         # Build points list
         points = []
         for i in range(len(time)):
@@ -163,16 +254,46 @@ class GGAnalyzer:
                 lon_acc=float(lon_acc[i]),
                 total_g=float(total_g[i]),
                 speed_mph=float(speed_data[valid_mask][i]) if speed_data is not None else 0.0,
-                throttle_pct=float(throttle_data[valid_mask][i]) if throttle_data is not None else 0.0,
+                throttle_pct=float(throttle[i]),
                 gear=int(gear_data[valid_mask][i]) if gear_data is not None else 0,
-                lap_number=int(lap_data[valid_mask][i]) if lap_data is not None else 0
+                lap_number=int(lap_data[valid_mask][i]) if lap_data is not None else 0,
+                lat=float(gps_lat[i]),
+                lon=float(gps_lon[i])
             )
             points.append(p)
 
-        # Find low utilization zones (potential grip left on table)
-        low_utilization_zones = self._find_low_utilization_zones(
-            time, lat_acc, lon_acc, total_g, reference_max_g
+        # Calculate quadrant breakdown
+        quadrants = self._calculate_quadrants(lat_acc, lon_acc, total_g, reference_max_g)
+
+        # Find power-limited zones
+        power_limited_zones, power_limited_pct = self._find_power_limited_zones(
+            time, lat_acc, lon_acc, throttle, gps_lat, gps_lon
         )
+
+        # Find low utilization zones (excluding power-limited)
+        low_utilization_zones = self._find_low_utilization_zones(
+            time, lat_acc, lon_acc, total_g, reference_max_g,
+            gps_lat, gps_lon, throttle
+        )
+
+        # Get unique lap numbers
+        if lap_data is not None:
+            lap_numbers = sorted(list(set(int(x) for x in lap_data[valid_mask] if x > 0)))
+        else:
+            lap_numbers = []
+
+        # Calculate GPS bounds for track map
+        gps_bounds = {}
+        if lat_gps is not None and lon_gps is not None:
+            valid_lat = gps_lat[~np.isnan(gps_lat) & (gps_lat != 0)]
+            valid_lon = gps_lon[~np.isnan(gps_lon) & (gps_lon != 0)]
+            if len(valid_lat) > 0 and len(valid_lon) > 0:
+                gps_bounds = {
+                    "min_lat": float(np.min(valid_lat)),
+                    "max_lat": float(np.max(valid_lat)),
+                    "min_lon": float(np.min(valid_lon)),
+                    "max_lon": float(np.max(valid_lon))
+                }
 
         stats = GGStats(
             max_lateral_g=max_lateral_g,
@@ -191,7 +312,12 @@ class GGAnalyzer:
             stats=stats,
             points=points,
             reference_max_g=reference_max_g,
-            low_utilization_zones=low_utilization_zones
+            low_utilization_zones=low_utilization_zones,
+            quadrants=quadrants,
+            power_limited_zones=power_limited_zones,
+            power_limited_pct=power_limited_pct,
+            lap_numbers=lap_numbers,
+            gps_bounds=gps_bounds
         )
 
     def analyze_from_parquet(
@@ -231,10 +357,39 @@ class GGAnalyzer:
 
         throttle_data = self._find_column(df, ['PedalPos', 'throttle', 'Throttle'])
 
+        # GPS coordinates for track map
+        lat_gps = self._find_column(df, ['GPS Latitude', 'latitude', 'gps_lat'])
+        lon_gps = self._find_column(df, ['GPS Longitude', 'longitude', 'gps_lon'])
+
+        # Try to detect laps if not already in data
+        lap_data = None
+        if lat_gps is not None and lon_gps is not None:
+            try:
+                from ..analysis.lap_analyzer import LapAnalyzer
+                session_data = {
+                    'time': time_data,
+                    'latitude': lat_gps,
+                    'longitude': lon_gps,
+                    'rpm': np.zeros(len(time_data)),
+                    'speed_mph': speed_data if speed_data is not None else np.zeros(len(time_data)),
+                    'speed_ms': (speed_data / 2.237) if speed_data is not None else np.zeros(len(time_data))
+                }
+                analyzer = LapAnalyzer(session_data)
+                laps = analyzer.detect_laps()
+                if laps:
+                    lap_data = np.zeros(len(time_data))
+                    for lap in laps:
+                        lap_data[lap.start_index:lap.end_index+1] = lap.lap_number
+            except Exception:
+                pass  # Lap detection failed, continue without
+
         return self.analyze_from_arrays(
             time_data, lat_acc, lon_acc,
             speed_data=speed_data,
             throttle_data=throttle_data,
+            lap_data=lap_data,
+            lat_gps=lat_gps,
+            lon_gps=lon_gps,
             session_id=session_id
         )
 
@@ -248,6 +403,114 @@ class GGAnalyzer:
                     return df[actual_col].values
         return None
 
+    def _calculate_quadrants(
+        self,
+        lat_acc: np.ndarray,
+        lon_acc: np.ndarray,
+        total_g: np.ndarray,
+        max_g: float
+    ) -> List[QuadrantStats]:
+        """Calculate statistics for each quadrant of the G-G diagram."""
+        quadrants = []
+
+        definitions = [
+            ("lat_left", "Left Corners", lat_acc < -0.1, "#e74c3c"),
+            ("lat_right", "Right Corners", lat_acc > 0.1, "#3498db"),
+            ("braking", "Braking", lon_acc < -0.1, "#f39c12"),
+            ("acceleration", "Acceleration", lon_acc > 0.1, "#2ecc71")
+        ]
+
+        for name, display_name, mask, color in definitions:
+            if np.sum(mask) > 0:
+                q_total_g = total_g[mask]
+                quadrants.append(QuadrantStats(
+                    name=name,
+                    display_name=display_name,
+                    max_g=float(np.max(q_total_g)),
+                    avg_g=float(np.mean(q_total_g)),
+                    utilization_pct=float(np.mean(q_total_g) / max_g * 100),
+                    time_spent_pct=float(np.sum(mask) / len(lat_acc) * 100),
+                    points_count=int(np.sum(mask)),
+                    color=color
+                ))
+            else:
+                quadrants.append(QuadrantStats(
+                    name=name,
+                    display_name=display_name,
+                    max_g=0.0,
+                    avg_g=0.0,
+                    utilization_pct=0.0,
+                    time_spent_pct=0.0,
+                    points_count=0,
+                    color=color
+                ))
+
+        return quadrants
+
+    def _find_power_limited_zones(
+        self,
+        time: np.ndarray,
+        lat_acc: np.ndarray,
+        lon_acc: np.ndarray,
+        throttle: np.ndarray,
+        lat_gps: np.ndarray,
+        lon_gps: np.ndarray
+    ) -> Tuple[List[LowUtilizationZone], float]:
+        """
+        Find zones where the car is power-limited (full throttle on straight).
+
+        Args:
+            time: Time array
+            lat_acc: Lateral acceleration
+            lon_acc: Longitudinal acceleration
+            throttle: Throttle position (0-100)
+            lat_gps: GPS latitude
+            lon_gps: GPS longitude
+
+        Returns:
+            Tuple of (zones list, percentage of session power-limited)
+        """
+        zones = []
+
+        # Power limited: full throttle, on straight, low acceleration
+        full_throttle = throttle >= self.POWER_LIMITED_THROTTLE
+        on_straight = np.abs(lat_acc) < self.POWER_LIMITED_LAT_G
+        low_accel = lon_acc < self.power_limited_accel_g
+
+        power_limited_mask = full_throttle & on_straight & low_accel
+
+        # Calculate percentage of session
+        power_limited_pct = float(np.sum(power_limited_mask) / len(time) * 100) if len(time) > 0 else 0.0
+
+        # Find continuous zones
+        zone_start = None
+        for i in range(len(power_limited_mask)):
+            if power_limited_mask[i] and zone_start is None:
+                zone_start = i
+            elif not power_limited_mask[i] and zone_start is not None:
+                if i - zone_start >= 10:  # Minimum 1s at 10Hz
+                    avg_lat = float(np.mean(lat_gps[zone_start:i])) if lat_gps is not None else 0.0
+                    avg_lon = float(np.mean(lon_gps[zone_start:i])) if lon_gps is not None else 0.0
+
+                    zones.append(LowUtilizationZone(
+                        start_time=float(time[zone_start]),
+                        end_time=float(time[i-1]),
+                        start_idx=zone_start,
+                        end_idx=i-1,
+                        duration=float(time[i-1] - time[zone_start]),
+                        avg_lat_g=float(np.mean(np.abs(lat_acc[zone_start:i]))),
+                        avg_lon_g=float(np.mean(lon_acc[zone_start:i])),
+                        avg_total_g=float(np.mean(np.sqrt(lat_acc[zone_start:i]**2 + lon_acc[zone_start:i]**2))),
+                        utilization_pct=100.0,  # Power limited = using all available
+                        avg_lat=avg_lat,
+                        avg_lon=avg_lon,
+                        zone_type="power_limited",
+                        recommendation="Power limited zone - engine at maximum output"
+                    ))
+                zone_start = None
+
+        return zones[:10], power_limited_pct
+
     def _find_low_utilization_zones(
         self,
         time: np.ndarray,
@@ -255,10 +518,14 @@ class GGAnalyzer:
         lon_acc: np.ndarray,
         total_g: np.ndarray,
         max_g: float,
+        lat_gps: np.ndarray,
+        lon_gps: np.ndarray,
+        throttle: np.ndarray,
         threshold: float = 0.5
-    ) -> List[Dict]:
+    ) -> List[LowUtilizationZone]:
         """
         Find zones where utilization is low (grip left on table).
+        Excludes power-limited zones.
 
         Args:
             time: Time array
@@ -266,6 +533,9 @@ class GGAnalyzer:
             lon_acc: Longitudinal acceleration
             total_g: Combined g-force
             max_g: Reference maximum g
+            lat_gps: GPS latitude
+            lon_gps: GPS longitude
+            throttle: Throttle position
             threshold: Utilization threshold (0.5 = 50% of max grip)
 
         Returns:
@@ -276,7 +546,12 @@ class GGAnalyzer:
         # Find periods where we're in a turn (significant lateral g) but low total g
         in_turn = np.abs(lat_acc) > 0.3  # In a turn
         low_g = total_g < (max_g * threshold)
-        low_util_mask = in_turn & low_g
+
+        # Exclude power-limited zones (full throttle on straight)
+        not_power_limited = ~((throttle >= self.POWER_LIMITED_THROTTLE) &
+                              (np.abs(lat_acc) < self.POWER_LIMITED_LAT_G))
+
+        low_util_mask = in_turn & low_g & not_power_limited
 
         # Find continuous zones
         zone_start = None
@@ -285,14 +560,29 @@ class GGAnalyzer:
                 zone_start = i
             elif not low_util_mask[i] and zone_start is not None:
                 if i - zone_start >= 5:  # Minimum 0.5s at 10Hz
-                    zones.append({
-                        "start_time": float(time[zone_start]),
-                        "end_time": float(time[i-1]),
-                        "duration": float(time[i-1] - time[zone_start]),
-                        "avg_lat_g": float(np.mean(np.abs(lat_acc[zone_start:i]))),
-                        "avg_total_g": float(np.mean(total_g[zone_start:i])),
-                        "utilization_pct": float(np.mean(total_g[zone_start:i]) / max_g * 100)
-                    })
+                    avg_total = float(np.mean(total_g[zone_start:i]))
+                    avg_lat = float(np.mean(lat_gps[zone_start:i])) if lat_gps is not None else 0.0
+                    avg_lon = float(np.mean(lon_gps[zone_start:i])) if lon_gps is not None else 0.0
+                    avg_lat_g = float(np.mean(np.abs(lat_acc[zone_start:i])))
+
+                    # Calculate how much more grip could be used
+                    grip_available = max_g - avg_total
+
+                    zones.append(LowUtilizationZone(
+                        start_time=float(time[zone_start]),
+                        end_time=float(time[i-1]),
+                        start_idx=zone_start,
+                        end_idx=i-1,
+                        duration=float(time[i-1] - time[zone_start]),
+                        avg_lat_g=avg_lat_g,
+                        avg_lon_g=float(np.mean(lon_acc[zone_start:i])),
+                        avg_total_g=avg_total,
+                        utilization_pct=float(avg_total / max_g * 100),
+                        avg_lat=avg_lat,
+                        avg_lon=avg_lon,
+                        zone_type="low_grip",
+                        recommendation=f"Could carry {grip_available:.2f}g more lateral grip here"
+                    ))
                 zone_start = None
 
         return zones[:10]  # Return top 10 zones

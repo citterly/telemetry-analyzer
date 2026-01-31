@@ -288,13 +288,29 @@
         "templates/base.html"
       ],
       "notes": "Added CornerDetector for auto-detection from GPS radius/speed/acceleration. CornerAnalyzer calculates per-corner metrics: entry/apex/exit speeds, time in corner, throttle pickup %, lift detection, trail braking. UI at /corner-analysis with corner cards, comparison table, and speed chart. 33 tests passing."
+    },
+    {
+      "id": "feat-061a",
+      "name": "G-G diagram enhancements",
+      "category": "bugfix, ui",
+      "description": "Fix lap filter population bug. Add track map integration for low utilization zones. Break grip utilization into quadrants with mini G-G visualizations. Detect and display power-limited zones separately.",
+      "status": "passing",
+      "priority": 21,
+      "tests": ["tests/test_gg_analysis.py (25 tests)"],
+      "files": [
+        "src/features/gg_analysis.py",
+        "src/visualization/gg_diagram.py",
+        "templates/gg_diagram.html",
+        "src/main/app.py"
+      ],
+      "notes": "BUGFIX: Fixed API to use analyze_from_parquet for lap detection. IMPLEMENTED: (1) Lap filter dropdown now populates correctly, (2) Quadrant breakdown (lat-left, lat-right, braking, accel) with utilization stats, (3) Power-limited zone detection in GGAnalyzer, (4) GPS coordinates for low utilization zones with track map bounds, (5) Mini track map with zone markers in UI. Lap comparison has placeholder for future enhancement. 25 tests passing."
     }
   ],
   "metadata": {
     "created_at": "2025-01-29T01:00:00Z",
-    "last_updated": "2026-01-31T19:00:00Z",
-    "total_features": 25,
-    "passing": 25,
+    "last_updated": "2026-01-31T20:00:00Z",
+    "total_features": 26,
+    "passing": 26,
     "failing": 0,
     "planned": 0
   },
