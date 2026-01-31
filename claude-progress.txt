@@ -300,3 +300,30 @@ Summary:
 - Total tests: 300+ across all test files
 - Key capabilities: XRK extraction, shift analysis, lap detection, track maps, vehicle profiles
 
+
+=== Session 5 (2026-01-31 16:00 UTC) ===
+Working on: feat-060 (Delta track map for lap comparison)
+
+Work completed:
+- Added TrackMap.render_delta_svg() method to src/visualization/track_map.py
+  - Colors track by time delta: green = ref lap faster, red = comparison lap faster
+  - Uses gradient scale based on max time delta in segments
+  - Includes delta-specific legend with lap labels
+- Added /api/track-map/delta/{filename} endpoint to src/main/app.py
+  - Parameters: lap_a, lap_b, segments, format
+  - Returns SVG (default) or JSON with segment data
+  - Uses compare_laps_detailed for segment analysis
+- Updated templates/analysis.html comparison section
+  - Added delta track map container above speed delta chart
+  - loadDeltaTrackMap() function fetches and displays SVG
+  - Added CSS styling for delta map container
+- Created 8 new tests in tests/test_track_map.py::TestDeltaTrackMap
+  - Tests for basic rendering, legend, title, colors, labels, edge cases
+
+Test results: 43/43 track map tests passing (35 existing + 8 new)
+
+Status: feat-060 marked PASSING
+Features: 23/24 passing (96%)
+
+Next priority: feat-061 (G-G diagram / friction circle)
+

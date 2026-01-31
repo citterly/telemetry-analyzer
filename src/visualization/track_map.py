@@ -582,3 +582,154 @@ class TrackMap:
             latitude_data, longitude_data, color_data, color_scheme, title
         )
         Path(filepath).write_text(html)
+
+    def render_delta_svg(
+        self,
+        ref_lat: np.ndarray,
+        ref_lon: np.ndarray,
+        comp_lat: np.ndarray,
+        comp_lon: np.ndarray,
+        segment_deltas: List[Dict],
+        title: str = "Delta Track Map",
+        ref_label: str = "Lap A",
+        comp_label: str = "Lap B"
+    ) -> str:
+        """
+        Render track map colored by time delta between two laps.
+
+        Green sections = reference lap faster (gaining time)
+        Red sections = comparison lap faster (losing time)
+
+        Args:
+            ref_lat: GPS latitude for reference lap
+            ref_lon: GPS longitude for reference lap
+            comp_lat: GPS latitude for comparison lap
+            comp_lon: GPS longitude for comparison lap
+            segment_deltas: List of dicts with 'start_pct', 'end_pct', 'time_delta', 'faster'
+            title: Map title
+            ref_label: Label for reference lap
+            comp_label: Label for comparison lap
+
+        Returns:
+            SVG string
+        """
+        # Use reference lap for track outline
+        coords = self._transform_coordinates(ref_lat, ref_lon)
+
+        if len(coords) < 2:
+            return self._build_svg_header() + '</svg>'
+
+        # Build color scale for delta
+        max_delta = max(abs(s.get('time_delta', 0)) for s in segment_deltas) if segment_deltas else 0.5
+        max_delta = max(max_delta, 0.1)  # Minimum range
+
+        delta_scale = ColorScale(
+            name=f'Time Delta ({ref_label} vs {comp_label})',
+            min_val=-max_delta,
+            max_val=max_delta,
+            colors=['#e74c3c', '#f1c40f', '#2ecc71'],  # Red -> Yellow -> Green
+            labels=[f'-{max_delta:.1f}s', '0', f'+{max_delta:.1f}s']
+        )
+
+        # Assign delta values to each point based on which segment it falls into
+        num_points = len(coords)
+        point_deltas = np.zeros(num_points)
+
+        for i in range(num_points):
+            pct = (i / (num_points - 1)) * 100 if num_points > 1 else 0
+            # Find which segment this point belongs to
+            for seg in segment_deltas:
+                if seg['start_pct'] <= pct < seg['end_pct'] or (seg['end_pct'] == 100 and pct == 100):
+                    # Positive delta means ref lap is slower (time_delta = comparison - reference)
+                    # We want green when ref is faster, so we negate
+                    point_deltas[i] = -seg.get('time_delta', 0)
+                    break
+
+        # Build SVG
+        svg = self._build_svg_header()
+
+        # Background
+        svg += f'<rect width="{self.config.width}" height="{self.config.height}" fill="{self.config.background_color}"/>\n'
+
+        # Track outline (faint)
+        svg += self._build_track_outline(coords)
+
+        # Colored delta trace
+        svg += self._build_delta_trace(coords, point_deltas, delta_scale)
+
+        # Start/finish marker
+        if self.config.show_start_finish and len(coords) > 0:
+            svg += self._build_start_finish_marker(coords[0])
+
+        # Delta legend
+        if self.config.show_legend:
+            svg += self._build_delta_legend(delta_scale, ref_label, comp_label)
+
+        # Title
+        if self.config.show_title:
+            svg += self._build_title(title)
+
+        svg += '</svg>'
+        return svg
+
+    def _build_delta_trace(
+        self,
+        coords: List[Tuple[float, float]],
+        delta_data: np.ndarray,
+        scale: ColorScale
+    ) -> str:
+        """Build track trace colored by time delta"""
+        if len(coords) < 2:
+            return ""
+
+        svg = '<g class="delta-trace">\n'
+
+        # Draw colored segments
+        for i in range(len(coords) - 1):
+            x1, y1 = coords[i]
+            x2, y2 = coords[i + 1]
+            delta = delta_data[i]
+
+            # Color: green for positive (ref faster), red for negative (ref slower)
+            color = scale.get_color(delta)
+            svg += f'<line x1="{x1:.1f}" y1="{y1:.1f}" x2="{x2:.1f}" y2="{y2:.1f}" stroke="{color}" stroke-width="{self.config.line_width + 1}" stroke-linecap="round"/>\n'
+
+        svg += '</g>\n'
+        return svg
+
+    def _build_delta_legend(
+        self,
+        scale: ColorScale,
+        ref_label: str,
+        comp_label: str
+    ) -> str:
+        """Build legend for delta track map"""
+        legend_width = 180
+        legend_height = 20
+
+        x = self.config.width - legend_width - self.config.padding
+        y = self.config.height - 60
+
+        svg = f'<g class="delta-legend" transform="translate({x}, {y})">\n'
+
+        # Gradient bar
+        gradient_id = f"delta-gradient-{id(scale)}"
+        svg += f'<defs><linearGradient id="{gradient_id}">\n'
+        for i, color in enumerate(scale.colors):
+            offset = i / (len(scale.colors) - 1) * 100
+            svg += f'<stop offset="{offset}%" stop-color="{color}"/>\n'
+        svg += '</linearGradient></defs>\n'
+
+        svg += f'<rect x="0" y="0" width="{legend_width}" height="{legend_height}" fill="url(#{gradient_id})" rx="3"/>\n'
+
+        # Labels
+        svg += f'<text x="0" y="-5" fill="{self.config.title_color}" font-size="10" font-family="sans-serif">{ref_label} faster</text>\n'
+        svg += f'<text x="{legend_width}" y="-5" fill="{self.config.title_color}" font-size="10" text-anchor="end" font-family="sans-serif">{comp_label} faster</text>\n'
+
+        # Min/max labels
+        svg += f'<text x="0" y="{legend_height + 12}" fill="{self.config.title_color}" font-size="9" font-family="sans-serif">{scale.min_val:.1f}s</text>\n'
+        svg += f'<text x="{legend_width/2}" y="{legend_height + 12}" fill="{self.config.title_color}" font-size="9" text-anchor="middle" font-family="sans-serif">0s</text>\n'
+        svg += f'<text x="{legend_width}" y="{legend_height + 12}" fill="{self.config.title_color}" font-size="9" text-anchor="end" font-family="sans-serif">+{scale.max_val:.1f}s</text>\n'
+
+        svg += '</g>\n'
+        return svg

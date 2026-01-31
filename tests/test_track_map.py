@@ -395,5 +395,141 @@ class TestTrackMapCustomConfig:
         assert svg.count('linearGradient') == 0 or 'legend' not in svg.lower()
 
 
+class TestDeltaTrackMap:
+    """Tests for delta track map feature"""
+
+    @pytest.fixture
+    def sample_lap_data(self):
+        """Sample GPS data for two laps"""
+        n = 100
+        # Reference lap
+        ref_lat = np.linspace(43.79, 43.81, n) + np.sin(np.linspace(0, 2*np.pi, n)) * 0.001
+        ref_lon = np.linspace(-87.99, -87.97, n) + np.cos(np.linspace(0, 2*np.pi, n)) * 0.001
+        # Comparison lap (slightly different)
+        comp_lat = ref_lat + np.random.randn(n) * 0.0001
+        comp_lon = ref_lon + np.random.randn(n) * 0.0001
+        return ref_lat, ref_lon, comp_lat, comp_lon
+
+    @pytest.fixture
+    def sample_segment_deltas(self):
+        """Sample segment delta data"""
+        return [
+            {'segment': 1, 'start_pct': 0, 'end_pct': 20, 'time_delta': 0.15, 'faster': 'A'},
+            {'segment': 2, 'start_pct': 20, 'end_pct': 40, 'time_delta': -0.08, 'faster': 'B'},
+            {'segment': 3, 'start_pct': 40, 'end_pct': 60, 'time_delta': 0.22, 'faster': 'A'},
+            {'segment': 4, 'start_pct': 60, 'end_pct': 80, 'time_delta': -0.25, 'faster': 'B'},
+            {'segment': 5, 'start_pct': 80, 'end_pct': 100, 'time_delta': 0.05, 'faster': '='},
+        ]
+
+    def test_render_delta_svg_basic(self, sample_lap_data, sample_segment_deltas):
+        """Test basic delta SVG rendering"""
+        ref_lat, ref_lon, comp_lat, comp_lon = sample_lap_data
+        track_map = TrackMap()
+
+        svg = track_map.render_delta_svg(
+            ref_lat, ref_lon, comp_lat, comp_lon,
+            sample_segment_deltas,
+            title="Delta: Lap 3 vs Lap 5"
+        )
+
+        assert '<svg' in svg
+        assert '</svg>' in svg
+        assert 'delta-trace' in svg
+
+    def test_render_delta_svg_has_legend(self, sample_lap_data, sample_segment_deltas):
+        """Test delta SVG has legend"""
+        ref_lat, ref_lon, comp_lat, comp_lon = sample_lap_data
+        track_map = TrackMap()
+
+        svg = track_map.render_delta_svg(
+            ref_lat, ref_lon, comp_lat, comp_lon,
+            sample_segment_deltas
+        )
+
+        assert 'delta-legend' in svg
+        assert 'linearGradient' in svg
+
+    def test_render_delta_svg_has_title(self, sample_lap_data, sample_segment_deltas):
+        """Test delta SVG has title"""
+        ref_lat, ref_lon, comp_lat, comp_lon = sample_lap_data
+        track_map = TrackMap()
+
+        svg = track_map.render_delta_svg(
+            ref_lat, ref_lon, comp_lat, comp_lon,
+            sample_segment_deltas,
+            title="Test Delta Map"
+        )
+
+        assert 'Test Delta Map' in svg
+
+    def test_render_delta_svg_has_colors(self, sample_lap_data, sample_segment_deltas):
+        """Test delta SVG has green/red colors"""
+        ref_lat, ref_lon, comp_lat, comp_lon = sample_lap_data
+        track_map = TrackMap()
+
+        svg = track_map.render_delta_svg(
+            ref_lat, ref_lon, comp_lat, comp_lon,
+            sample_segment_deltas
+        )
+
+        # Green and red for delta coloring
+        assert '#e74c3c' in svg or '#2ecc71' in svg
+
+    def test_render_delta_svg_with_labels(self, sample_lap_data, sample_segment_deltas):
+        """Test delta SVG has lap labels"""
+        ref_lat, ref_lon, comp_lat, comp_lon = sample_lap_data
+        track_map = TrackMap()
+
+        svg = track_map.render_delta_svg(
+            ref_lat, ref_lon, comp_lat, comp_lon,
+            sample_segment_deltas,
+            ref_label="Lap 3",
+            comp_label="Lap 5"
+        )
+
+        assert 'Lap 3' in svg
+        assert 'Lap 5' in svg
+
+    def test_render_delta_svg_empty_segments(self, sample_lap_data):
+        """Test delta SVG with empty segments"""
+        ref_lat, ref_lon, comp_lat, comp_lon = sample_lap_data
+        track_map = TrackMap()
+
+        svg = track_map.render_delta_svg(
+            ref_lat, ref_lon, comp_lat, comp_lon,
+            [],  # Empty segments
+        )
+
+        assert '<svg' in svg
+        assert '</svg>' in svg
+
+    def test_render_delta_svg_single_segment(self, sample_lap_data):
+        """Test delta SVG with single segment"""
+        ref_lat, ref_lon, comp_lat, comp_lon = sample_lap_data
+        track_map = TrackMap()
+
+        segments = [{'segment': 1, 'start_pct': 0, 'end_pct': 100, 'time_delta': 0.5, 'faster': 'A'}]
+
+        svg = track_map.render_delta_svg(
+            ref_lat, ref_lon, comp_lat, comp_lon,
+            segments,
+        )
+
+        assert '<svg' in svg
+        assert 'delta-trace' in svg
+
+    def test_render_delta_svg_has_start_finish(self, sample_lap_data, sample_segment_deltas):
+        """Test delta SVG has start/finish marker"""
+        ref_lat, ref_lon, comp_lat, comp_lon = sample_lap_data
+        track_map = TrackMap()
+
+        svg = track_map.render_delta_svg(
+            ref_lat, ref_lon, comp_lat, comp_lon,
+            sample_segment_deltas
+        )
+
+        assert 'S/F' in svg or 'start' in svg.lower()
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

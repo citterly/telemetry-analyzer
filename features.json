@@ -249,18 +249,34 @@
       "name": "Delta track map for lap comparison",
       "category": "ui",
       "description": "Show track map colored by time gained/lost when comparing two laps. Green sections = reference lap faster, Red sections = comparison lap faster. Replaces abstract segment bars with intuitive visual track overlay showing exactly where on track time was gained or lost.",
+      "status": "passing",
+      "priority": 19,
+      "tests": ["test_render_delta_svg_basic", "test_render_delta_svg_has_legend", "test_render_delta_svg_has_colors"],
+      "files": ["src/visualization/track_map.py", "templates/analysis.html", "src/main/app.py"],
+      "notes": "Added TrackMap.render_delta_svg(), /api/track-map/delta/{filename} endpoint, and delta map container in lap comparison UI. 8 tests passing."
+    },
+    {
+      "id": "feat-061",
+      "name": "G-G diagram / friction circle",
+      "category": "analysis, ui",
+      "description": "Scatter plot of GPS LatAcc vs LonAcc showing friction circle utilization. Calculate grip percentage used, identify corners leaving grip on table. Essential metric for chassis/tire analysis.",
       "status": "planned",
       "priority": 19,
       "tests": [],
-      "files": ["src/visualization/track_map.py", "templates/analysis.html", "src/main/app.py"],
-      "notes": "Enhancement request: Make lap comparison more intuitive by showing gains/losses on actual track layout instead of segment bar chart."
+      "files": [
+        "src/features/gg_analysis.py",
+        "src/visualization/gg_diagram.py",
+        "templates/gg_diagram.html",
+        "src/main/app.py"
+      ],
+      "notes": "Output: Matplotlib static + Chart.js interactive. Scope: User-selectable (full session, per-lap, per-corner drill-down). Reference circles: (1) vehicle config max_g from vehicles.json (add max_lateral_g field ~1.1-1.3g for R-compounds), (2) data-derived 95th percentile. Utilization metric: actual_g / max_g averaged. Color toggle: speed, throttle, gear, or lap. Standalone endpoint: /gg-diagram. Uses GPS LatAcc and GPS LonAcc channels at 10 Hz."
     }
   ],
   "metadata": {
     "created_at": "2025-01-29T01:00:00Z",
-    "last_updated": "2026-01-31T14:30:00Z",
-    "total_features": 23,
-    "passing": 22,
+    "last_updated": "2026-01-31T16:00:00Z",
+    "total_features": 24,
+    "passing": 23,
     "failing": 0,
     "planned": 1
   },

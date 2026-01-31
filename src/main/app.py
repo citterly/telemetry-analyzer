@@ -768,6 +768,125 @@ async def get_track_map(
         raise HTTPException(status_code=500, detail=f"Track map generation failed: {str(e)}")
 
 
+@app.get("/api/track-map/delta/{filename:path}")
+async def get_delta_track_map(
+    filename: str,
+    lap_a: int,
+    lap_b: int,
+    segments: int = 10,
+    format: str = "svg"
+):
+    """
+    Generate delta track map showing time gained/lost between two laps.
+
+    Green sections = lap_a faster (gaining time)
+    Red sections = lap_b faster (losing time)
+    """
+    import pandas as pd
+    import numpy as np
+
+    file_path = _find_parquet_file(filename)
+    if not file_path:
+        raise HTTPException(status_code=404, detail=f"Parquet file not found: {filename}")
+
+    try:
+        # Get lap comparison data
+        from src.features.lap_analysis import compare_laps_detailed
+        from src.analysis.lap_analyzer import LapAnalyzer
+
+        comparison = compare_laps_detailed(str(file_path), lap_a, lap_b, segments)
+        if comparison is None:
+            raise HTTPException(status_code=400, detail=f"Could not compare laps {lap_a} and {lap_b}")
+
+        # Load parquet and detect laps to get GPS data for each lap
+        df = pd.read_parquet(file_path)
+
+        time_data = df.index.values
+        lat_col = None
+        lon_col = None
+        speed_col = None
+
+        for col in df.columns:
+            col_lower = col.lower()
+            if 'latitude' in col_lower:
+                lat_col = col
+            elif 'longitude' in col_lower:
+                lon_col = col
+            elif 'speed' in col_lower and speed_col is None:
+                speed_col = col
+
+        if lat_col is None or lon_col is None:
+            raise HTTPException(status_code=400, detail="GPS data not found in file")
+
+        lat_data = df[lat_col].values
+        lon_data = df[lon_col].values
+        speed_data = df[speed_col].values if speed_col else np.zeros(len(time_data))
+
+        if speed_data.max() < 100:
+            speed_data = speed_data * 2.237
+
+        # Detect laps
+        session_data = {
+            'time': time_data,
+            'latitude': lat_data,
+            'longitude': lon_data,
+            'rpm': np.zeros(len(time_data)),
+            'speed_mph': speed_data,
+            'speed_ms': speed_data / 2.237
+        }
+
+        analyzer = LapAnalyzer(session_data)
+        laps = analyzer.detect_laps()
+
+        # Find the two laps
+        lap_a_info = None
+        lap_b_info = None
+        for lap in laps:
+            if lap.lap_number == lap_a:
+                lap_a_info = lap
+            if lap.lap_number == lap_b:
+                lap_b_info = lap
+
+        if lap_a_info is None or lap_b_info is None:
+            raise HTTPException(status_code=400, detail=f"Lap {lap_a} or {lap_b} not found")
+
+        # Get GPS data for each lap
+        lap_a_data = analyzer.get_lap_data(lap_a_info)
+        lap_b_data = analyzer.get_lap_data(lap_b_info)
+
+        ref_lat = np.array(lap_a_data['latitude'])
+        ref_lon = np.array(lap_a_data['longitude'])
+        comp_lat = np.array(lap_b_data['latitude'])
+        comp_lon = np.array(lap_b_data['longitude'])
+
+        # Generate track map
+        track_map = TrackMap()
+
+        if format == 'json':
+            return {
+                "lap_a": lap_a,
+                "lap_b": lap_b,
+                "segments": comparison.segments,
+                "time_delta": comparison.time_delta,
+                "summary": comparison.summary
+            }
+        else:
+            svg = track_map.render_delta_svg(
+                ref_lat, ref_lon,
+                comp_lat, comp_lon,
+                comparison.segments,
+                title=f"Delta: Lap {lap_a} vs Lap {lap_b}",
+                ref_label=f"Lap {lap_a}",
+                comp_label=f"Lap {lap_b}"
+            )
+            return HTMLResponse(content=svg, media_type="image/svg+xml")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Delta track map generation failed: {str(e)}")
+
+
 # ============================================================
 # Queue Dashboard Endpoints
 # ============================================================

@@ -129,6 +129,17 @@
     .segment-a { background-color: rgba(0, 184, 148, 0.7); }
     .segment-b { background-color: rgba(231, 76, 60, 0.7); }
     .segment-equal { background-color: rgba(99, 110, 114, 0.5); }
+
+    /* Delta track map */
+    #delta-track-map-container {
+        background: #16213e;
+        border-radius: 8px;
+        padding: 10px;
+    }
+    #delta-track-map-container svg {
+        max-width: 100%;
+        height: auto;
+    }
 </style>
 {% endblock %}
 
@@ -287,6 +298,15 @@
                     <div class="col-12">
                         <div class="text-center mb-2">
                             <span id="comp-delta-summary" class="h4">--</span>
+                        </div>
+                    </div>
+                </div>
+                <!-- Delta Track Map -->
+                <div class="row mb-3">
+                    <div class="col-12">
+                        <h6>Delta Track Map <small class="text-muted">(Green = Lap A faster, Red = Lap B faster)</small></h6>
+                        <div id="delta-track-map-container" class="text-center" style="min-height: 300px;">
+                            <div class="text-muted">Loading delta track map...</div>
                         </div>
                     </div>
                 </div>
@@ -1328,6 +1348,35 @@
 
         // Segment bars
         renderSegmentBars(data.segments, data.lap_a, data.lap_b);
+
+        // Delta track map
+        loadDeltaTrackMap(data.lap_a, data.lap_b);
+    }
+
+    async function loadDeltaTrackMap(lapA, lapB) {
+        const container = document.getElementById('delta-track-map-container');
+        container.innerHTML = '<div class="text-muted">Loading delta track map...</div>';
+
+        try {
+            const url = `/api/track-map/delta/${encodeURIComponent(currentFile)}?lap_a=${lapA}&lap_b=${lapB}&segments=20`;
+            const response = await fetch(url);
+
+            if (response.ok) {
+                container.innerHTML = await response.text();
+                // Scale SVG to fit container
+                const svg = container.querySelector('svg');
+                if (svg) {
+                    svg.style.maxWidth = '100%';
+                    svg.style.height = 'auto';
+                }
+            } else {
+                const error = await response.json();
+                container.innerHTML = `<div class="text-warning">Delta map not available: ${error.detail || 'Unknown error'}</div>`;
+            }
+        } catch (e) {
+            console.error('Delta track map error:', e);
+            container.innerHTML = '<div class="text-warning">Failed to load delta track map</div>';
+        }
     }
 
     function renderSpeedDeltaChart(speedDeltas, lapA, lapB) {
