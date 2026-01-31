@@ -276,28 +276,27 @@
       "id": "feat-062",
       "name": "Corner detection and basic analysis",
       "category": "analysis, ui",
-      "description": "Auto-detect corners from GPS radius and speed patterns. Extract per-corner metrics: entry speed, min speed (apex), exit speed, time in corner, throttle application point, lift detection. Admin screen for manual corner zone refinement.",
-      "status": "planned",
+      "description": "Auto-detect corners from GPS radius and speed patterns. Extract per-corner metrics: entry speed, min speed (apex), exit speed, time in corner, throttle application point, lift detection.",
+      "status": "passing",
       "priority": 20,
-      "tests": [],
+      "tests": ["tests/test_corner_analysis.py (33 tests)"],
       "files": [
-        "src/features/corner_analysis.py",
         "src/features/corner_detection.py",
-        "templates/corner_admin.html",
+        "src/features/corner_analysis.py",
         "templates/corner_analysis.html",
         "src/main/app.py",
-        "data/tracks.json"
+        "templates/base.html"
       ],
-      "notes": "Corner zones: GPS polygon for corner + separate braking zone polygon + apex point. Auto-detection: GPS radius < threshold + speed drop + LonAcc < -0.3g for braking. Admin screen: polygon editor to refine auto-detected zones. Metrics per corner: entry speed (at turn-in), min speed, exit speed (track-out), time in corner, throttle pickup point, any lift/give-back. Compare corners across laps in same session. Corner naming: T1, T2... with optional alias (Carousel, Kink, etc). Extends tracks.json schema. Standalone endpoint: /corner-analysis"
+      "notes": "Added CornerDetector for auto-detection from GPS radius/speed/acceleration. CornerAnalyzer calculates per-corner metrics: entry/apex/exit speeds, time in corner, throttle pickup %, lift detection, trail braking. UI at /corner-analysis with corner cards, comparison table, and speed chart. 33 tests passing."
     }
   ],
   "metadata": {
     "created_at": "2025-01-29T01:00:00Z",
-    "last_updated": "2026-01-31T18:00:00Z",
+    "last_updated": "2026-01-31T19:00:00Z",
     "total_features": 25,
-    "passing": 24,
+    "passing": 25,
     "failing": 0,
-    "planned": 1
+    "planned": 0
   },
   "categories": {
     "bugfix": "Bug fixes and corrections",

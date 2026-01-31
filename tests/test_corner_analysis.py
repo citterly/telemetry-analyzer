@@ -1,0 +1,584 @@
+"""
+Tests for corner detection and analysis.
+"""
+
+import pytest
+import numpy as np
+import pandas as pd
+import tempfile
+import os
+from pathlib import Path
+
+from src.features.corner_detection import (
+    CornerDetector, CornerZone, CornerDetectionResult, detect_corners
+)
+from src.features.corner_analysis import (
+    CornerAnalyzer, CornerMetrics, LapCornerAnalysis, CornerComparison,
+    CornerAnalysisResult, analyze_corners
+)
+
+
+class TestCornerZone:
+    """Tests for CornerZone dataclass"""
+
+    def test_corner_zone_creation(self):
+        """Test creating a CornerZone"""
+        zone = CornerZone(
+            name="T1",
+            alias="Carousel",
+            entry_idx=100,
+            apex_idx=150,
+            exit_idx=200,
+            entry_lat=43.792,
+            entry_lon=-87.989,
+            apex_lat=43.791,
+            apex_lon=-87.990,
+            exit_lat=43.790,
+            exit_lon=-87.991,
+            min_radius=50.0,
+            apex_speed_mph=65.0,
+            direction="left",
+            corner_type="normal"
+        )
+        assert zone.name == "T1"
+        assert zone.alias == "Carousel"
+        assert zone.apex_idx == 150
+        assert zone.direction == "left"
+
+    def test_corner_zone_to_dict(self):
+        """Test CornerZone serialization"""
+        zone = CornerZone(
+            name="T1",
+            entry_idx=100,
+            apex_idx=150,
+            exit_idx=200,
+            apex_speed_mph=70.5
+        )
+        d = zone.to_dict()
+        assert d["name"] == "T1"
+        assert d["apex_speed_mph"] == 70.5
+        assert "entry" in d
+        assert "apex" in d
+        assert "exit" in d
+
+    def test_corner_zone_from_dict(self):
+        """Test CornerZone deserialization"""
+        data = {
+            "name": "T2",
+            "alias": "Kink",
+            "entry_idx": 50,
+            "apex_idx": 75,
+            "exit_idx": 100,
+            "entry": {"lat": 43.8, "lon": -88.0},
+            "apex": {"lat": 43.81, "lon": -88.01},
+            "exit": {"lat": 43.82, "lon": -88.02},
+            "min_radius": 100.0,
+            "apex_speed_mph": 110.0,
+            "direction": "right",
+            "corner_type": "kink"
+        }
+        zone = CornerZone.from_dict(data)
+        assert zone.name == "T2"
+        assert zone.alias == "Kink"
+        assert zone.apex_lat == 43.81
+        assert zone.corner_type == "kink"
+
+
+class TestCornerDetectionResult:
+    """Tests for CornerDetectionResult dataclass"""
+
+    def test_detection_result_creation(self):
+        """Test creating a CornerDetectionResult"""
+        corners = [
+            CornerZone(name="T1", apex_speed_mph=60.0),
+            CornerZone(name="T2", apex_speed_mph=80.0)
+        ]
+        result = CornerDetectionResult(
+            lap_number=1,
+            corners=corners,
+            detection_params={"radius_threshold": 200.0},
+            confidence=0.85
+        )
+        assert result.lap_number == 1
+        assert len(result.corners) == 2
+        assert result.confidence == 0.85
+
+    def test_detection_result_to_dict(self):
+        """Test CornerDetectionResult serialization"""
+        corners = [CornerZone(name="T1")]
+        result = CornerDetectionResult(
+            lap_number=2,
+            corners=corners,
+            detection_params={"test": 1},
+            confidence=0.9
+        )
+        d = result.to_dict()
+        assert d["lap_number"] == 2
+        assert d["corner_count"] == 1
+        assert d["confidence"] == 0.9
+
+
+class TestCornerDetector:
+    """Tests for CornerDetector class"""
+
+    @pytest.fixture
+    def sample_track_data(self):
+        """Generate sample track data with clear corners"""
+        n = 500
+        time = np.linspace(0, 50, n)
+
+        # Create a track with straight sections and corners
+        # Simulate a simple oval with two corners
+        t = time / 10
+        lat = 43.797 + 0.005 * np.sin(t)
+        lon = -87.99 + 0.005 * np.cos(t)
+
+        # Speed: fast on straights, slow in corners
+        speed = 100 - 40 * np.abs(np.sin(t))
+
+        # Radius: large on straights, small in corners
+        radius = 1000 - 900 * np.abs(np.sin(t))
+
+        # Lateral acceleration: high in corners
+        lat_acc = 0.8 * np.sin(t)
+
+        # Longitudinal acceleration: braking into corners
+        lon_acc = -0.5 * np.sin(t + 0.5)
+
+        return time, lat, lon, speed, radius, lat_acc, lon_acc
+
+    def test_detector_creation(self):
+        """Test creating a CornerDetector"""
+        detector = CornerDetector(radius_threshold=150.0)
+        assert detector.radius_threshold == 150.0
+
+    def test_detector_defaults(self):
+        """Test default detector parameters"""
+        detector = CornerDetector()
+        assert detector.radius_threshold == 200.0
+        assert detector.lat_acc_threshold == 0.3
+        assert detector.min_corner_duration == 0.5
+
+    def test_detect_from_arrays(self, sample_track_data):
+        """Test corner detection from arrays"""
+        time, lat, lon, speed, radius, lat_acc, lon_acc = sample_track_data
+
+        detector = CornerDetector()
+        result = detector.detect_from_arrays(
+            time, lat, lon, speed, radius, lat_acc, lon_acc
+        )
+
+        assert isinstance(result, CornerDetectionResult)
+        assert result.lap_number == 1
+        assert len(result.corners) > 0  # Should detect at least some corners
+        assert result.confidence > 0
+
+    def test_detect_without_radius(self, sample_track_data):
+        """Test detection computes radius when not provided"""
+        time, lat, lon, speed, _, lat_acc, lon_acc = sample_track_data
+
+        detector = CornerDetector()
+        result = detector.detect_from_arrays(
+            time, lat, lon, speed, None, lat_acc, lon_acc
+        )
+
+        assert isinstance(result, CornerDetectionResult)
+
+    def test_detect_without_accelerations(self, sample_track_data):
+        """Test detection computes accelerations when not provided"""
+        time, lat, lon, speed, radius, _, _ = sample_track_data
+
+        detector = CornerDetector()
+        result = detector.detect_from_arrays(
+            time, lat, lon, speed, radius, None, None
+        )
+
+        assert isinstance(result, CornerDetectionResult)
+
+    def test_detect_minimal_data(self):
+        """Test detection with minimal data"""
+        time = np.array([0, 1, 2])
+        lat = np.array([43.0, 43.0, 43.0])
+        lon = np.array([-87.0, -87.0, -87.0])
+        speed = np.array([60, 60, 60])
+
+        detector = CornerDetector()
+        result = detector.detect_from_arrays(time, lat, lon, speed)
+
+        assert result.corners == []  # Not enough data for corners
+        assert result.confidence == 0.0
+
+    def test_corner_direction_detection(self, sample_track_data):
+        """Test that corner direction is detected correctly"""
+        time, lat, lon, speed, radius, lat_acc, lon_acc = sample_track_data
+
+        detector = CornerDetector()
+        result = detector.detect_from_arrays(
+            time, lat, lon, speed, radius, lat_acc, lon_acc
+        )
+
+        for corner in result.corners:
+            assert corner.direction in ["left", "right"]
+
+    def test_corner_type_classification(self, sample_track_data):
+        """Test that corner types are classified"""
+        time, lat, lon, speed, radius, lat_acc, lon_acc = sample_track_data
+
+        detector = CornerDetector()
+        result = detector.detect_from_arrays(
+            time, lat, lon, speed, radius, lat_acc, lon_acc
+        )
+
+        for corner in result.corners:
+            assert corner.corner_type in ["normal", "hairpin", "kink"]
+
+
+class TestCornerMetrics:
+    """Tests for CornerMetrics dataclass"""
+
+    def test_metrics_creation(self):
+        """Test creating CornerMetrics"""
+        metrics = CornerMetrics(
+            corner_name="T1",
+            entry_speed=80.0,
+            min_speed=55.0,
+            exit_speed=75.0,
+            time_in_corner=3.5
+        )
+        assert metrics.corner_name == "T1"
+        assert metrics.entry_speed == 80.0
+        assert metrics.speed_scrub == 0.0  # Default
+
+    def test_metrics_to_dict(self):
+        """Test CornerMetrics serialization"""
+        metrics = CornerMetrics(
+            corner_name="T1",
+            entry_speed=80.0,
+            min_speed=55.0,
+            exit_speed=75.0,
+            time_in_corner=3.5,
+            lift_detected=True,
+            lift_time=1.2
+        )
+        d = metrics.to_dict()
+        assert d["corner_name"] == "T1"
+        assert d["speeds"]["entry"] == 80.0
+        assert d["speeds"]["min"] == 55.0
+        assert d["lift"]["detected"] is True
+
+    def test_metrics_defaults(self):
+        """Test default values"""
+        metrics = CornerMetrics(corner_name="T1")
+        assert metrics.entry_speed == 0.0
+        assert metrics.lift_detected is False
+        assert metrics.trail_brake_detected is False
+        assert metrics.consistency_score == 0.0
+
+
+class TestLapCornerAnalysis:
+    """Tests for LapCornerAnalysis dataclass"""
+
+    def test_lap_analysis_creation(self):
+        """Test creating LapCornerAnalysis"""
+        corners = [
+            CornerMetrics(corner_name="T1", entry_speed=80.0),
+            CornerMetrics(corner_name="T2", entry_speed=70.0)
+        ]
+        lap = LapCornerAnalysis(
+            lap_number=1,
+            lap_time=120.5,
+            corners=corners,
+            total_corner_time=25.0,
+            avg_entry_speed=75.0,
+            avg_exit_speed=72.0,
+            lifts_count=1,
+            trail_brakes_count=5
+        )
+        assert lap.lap_number == 1
+        assert len(lap.corners) == 2
+        assert lap.avg_entry_speed == 75.0
+
+    def test_lap_analysis_to_dict(self):
+        """Test LapCornerAnalysis serialization"""
+        lap = LapCornerAnalysis(
+            lap_number=1,
+            lap_time=120.5,
+            corners=[],
+            total_corner_time=25.0,
+            avg_entry_speed=75.0,
+            avg_exit_speed=72.0,
+            lifts_count=1,
+            trail_brakes_count=5
+        )
+        d = lap.to_dict()
+        assert d["lap_number"] == 1
+        assert d["lap_time"] == 120.5
+        assert d["summary"]["lifts_count"] == 1
+
+
+class TestCornerAnalyzer:
+    """Tests for CornerAnalyzer class"""
+
+    @pytest.fixture
+    def sample_session_data(self):
+        """Generate sample session data"""
+        n = 500
+        time = np.linspace(0, 50, n)
+
+        t = time / 10
+        lat = 43.797 + 0.005 * np.sin(t)
+        lon = -87.99 + 0.005 * np.cos(t)
+        speed = 100 - 40 * np.abs(np.sin(t))
+        radius = 1000 - 900 * np.abs(np.sin(t))
+        lat_acc = 0.8 * np.sin(t)
+        lon_acc = -0.5 * np.sin(t + 0.5)
+        throttle = 50 + 40 * np.cos(t)
+
+        return time, lat, lon, speed, radius, lat_acc, lon_acc, throttle
+
+    @pytest.fixture
+    def sample_parquet_file(self, sample_session_data):
+        """Create a temporary parquet file with sample data"""
+        time, lat, lon, speed, radius, lat_acc, lon_acc, throttle = sample_session_data
+
+        df = pd.DataFrame({
+            'GPS Latitude': lat,
+            'GPS Longitude': lon,
+            'GPS Speed': speed * 0.44704,  # Convert to m/s
+            'GPS Radius': radius,
+            'GPS LatAcc': lat_acc,
+            'GPS LonAcc': lon_acc,
+            'PedalPos': throttle
+        }, index=time)
+
+        with tempfile.NamedTemporaryFile(suffix='.parquet', delete=False) as f:
+            df.to_parquet(f.name)
+            yield f.name
+            os.unlink(f.name)
+
+    def test_analyzer_creation(self):
+        """Test creating CornerAnalyzer"""
+        analyzer = CornerAnalyzer()
+        assert analyzer.detector is not None
+
+    def test_analyze_from_arrays(self, sample_session_data):
+        """Test analyzing from arrays"""
+        time, lat, lon, speed, radius, lat_acc, lon_acc, throttle = sample_session_data
+
+        analyzer = CornerAnalyzer()
+        result = analyzer.analyze_from_arrays(
+            time, lat, lon, speed, radius, lat_acc, lon_acc, throttle,
+            session_id="test_session",
+            track_name="Test Track"
+        )
+
+        assert isinstance(result, CornerAnalysisResult)
+        assert result.session_id == "test_session"
+        assert result.track_name == "Test Track"
+        assert len(result.laps) > 0
+
+    def test_analyze_from_parquet(self, sample_parquet_file):
+        """Test analyzing from parquet file"""
+        analyzer = CornerAnalyzer()
+        result = analyzer.analyze_from_parquet(sample_parquet_file)
+
+        assert isinstance(result, CornerAnalysisResult)
+        assert len(result.corner_zones) >= 0
+
+    def test_throttle_detection(self, sample_session_data):
+        """Test throttle pickup detection"""
+        time, lat, lon, speed, radius, lat_acc, lon_acc, throttle = sample_session_data
+
+        analyzer = CornerAnalyzer()
+        result = analyzer.analyze_from_arrays(
+            time, lat, lon, speed, radius, lat_acc, lon_acc, throttle
+        )
+
+        if result.laps and result.laps[0].corners:
+            for corner in result.laps[0].corners:
+                assert corner.throttle_pickup_pct >= 0
+                assert corner.throttle_pickup_pct <= 100
+
+    def test_recommendations_generated(self, sample_session_data):
+        """Test that recommendations are generated"""
+        time, lat, lon, speed, radius, lat_acc, lon_acc, throttle = sample_session_data
+
+        analyzer = CornerAnalyzer()
+        result = analyzer.analyze_from_arrays(
+            time, lat, lon, speed, radius, lat_acc, lon_acc, throttle
+        )
+
+        assert len(result.recommendations) > 0
+
+
+class TestCornerAnalysisResult:
+    """Tests for CornerAnalysisResult dataclass"""
+
+    def test_result_creation(self):
+        """Test creating CornerAnalysisResult"""
+        result = CornerAnalysisResult(
+            session_id="test",
+            track_name="Test Track",
+            analysis_timestamp="2024-01-01T00:00:00",
+            laps=[],
+            corner_comparisons=[],
+            corner_zones=[],
+            recommendations=["Test recommendation"]
+        )
+        assert result.session_id == "test"
+        assert result.track_name == "Test Track"
+
+    def test_result_to_dict(self):
+        """Test CornerAnalysisResult serialization"""
+        result = CornerAnalysisResult(
+            session_id="test",
+            track_name="Test Track",
+            analysis_timestamp="2024-01-01T00:00:00",
+            laps=[],
+            corner_comparisons=[],
+            corner_zones=[],
+            recommendations=["Tip 1"]
+        )
+        d = result.to_dict()
+        assert d["session_id"] == "test"
+        assert d["track_name"] == "Test Track"
+        assert d["lap_count"] == 0
+        assert d["corner_count"] == 0
+        assert len(d["recommendations"]) == 1
+
+    def test_result_to_json(self):
+        """Test JSON serialization"""
+        result = CornerAnalysisResult(
+            session_id="test",
+            track_name="Test Track",
+            analysis_timestamp="2024-01-01T00:00:00",
+            laps=[],
+            corner_comparisons=[],
+            corner_zones=[],
+            recommendations=[]
+        )
+        json_str = result.to_json()
+        assert '"session_id": "test"' in json_str
+
+
+class TestConvenienceFunctions:
+    """Tests for module-level convenience functions"""
+
+    @pytest.fixture
+    def sample_parquet(self):
+        """Create a sample parquet file"""
+        n = 200
+        time = np.linspace(0, 20, n)
+        t = time / 5
+
+        df = pd.DataFrame({
+            'GPS Latitude': 43.797 + 0.003 * np.sin(t),
+            'GPS Longitude': -87.99 + 0.003 * np.cos(t),
+            'GPS Speed': 30 + 20 * np.cos(t),  # m/s
+            'GPS LatAcc': 0.5 * np.sin(t),
+            'GPS LonAcc': -0.3 * np.sin(t + 0.5)
+        }, index=time)
+
+        with tempfile.NamedTemporaryFile(suffix='.parquet', delete=False) as f:
+            df.to_parquet(f.name)
+            yield f.name
+            os.unlink(f.name)
+
+    def test_detect_corners_function(self, sample_parquet):
+        """Test detect_corners convenience function"""
+        result = detect_corners(sample_parquet)
+        assert isinstance(result, CornerDetectionResult)
+
+    def test_analyze_corners_function(self, sample_parquet):
+        """Test analyze_corners convenience function"""
+        result = analyze_corners(sample_parquet, track_name="Test Track")
+        assert isinstance(result, CornerAnalysisResult)
+        assert result.track_name == "Test Track"
+
+
+class TestEdgeCases:
+    """Tests for edge cases and error handling"""
+
+    def test_empty_data(self):
+        """Test handling of empty data"""
+        detector = CornerDetector()
+        result = detector.detect_from_arrays(
+            np.array([]),
+            np.array([]),
+            np.array([]),
+            np.array([])
+        )
+        assert len(result.corners) == 0
+        assert result.confidence == 0.0
+
+    def test_constant_speed(self):
+        """Test with constant speed (no corners)"""
+        n = 100
+        time = np.linspace(0, 10, n)
+        lat = np.linspace(43.0, 43.1, n)
+        lon = np.linspace(-87.0, -86.9, n)
+        speed = np.ones(n) * 60
+
+        detector = CornerDetector()
+        result = detector.detect_from_arrays(time, lat, lon, speed)
+        # Straight line should have no corners or very low confidence
+        assert len(result.corners) == 0 or result.confidence < 0.5
+
+    def test_nan_handling(self):
+        """Test handling of NaN values in data"""
+        n = 100
+        time = np.linspace(0, 10, n)
+        lat = np.full(n, 43.0)
+        lat[50] = np.nan
+        lon = np.full(n, -87.0)
+        speed = np.full(n, 60.0)
+
+        detector = CornerDetector()
+        # Should not raise an error
+        result = detector.detect_from_arrays(time, lat, lon, speed)
+        assert isinstance(result, CornerDetectionResult)
+
+    def test_missing_throttle_data(self):
+        """Test analysis with missing throttle data"""
+        n = 200
+        time = np.linspace(0, 20, n)
+        t = time / 5
+        lat = 43.797 + 0.005 * np.sin(t)
+        lon = -87.99 + 0.005 * np.cos(t)
+        speed = 80 - 30 * np.abs(np.sin(t))
+
+        analyzer = CornerAnalyzer()
+        result = analyzer.analyze_from_arrays(
+            time, lat, lon, speed,
+            None, None, None, None  # No optional data
+        )
+
+        assert isinstance(result, CornerAnalysisResult)
+        # Should still work, just with zeros for throttle metrics
+
+
+class TestRealDataCompatibility:
+    """Tests that work with real data format if available"""
+
+    @pytest.fixture
+    def real_parquet_path(self):
+        """Path to real parquet file if it exists"""
+        possible_paths = [
+            Path("data/exports/processed/test_session.parquet"),
+            Path("data/exports/processed/20250712_104619_Road America_a_0394.parquet"),
+        ]
+        for path in possible_paths:
+            if path.exists():
+                return str(path)
+        return None
+
+    def test_with_real_data(self, real_parquet_path):
+        """Test with real parquet file if available"""
+        if real_parquet_path is None:
+            pytest.skip("No real parquet file available")
+
+        analyzer = CornerAnalyzer()
+        result = analyzer.analyze_from_parquet(real_parquet_path)
+
+        assert isinstance(result, CornerAnalysisResult)
+        assert result.session_id is not None

@@ -893,6 +893,7 @@ async def get_delta_track_map(
 
 from src.features.gg_analysis import GGAnalyzer
 from src.visualization.gg_diagram import GGDiagram
+from src.features.corner_analysis import CornerAnalyzer
 
 
 @app.get("/gg-diagram")
@@ -977,6 +978,65 @@ async def get_gg_diagram(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"G-G diagram generation failed: {str(e)}")
+
+
+# ============================================================
+# Corner Analysis Endpoints
+# ============================================================
+
+
+@app.get("/corner-analysis")
+async def corner_analysis_page(request: Request):
+    """Corner analysis page"""
+    return templates.TemplateResponse("corner_analysis.html", {"request": request})
+
+
+@app.get("/api/corner-analysis/{filename:path}")
+async def get_corner_analysis(
+    filename: str,
+    track_name: str = "Unknown Track"
+):
+    """
+    Analyze corners in a session.
+
+    Detects corners and calculates per-corner metrics:
+    - Entry/apex/exit speeds
+    - Time in corner
+    - Throttle pickup point
+    - Lift detection
+    - Trail braking
+    """
+    import pandas as pd
+    import numpy as np
+
+    file_path = _find_parquet_file(filename)
+    if not file_path:
+        raise HTTPException(status_code=404, detail=f"Parquet file not found: {filename}")
+
+    try:
+        df = pd.read_parquet(file_path)
+
+        # Check for required GPS data
+        lat_data = _find_column(df, ['GPS Latitude', 'gps_lat', 'latitude'])
+        lon_data = _find_column(df, ['GPS Longitude', 'gps_lon', 'longitude'])
+
+        if lat_data is None or lon_data is None:
+            raise HTTPException(status_code=400, detail="GPS latitude/longitude data not found")
+
+        # Run corner analysis
+        analyzer = CornerAnalyzer()
+        result = analyzer.analyze_from_parquet(
+            str(file_path),
+            session_id=Path(filename).stem,
+            track_name=track_name
+        )
+
+        return result.to_dict()
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Corner analysis failed: {str(e)}")
 
 
 # ============================================================
