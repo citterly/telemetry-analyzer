@@ -90,6 +90,14 @@
         border-radius: 8px;
         padding: 10px;
         min-height: 200px;
+        position: relative;
+        overflow: hidden;
+    }
+    #mini-track-map svg {
+        cursor: grab;
+    }
+    #mini-track-map svg:active {
+        cursor: grabbing;
     }
     .zone-marker {
         transition: all 0.2s;
@@ -99,6 +107,37 @@
     .zone-marker.selected {
         stroke: #fff;
         stroke-width: 3;
+    }
+    .track-map-controls {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+        z-index: 10;
+    }
+    .track-map-controls button {
+        width: 32px;
+        height: 32px;
+        padding: 0;
+        font-size: 1.2rem;
+        line-height: 1;
+        background: rgba(45, 45, 45, 0.9);
+        border: 1px solid #555;
+        color: #fff;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+    .track-map-controls button:hover {
+        background: rgba(74, 144, 226, 0.8);
+    }
+    .zoom-level {
+        position: absolute;
+        bottom: 10px;
+        left: 10px;
+        font-size: 0.75rem;
+        color: #888;
     }
 
     /* Zone details */
@@ -286,8 +325,17 @@
         <div class="col-md-6">
             <!-- Mini Track Map -->
             <div class="card mb-3">
-                <div class="card-header"><strong>Track Position</strong></div>
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <strong>Track Position</strong>
+                    <small class="text-muted">Scroll to zoom, drag to pan</small>
+                </div>
                 <div class="card-body" id="mini-track-map">
+                    <div class="track-map-controls">
+                        <button onclick="zoomTrackMap(1.5)" title="Zoom In">+</button>
+                        <button onclick="zoomTrackMap(0.67)" title="Zoom Out">-</button>
+                        <button onclick="resetTrackMapZoom()" title="Reset View">R</button>
+                    </div>
+                    <span class="zoom-level" id="zoom-level">100%</span>
                     <div class="text-muted text-center">Select a session to see track map</div>
                 </div>
             </div>
@@ -540,30 +588,53 @@
         }
     }
 
+    // Track map zoom/pan state
+    let trackMapState = {
+        zoom: 1,
+        panX: 0,
+        panY: 0,
+        isDragging: false,
+        lastX: 0,
+        lastY: 0,
+        baseViewBox: null
+    };
+
     function renderMiniTrackMap() {
         const container = document.getElementById('mini-track-map');
 
+        // Preserve controls
+        const controls = container.querySelector('.track-map-controls');
+        const zoomLabel = container.querySelector('.zoom-level');
+
         if (!currentData || !currentData.gps_bounds || !currentData.points) {
-            container.innerHTML = '<div class="text-muted text-center">No GPS data available</div>';
+            const html = '<div class="text-muted text-center" style="padding-top: 80px;">No GPS data available</div>';
+            container.innerHTML = html;
+            if (controls) container.appendChild(controls);
+            if (zoomLabel) container.appendChild(zoomLabel);
             return;
         }
 
         const bounds = currentData.gps_bounds;
         if (!bounds.min_lat || !bounds.max_lat || !bounds.min_lon || !bounds.max_lon) {
-            container.innerHTML = '<div class="text-muted text-center">No GPS data available</div>';
+            const html = '<div class="text-muted text-center" style="padding-top: 80px;">No GPS data available</div>';
+            container.innerHTML = html;
+            if (controls) container.appendChild(controls);
+            if (zoomLabel) container.appendChild(zoomLabel);
             return;
         }
 
-        // Ensure container has visible dimensions
+        // Reset zoom state for new data
+        trackMapState = { zoom: 1, panX: 0, panY: 0, isDragging: false, lastX: 0, lastY: 0, baseViewBox: null };
+
         const width = Math.max(container.clientWidth - 20, 400);
-        const height = 200;
-        const padding = 15;
+        const height = 250;
+        const padding = 20;
 
         // Scale functions - maintain aspect ratio
         const latRange = bounds.max_lat - bounds.min_lat || 0.001;
         const lonRange = bounds.max_lon - bounds.min_lon || 0.001;
 
-        // Convert to approximate meters for proper aspect ratio (lat ~111km/deg, lon ~85km/deg at 44N)
+        // Convert to approximate meters for proper aspect ratio
         const latMeters = latRange * 111000;
         const lonMeters = lonRange * 85000;
 
@@ -614,17 +685,64 @@
             }
         }
 
-        container.innerHTML = `
-            <svg width="${width}" height="${height}" style="display: block; margin: 0 auto;">
+        // Store base viewBox for zoom calculations
+        trackMapState.baseViewBox = { x: 0, y: 0, w: width, h: height };
+
+        // Create SVG with viewBox for zoom/pan
+        const svgHtml = `
+            <svg id="track-map-svg" width="${width}" height="${height}"
+                 viewBox="0 0 ${width} ${height}"
+                 style="display: block; margin: 0 auto;">
                 <rect width="${width}" height="${height}" fill="#1a1a1a" rx="4"/>
-                <path d="${pathD}" stroke="#4a90e2" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-                ${markers}
+                <g id="track-content">
+                    <path d="${pathD}" stroke="#4a90e2" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+                    ${markers}
+                </g>
             </svg>
         `;
 
+        // Keep controls, replace SVG
+        const existingControls = container.querySelector('.track-map-controls');
+        const existingZoom = container.querySelector('.zoom-level');
+        container.innerHTML = svgHtml;
+        if (existingControls) container.appendChild(existingControls);
+        if (existingZoom) container.appendChild(existingZoom);
+
+        // Re-add controls if they were lost
+        if (!container.querySelector('.track-map-controls')) {
+            const controlsHtml = `
+                <div class="track-map-controls">
+                    <button onclick="zoomTrackMap(1.5)" title="Zoom In">+</button>
+                    <button onclick="zoomTrackMap(0.67)" title="Zoom Out">-</button>
+                    <button onclick="resetTrackMapZoom()" title="Reset View">R</button>
+                </div>
+                <span class="zoom-level" id="zoom-level">100%</span>
+            `;
+            container.insertAdjacentHTML('beforeend', controlsHtml);
+        }
+
+        // Setup zoom/pan event handlers
+        const svg = document.getElementById('track-map-svg');
+        if (svg) {
+            // Mouse wheel zoom
+            svg.addEventListener('wheel', handleTrackMapWheel, { passive: false });
+
+            // Pan with mouse drag
+            svg.addEventListener('mousedown', handleTrackMapMouseDown);
+            svg.addEventListener('mousemove', handleTrackMapMouseMove);
+            svg.addEventListener('mouseup', handleTrackMapMouseUp);
+            svg.addEventListener('mouseleave', handleTrackMapMouseUp);
+
+            // Touch support
+            svg.addEventListener('touchstart', handleTrackMapTouchStart, { passive: false });
+            svg.addEventListener('touchmove', handleTrackMapTouchMove, { passive: false });
+            svg.addEventListener('touchend', handleTrackMapTouchEnd);
+        }
+
         // Add click handlers to markers
         container.querySelectorAll('.zone-marker').forEach(marker => {
-            marker.addEventListener('click', () => {
+            marker.addEventListener('click', (e) => {
+                e.stopPropagation();
                 const idx = parseInt(marker.dataset.idx);
                 const isLowGrip = idx < (currentData.low_utilization_zones || []).length;
                 const zoneType = isLowGrip ? 'low_grip' : 'power_limited';
@@ -632,6 +750,138 @@
                 selectZone(zoneIdx, zoneType);
             });
         });
+
+        updateZoomLevel();
+    }
+
+    function handleTrackMapWheel(e) {
+        e.preventDefault();
+        const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
+        zoomTrackMapAt(zoomFactor, e.offsetX, e.offsetY);
+    }
+
+    function handleTrackMapMouseDown(e) {
+        if (e.button === 0) {
+            trackMapState.isDragging = true;
+            trackMapState.lastX = e.clientX;
+            trackMapState.lastY = e.clientY;
+        }
+    }
+
+    function handleTrackMapMouseMove(e) {
+        if (trackMapState.isDragging) {
+            const dx = e.clientX - trackMapState.lastX;
+            const dy = e.clientY - trackMapState.lastY;
+            trackMapState.lastX = e.clientX;
+            trackMapState.lastY = e.clientY;
+            panTrackMap(dx, dy);
+        }
+    }
+
+    function handleTrackMapMouseUp() {
+        trackMapState.isDragging = false;
+    }
+
+    function handleTrackMapTouchStart(e) {
+        if (e.touches.length === 1) {
+            trackMapState.isDragging = true;
+            trackMapState.lastX = e.touches[0].clientX;
+            trackMapState.lastY = e.touches[0].clientY;
+        }
+    }
+
+    function handleTrackMapTouchMove(e) {
+        if (trackMapState.isDragging && e.touches.length === 1) {
+            e.preventDefault();
+            const dx = e.touches[0].clientX - trackMapState.lastX;
+            const dy = e.touches[0].clientY - trackMapState.lastY;
+            trackMapState.lastX = e.touches[0].clientX;
+            trackMapState.lastY = e.touches[0].clientY;
+            panTrackMap(dx, dy);
+        }
+    }
+
+    function handleTrackMapTouchEnd() {
+        trackMapState.isDragging = false;
+    }
+
+    function zoomTrackMap(factor) {
+        const svg = document.getElementById('track-map-svg');
+        if (!svg || !trackMapState.baseViewBox) return;
+
+        // Zoom towards center
+        const rect = svg.getBoundingClientRect();
+        zoomTrackMapAt(factor, rect.width / 2, rect.height / 2);
+    }
+
+    function zoomTrackMapAt(factor, x, y) {
+        const svg = document.getElementById('track-map-svg');
+        if (!svg || !trackMapState.baseViewBox) return;
+
+        const newZoom = Math.max(0.5, Math.min(10, trackMapState.zoom * factor));
+        if (newZoom === trackMapState.zoom) return;
+
+        // Get current viewBox
+        const vb = svg.viewBox.baseVal;
+
+        // Calculate zoom point in viewBox coordinates
+        const rect = svg.getBoundingClientRect();
+        const vbX = vb.x + (x / rect.width) * vb.width;
+        const vbY = vb.y + (y / rect.height) * vb.height;
+
+        // Calculate new dimensions
+        const base = trackMapState.baseViewBox;
+        const newW = base.w / newZoom;
+        const newH = base.h / newZoom;
+
+        // Adjust position to zoom towards mouse
+        const newX = vbX - (x / rect.width) * newW;
+        const newY = vbY - (y / rect.height) * newH;
+
+        trackMapState.zoom = newZoom;
+        trackMapState.panX = newX;
+        trackMapState.panY = newY;
+
+        svg.setAttribute('viewBox', `${newX} ${newY} ${newW} ${newH}`);
+        updateZoomLevel();
+    }
+
+    function panTrackMap(dx, dy) {
+        const svg = document.getElementById('track-map-svg');
+        if (!svg || !trackMapState.baseViewBox) return;
+
+        const vb = svg.viewBox.baseVal;
+        const rect = svg.getBoundingClientRect();
+
+        // Convert screen pixels to viewBox units
+        const scale = vb.width / rect.width;
+        const newX = vb.x - dx * scale;
+        const newY = vb.y - dy * scale;
+
+        trackMapState.panX = newX;
+        trackMapState.panY = newY;
+
+        svg.setAttribute('viewBox', `${newX} ${newY} ${vb.width} ${vb.height}`);
+    }
+
+    function resetTrackMapZoom() {
+        const svg = document.getElementById('track-map-svg');
+        if (!svg || !trackMapState.baseViewBox) return;
+
+        const base = trackMapState.baseViewBox;
+        trackMapState.zoom = 1;
+        trackMapState.panX = 0;
+        trackMapState.panY = 0;
+
+        svg.setAttribute('viewBox', `0 0 ${base.w} ${base.h}`);
+        updateZoomLevel();
+    }
+
+    function updateZoomLevel() {
+        const el = document.getElementById('zoom-level');
+        if (el) {
+            el.textContent = `${Math.round(trackMapState.zoom * 100)}%`;
+        }
     }
 
     function selectZone(idx, zoneType) {
