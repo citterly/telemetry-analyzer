@@ -499,3 +499,38 @@ Features: 27/27 passing (100%)
 === ALL FEATURES COMPLETE ===
 Project aim-telemetry now has all 27 features implemented and tested!
 
+
+=== Session 8 continued (2026-01-31 21:30 UTC) ===
+Working on: feat-042 (Vehicle settings page)
+
+Work completed:
+- Created templates/vehicles.html
+  - Vehicle list with active vehicle indicator
+  - Click to select and view/edit parameters
+  - Set as Active button to switch vehicles
+  - Editable G-force limits (max_lateral_g, max_braking_g, power_limited_accel_g)
+  - Editable physical properties (weight, tire size, circumference)
+  - Editable engine specs (max RPM, shift RPM, power band)
+  - Editable transmission ratios and final drive
+  - Notes field
+  - Save/Reset buttons with change tracking
+  - Persists to vehicles.json on save
+
+- Added API endpoints to src/main/app.py:
+  - GET /vehicles - page route
+  - GET /api/vehicles - list all vehicles and active ID
+  - GET /api/vehicles/{id} - get one vehicle
+  - PUT /api/vehicles/{id} - update vehicle parameters
+  - PUT /api/vehicles/active - set active vehicle
+
+- Updated src/config/vehicles.py:
+  - Added max_lateral_g, max_braking_g, power_limited_accel_g to Vehicle class
+  - Added update_vehicle() method to persist changes
+  - Added get_active_vehicle_id() method
+  - set_active_vehicle() now persists to JSON
+
+- Added "Vehicles" link to navbar in base.html
+
+Status: feat-042 marked PASSING
+Features: 28/28 passing (100%)
+

@@ -321,13 +321,28 @@
         "data/vehicles.json"
       ],
       "notes": "FIXED: (1) Lap filter now re-fetches data and updates stats. (2) Track map GPS trace renders correctly with proper aspect ratio. (3) Zone click highlighting works. (4) Lap comparison implemented with overlay chart and stats table. IMPLEMENTED: (1) Per-quadrant reference values in vehicles.json (max_braking_g, power_limited_accel_g). (2) Quadrant utilization uses correct reference for each type. (3) New metrics: corner_utilization_pct, non_power_limited_utilization_pct, braking_to_lateral_ratio. (4) Warnings when max_g exceeds config or braking ratio is low. (5) Replaced 'Max Combined G' with 'Brake/Lateral Ratio' in UI."
+    },
+    {
+      "id": "feat-042",
+      "name": "Vehicle settings page",
+      "category": "ui, infra",
+      "description": "Web UI for viewing and editing vehicle configurations including G-force limits, physical properties, engine specs, and transmission ratios.",
+      "status": "passing",
+      "priority": 22,
+      "tests": [],
+      "files": [
+        "templates/vehicles.html",
+        "src/main/app.py",
+        "src/config/vehicles.py"
+      ],
+      "notes": "Added /vehicles page with: vehicle list with active indicator, parameter editing (G-force limits, weight, tires, engine, transmission), save to JSON persistence, set active vehicle API. Navbar link added."
     }
   ],
   "metadata": {
     "created_at": "2025-01-29T01:00:00Z",
-    "last_updated": "2026-01-31T21:00:00Z",
-    "total_features": 27,
-    "passing": 27,
+    "last_updated": "2026-01-31T21:30:00Z",
+    "total_features": 28,
+    "passing": 28,
     "failing": 0,
     "planned": 0
   },

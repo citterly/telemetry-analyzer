@@ -1282,6 +1282,82 @@ async def server_error_handler(request: Request, exc):
     }, status_code=500)
 
 
+# ============================================================
+# Vehicle Settings Endpoints
+# ============================================================
+
+from src.config.vehicles import VehicleDatabase, get_vehicle, set_active_vehicle
+
+
+@app.get("/vehicles")
+async def vehicles_page(request: Request):
+    """Vehicle settings page"""
+    return templates.TemplateResponse("vehicles.html", {"request": request})
+
+
+@app.get("/api/vehicles")
+async def get_vehicles():
+    """Get all vehicles and active vehicle ID"""
+    db = VehicleDatabase()
+    vehicles = db.list_vehicles()
+    active_id = db.get_active_vehicle_id()
+
+    return {
+        "active_vehicle": active_id,
+        "vehicles": [v.to_dict() for v in vehicles]
+    }
+
+
+@app.get("/api/vehicles/{vehicle_id}")
+async def get_vehicle_by_id(vehicle_id: str):
+    """Get a specific vehicle by ID"""
+    vehicle = get_vehicle(vehicle_id)
+    if vehicle is None:
+        raise HTTPException(status_code=404, detail=f"Vehicle not found: {vehicle_id}")
+    return vehicle.to_dict()
+
+
+@app.put("/api/vehicles/{vehicle_id}")
+async def update_vehicle(vehicle_id: str, request: Request):
+    """Update a vehicle's parameters"""
+    db = VehicleDatabase()
+
+    # Check vehicle exists
+    vehicle = get_vehicle(vehicle_id)
+    if vehicle is None:
+        raise HTTPException(status_code=404, detail=f"Vehicle not found: {vehicle_id}")
+
+    # Get updated data
+    data = await request.json()
+
+    # Update the vehicle in the database
+    try:
+        db.update_vehicle(vehicle_id, data)
+        return {"status": "ok", "message": f"Vehicle {vehicle_id} updated"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update vehicle: {str(e)}")
+
+
+@app.put("/api/vehicles/active")
+async def set_active_vehicle_endpoint(request: Request):
+    """Set the active vehicle"""
+    data = await request.json()
+    vehicle_id = data.get("vehicle_id")
+
+    if not vehicle_id:
+        raise HTTPException(status_code=400, detail="vehicle_id is required")
+
+    vehicle = get_vehicle(vehicle_id)
+    if vehicle is None:
+        raise HTTPException(status_code=404, detail=f"Vehicle not found: {vehicle_id}")
+
+    try:
+        set_active_vehicle(vehicle_id)
+        return {"status": "ok", "active_vehicle": vehicle_id}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to set active vehicle: {str(e)}")
+
+
 # Health check endpoint
 @app.get("/health")
 async def health_check():

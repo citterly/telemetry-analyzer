@@ -89,6 +89,10 @@ class Vehicle:
     current_setup: TransmissionSetup
     alternative_setups: List[TransmissionSetup] = field(default_factory=list)
     notes: str = ""
+    # G-force limits for analysis
+    max_lateral_g: float = 1.3
+    max_braking_g: float = 1.4
+    power_limited_accel_g: float = 0.5
 
     @property
     def weight_kg(self) -> float:
@@ -172,6 +176,9 @@ class Vehicle:
             "tire_size": self.tire_size,
             "tire_circumference_meters": self.tire_circumference_meters,
             "weight_lbs": self.weight_lbs,
+            "max_lateral_g": self.max_lateral_g,
+            "max_braking_g": self.max_braking_g,
+            "power_limited_accel_g": self.power_limited_accel_g,
             "engine": self.engine.to_dict(),
             "current_setup": self.current_setup.to_dict(),
             "alternative_setups": [s.to_dict() for s in self.alternative_setups],
@@ -195,7 +202,10 @@ class Vehicle:
                 TransmissionSetup.from_dict(s)
                 for s in data.get("alternative_setups", [])
             ],
-            notes=data.get("notes", "")
+            notes=data.get("notes", ""),
+            max_lateral_g=data.get("max_lateral_g", 1.3),
+            max_braking_g=data.get("max_braking_g", 1.4),
+            power_limited_accel_g=data.get("power_limited_accel_g", 0.5)
         )
 
 
@@ -330,9 +340,48 @@ class VehicleDatabase:
             return self.vehicles.get(self._active_vehicle_id)
         return None
 
+    def add_vehicle(self, vehicle: Vehicle) -> None:
+        """Add a vehicle to the database"""
+        self.vehicles[vehicle.id] = vehicle
+        if self._active_vehicle_id is None:
+            self._active_vehicle_id = vehicle.id
+
+    def get_active_vehicle_id(self) -> Optional[str]:
+        """Get the ID of the active vehicle"""
+        return self._active_vehicle_id
+
+    def update_vehicle(self, vehicle_id: str, data: dict) -> bool:
+        """
+        Update a vehicle's parameters and persist to JSON.
+
+        Args:
+            vehicle_id: ID of vehicle to update
+            data: Dictionary of updated fields
+
+        Returns:
+            True if successful
+        """
+        if vehicle_id not in self.vehicles:
+            return False
+
+        # Create updated vehicle from data
+        updated = Vehicle.from_dict(data)
+        self.vehicles[vehicle_id] = updated
+
+        # Persist to JSON
+        self._persist()
+        return True
+
+    def _persist(self) -> None:
+        """Save current state to JSON file"""
+        json_path = self._json_path
+        if json_path is None:
+            json_path = str(Path(__file__).parent.parent.parent / "data" / "vehicles.json")
+        self.save_to_json(json_path)
+
     def set_active_vehicle(self, vehicle_id: str) -> bool:
         """
-        Set the active vehicle.
+        Set the active vehicle and persist to JSON.
 
         Args:
             vehicle_id: ID of vehicle to activate
@@ -342,14 +391,9 @@ class VehicleDatabase:
         """
         if vehicle_id in self.vehicles:
             self._active_vehicle_id = vehicle_id
+            self._persist()
             return True
         return False
-
-    def add_vehicle(self, vehicle: Vehicle) -> None:
-        """Add a vehicle to the database"""
-        self.vehicles[vehicle.id] = vehicle
-        if self._active_vehicle_id is None:
-            self._active_vehicle_id = vehicle.id
 
 
 # Singleton instance

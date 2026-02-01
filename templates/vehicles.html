@@ -1,0 +1,470 @@
+{% extends "base.html" %}
+
+{% block title %}Vehicle Settings - {{ super() }}{% endblock %}
+
+{% block extra_head %}
+<style>
+    .vehicle-card {
+        background: #1e1e2e;
+        border-radius: 8px;
+        padding: 20px;
+        margin-bottom: 15px;
+        border: 2px solid transparent;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    .vehicle-card:hover {
+        border-color: #4a90e2;
+    }
+    .vehicle-card.active {
+        border-color: #2ecc71;
+        background: linear-gradient(135deg, #1e3a2e 0%, #1e1e2e 100%);
+    }
+    .vehicle-card .vehicle-name {
+        font-size: 1.3rem;
+        font-weight: bold;
+        margin-bottom: 5px;
+    }
+    .vehicle-card .vehicle-info {
+        color: #888;
+        font-size: 0.9rem;
+    }
+    .vehicle-card .active-badge {
+        background: #2ecc71;
+        color: white;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 0.75rem;
+        margin-left: 10px;
+    }
+
+    .param-section {
+        background: #16213e;
+        border-radius: 8px;
+        padding: 20px;
+        margin-bottom: 20px;
+    }
+    .param-section h5 {
+        border-bottom: 1px solid #333;
+        padding-bottom: 10px;
+        margin-bottom: 15px;
+    }
+
+    .param-row {
+        display: flex;
+        align-items: center;
+        margin-bottom: 12px;
+    }
+    .param-row label {
+        flex: 0 0 200px;
+        margin-bottom: 0;
+    }
+    .param-row input {
+        flex: 1;
+        max-width: 150px;
+    }
+    .param-row .param-unit {
+        margin-left: 10px;
+        color: #888;
+        min-width: 50px;
+    }
+    .param-row .param-help {
+        margin-left: 15px;
+        color: #666;
+        font-size: 0.85rem;
+    }
+
+    .save-bar {
+        position: sticky;
+        bottom: 0;
+        background: #1a1a2e;
+        padding: 15px 20px;
+        margin: 20px -20px -20px;
+        border-top: 1px solid #333;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    .save-bar.has-changes {
+        background: linear-gradient(135deg, #2c3e50 0%, #1a1a2e 100%);
+    }
+
+    .transmission-table {
+        width: 100%;
+    }
+    .transmission-table th, .transmission-table td {
+        padding: 8px;
+        text-align: center;
+    }
+    .transmission-table input {
+        width: 80px;
+        text-align: center;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4">Vehicle Settings</h1>
+        <p class="text-muted">Select and configure vehicle parameters for analysis</p>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Vehicle List -->
+    <div class="col-md-4">
+        <h5 class="mb-3">Vehicles</h5>
+        <div id="vehicle-list">
+            <div class="text-muted">Loading vehicles...</div>
+        </div>
+    </div>
+
+    <!-- Vehicle Details -->
+    <div class="col-md-8">
+        <div id="vehicle-details" style="display: none;">
+            <!-- G-Force Parameters -->
+            <div class="param-section">
+                <h5>G-Force Limits</h5>
+                <div class="param-row">
+                    <label for="max_lateral_g">Max Lateral G</label>
+                    <input type="number" class="form-control" id="max_lateral_g" step="0.05" min="0.5" max="2.5">
+                    <span class="param-unit">g</span>
+                    <span class="param-help">Tire grip limit in corners</span>
+                </div>
+                <div class="param-row">
+                    <label for="max_braking_g">Max Braking G</label>
+                    <input type="number" class="form-control" id="max_braking_g" step="0.05" min="0.5" max="2.5">
+                    <span class="param-unit">g</span>
+                    <span class="param-help">Braking limit (often higher due to weight transfer)</span>
+                </div>
+                <div class="param-row">
+                    <label for="power_limited_accel_g">Power-Limited Accel G</label>
+                    <input type="number" class="form-control" id="power_limited_accel_g" step="0.05" min="0.1" max="1.5">
+                    <span class="param-unit">g</span>
+                    <span class="param-help">Acceleration limit when engine is at max power</span>
+                </div>
+            </div>
+
+            <!-- Physical Parameters -->
+            <div class="param-section">
+                <h5>Physical Properties</h5>
+                <div class="param-row">
+                    <label for="weight_lbs">Weight</label>
+                    <input type="number" class="form-control" id="weight_lbs" step="10" min="1000" max="5000">
+                    <span class="param-unit">lbs</span>
+                    <span class="param-help">Vehicle weight with driver</span>
+                </div>
+                <div class="param-row">
+                    <label for="tire_size">Tire Size</label>
+                    <input type="text" class="form-control" id="tire_size" style="max-width: 150px;">
+                    <span class="param-unit"></span>
+                    <span class="param-help">e.g., 275/35/18</span>
+                </div>
+                <div class="param-row">
+                    <label for="tire_circumference_meters">Tire Circumference</label>
+                    <input type="number" class="form-control" id="tire_circumference_meters" step="0.001" min="1.5" max="2.5">
+                    <span class="param-unit">m</span>
+                    <span class="param-help">For speed/RPM calculations</span>
+                </div>
+            </div>
+
+            <!-- Engine Parameters -->
+            <div class="param-section">
+                <h5>Engine</h5>
+                <div class="param-row">
+                    <label for="max_rpm">Max RPM</label>
+                    <input type="number" class="form-control" id="max_rpm" step="100" min="4000" max="12000">
+                    <span class="param-unit">rpm</span>
+                    <span class="param-help">Absolute rev limit</span>
+                </div>
+                <div class="param-row">
+                    <label for="shift_rpm">Shift RPM</label>
+                    <input type="number" class="form-control" id="shift_rpm" step="100" min="3000" max="11000">
+                    <span class="param-unit">rpm</span>
+                    <span class="param-help">Optimal shift point</span>
+                </div>
+                <div class="param-row">
+                    <label for="power_band_min">Power Band Start</label>
+                    <input type="number" class="form-control" id="power_band_min" step="100" min="2000" max="9000">
+                    <span class="param-unit">rpm</span>
+                    <span class="param-help">Where peak power begins</span>
+                </div>
+                <div class="param-row">
+                    <label for="power_band_max">Power Band End</label>
+                    <input type="number" class="form-control" id="power_band_max" step="100" min="3000" max="10000">
+                    <span class="param-unit">rpm</span>
+                    <span class="param-help">Where peak power ends</span>
+                </div>
+            </div>
+
+            <!-- Transmission -->
+            <div class="param-section">
+                <h5>Current Transmission Setup: <span id="setup-name" class="text-primary"></span></h5>
+                <table class="transmission-table">
+                    <thead>
+                        <tr>
+                            <th>Gear</th>
+                            <th id="gear-headers"></th>
+                            <th>Final Drive</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Ratio</td>
+                            <td id="gear-ratios"></td>
+                            <td><input type="number" class="form-control" id="final_drive" step="0.01" min="2.0" max="5.0"></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Notes -->
+            <div class="param-section">
+                <h5>Notes</h5>
+                <textarea class="form-control" id="notes" rows="3" style="background: #2d2d2d; border: 1px solid #444; color: #fff;"></textarea>
+            </div>
+
+            <!-- Save Bar -->
+            <div class="save-bar" id="save-bar">
+                <span id="save-status" class="text-muted">No changes</span>
+                <div>
+                    <button class="btn btn-outline-secondary me-2" onclick="resetChanges()">Reset</button>
+                    <button class="btn btn-primary" onclick="saveVehicle()" id="btn-save" disabled>Save Changes</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="no-vehicle-selected" class="text-center py-5 text-muted">
+            <h4>Select a vehicle to view and edit parameters</h4>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    let vehicles = [];
+    let activeVehicleId = null;
+    let selectedVehicle = null;
+    let originalData = null;
+    let hasChanges = false;
+
+    document.addEventListener('DOMContentLoaded', loadVehicles);
+
+    async function loadVehicles() {
+        try {
+            const response = await fetch('/api/vehicles');
+            const data = await response.json();
+            vehicles = data.vehicles;
+            activeVehicleId = data.active_vehicle;
+            renderVehicleList();
+        } catch (error) {
+            console.error('Failed to load vehicles:', error);
+        }
+    }
+
+    function renderVehicleList() {
+        const container = document.getElementById('vehicle-list');
+        let html = '';
+
+        for (const v of vehicles) {
+            const isActive = v.id === activeVehicleId;
+            const isSelected = selectedVehicle && v.id === selectedVehicle.id;
+            html += `
+                <div class="vehicle-card ${isActive ? 'active' : ''} ${isSelected ? 'selected' : ''}"
+                     onclick="selectVehicle('${v.id}')"
+                     data-id="${v.id}">
+                    <div class="vehicle-name">
+                        ${v.name}
+                        ${isActive ? '<span class="active-badge">Active</span>' : ''}
+                    </div>
+                    <div class="vehicle-info">
+                        ${v.year} ${v.make} ${v.model}<br>
+                        ${v.weight_lbs} lbs | ${v.max_lateral_g}g lateral
+                    </div>
+                    ${!isActive ? `<button class="btn btn-sm btn-outline-success mt-2" onclick="setActive('${v.id}', event)">Set as Active</button>` : ''}
+                </div>
+            `;
+        }
+
+        container.innerHTML = html;
+    }
+
+    function selectVehicle(vehicleId) {
+        if (hasChanges) {
+            if (!confirm('You have unsaved changes. Discard them?')) {
+                return;
+            }
+        }
+
+        selectedVehicle = vehicles.find(v => v.id === vehicleId);
+        if (!selectedVehicle) return;
+
+        originalData = JSON.parse(JSON.stringify(selectedVehicle));
+
+        // Show details panel
+        document.getElementById('vehicle-details').style.display = 'block';
+        document.getElementById('no-vehicle-selected').style.display = 'none';
+
+        // Populate fields
+        document.getElementById('max_lateral_g').value = selectedVehicle.max_lateral_g || 1.3;
+        document.getElementById('max_braking_g').value = selectedVehicle.max_braking_g || 1.4;
+        document.getElementById('power_limited_accel_g').value = selectedVehicle.power_limited_accel_g || 0.5;
+
+        document.getElementById('weight_lbs').value = selectedVehicle.weight_lbs || 3000;
+        document.getElementById('tire_size').value = selectedVehicle.tire_size || '';
+        document.getElementById('tire_circumference_meters').value = selectedVehicle.tire_circumference_meters || 2.0;
+
+        const engine = selectedVehicle.engine || {};
+        document.getElementById('max_rpm').value = engine.max_rpm || 7000;
+        document.getElementById('shift_rpm').value = engine.shift_rpm || 6500;
+        document.getElementById('power_band_min').value = engine.power_band_min || 5000;
+        document.getElementById('power_band_max').value = engine.power_band_max || 7000;
+
+        const setup = selectedVehicle.current_setup || {};
+        document.getElementById('setup-name').textContent = setup.name || 'Default';
+        document.getElementById('final_drive').value = setup.final_drive || 3.5;
+
+        // Build gear ratio inputs
+        const ratios = setup.transmission_ratios || [3.0, 2.0, 1.5, 1.0];
+        let headersHtml = '';
+        let ratiosHtml = '';
+        for (let i = 0; i < ratios.length; i++) {
+            headersHtml += `<th>${i + 1}</th>`;
+            ratiosHtml += `<td><input type="number" class="form-control gear-ratio" data-gear="${i}" value="${ratios[i]}" step="0.01" min="0.5" max="5.0"></td>`;
+        }
+        document.getElementById('gear-headers').innerHTML = headersHtml;
+        document.getElementById('gear-ratios').innerHTML = ratiosHtml;
+
+        document.getElementById('notes').value = selectedVehicle.notes || '';
+
+        // Highlight selected in list
+        document.querySelectorAll('.vehicle-card').forEach(card => {
+            card.classList.toggle('selected', card.dataset.id === vehicleId);
+        });
+
+        // Reset change tracking
+        hasChanges = false;
+        updateSaveStatus();
+
+        // Add change listeners
+        document.querySelectorAll('#vehicle-details input, #vehicle-details textarea').forEach(input => {
+            input.addEventListener('input', markChanged);
+        });
+    }
+
+    function markChanged() {
+        hasChanges = true;
+        updateSaveStatus();
+    }
+
+    function updateSaveStatus() {
+        const saveBar = document.getElementById('save-bar');
+        const status = document.getElementById('save-status');
+        const btnSave = document.getElementById('btn-save');
+
+        if (hasChanges) {
+            saveBar.classList.add('has-changes');
+            status.textContent = 'Unsaved changes';
+            status.classList.remove('text-muted');
+            status.classList.add('text-warning');
+            btnSave.disabled = false;
+        } else {
+            saveBar.classList.remove('has-changes');
+            status.textContent = 'No changes';
+            status.classList.add('text-muted');
+            status.classList.remove('text-warning');
+            btnSave.disabled = true;
+        }
+    }
+
+    function resetChanges() {
+        if (selectedVehicle) {
+            selectVehicle(selectedVehicle.id);
+        }
+    }
+
+    async function saveVehicle() {
+        if (!selectedVehicle) return;
+
+        // Gather values
+        const gearRatios = [];
+        document.querySelectorAll('.gear-ratio').forEach(input => {
+            gearRatios.push(parseFloat(input.value));
+        });
+
+        const updatedVehicle = {
+            ...selectedVehicle,
+            max_lateral_g: parseFloat(document.getElementById('max_lateral_g').value),
+            max_braking_g: parseFloat(document.getElementById('max_braking_g').value),
+            power_limited_accel_g: parseFloat(document.getElementById('power_limited_accel_g').value),
+            weight_lbs: parseInt(document.getElementById('weight_lbs').value),
+            tire_size: document.getElementById('tire_size').value,
+            tire_circumference_meters: parseFloat(document.getElementById('tire_circumference_meters').value),
+            engine: {
+                ...selectedVehicle.engine,
+                max_rpm: parseInt(document.getElementById('max_rpm').value),
+                shift_rpm: parseInt(document.getElementById('shift_rpm').value),
+                power_band_min: parseInt(document.getElementById('power_band_min').value),
+                power_band_max: parseInt(document.getElementById('power_band_max').value)
+            },
+            current_setup: {
+                ...selectedVehicle.current_setup,
+                transmission_ratios: gearRatios,
+                final_drive: parseFloat(document.getElementById('final_drive').value)
+            },
+            notes: document.getElementById('notes').value
+        };
+
+        try {
+            const response = await fetch(`/api/vehicles/${selectedVehicle.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(updatedVehicle)
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to save');
+            }
+
+            // Reload vehicles
+            await loadVehicles();
+            selectVehicle(selectedVehicle.id);
+
+            // Show success
+            const status = document.getElementById('save-status');
+            status.textContent = 'Saved!';
+            status.classList.remove('text-warning');
+            status.classList.add('text-success');
+            setTimeout(() => updateSaveStatus(), 2000);
+
+        } catch (error) {
+            alert('Failed to save vehicle: ' + error.message);
+        }
+    }
+
+    async function setActive(vehicleId, event) {
+        event.stopPropagation();
+
+        try {
+            const response = await fetch('/api/vehicles/active', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ vehicle_id: vehicleId })
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to set active vehicle');
+            }
+
+            activeVehicleId = vehicleId;
+            renderVehicleList();
+
+        } catch (error) {
+            alert('Failed to set active vehicle: ' + error.message);
+        }
+    }
+</script>
+{% endblock %}
