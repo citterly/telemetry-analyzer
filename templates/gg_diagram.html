@@ -23,6 +23,7 @@
     .stats-card.purple { background: linear-gradient(135deg, #9b59b6 0%, #8e44ad 100%); }
     .stats-value { font-size: 1.8rem; font-weight: bold; }
     .stats-label { font-size: 0.85rem; opacity: 0.9; }
+    .stats-help { font-size: 0.7rem; opacity: 0.7; margin-top: 4px; }
 
     #gg-chart-container {
         position: relative;
@@ -77,7 +78,8 @@
         margin-bottom: 10px;
     }
     .quadrant-card .q-name { font-weight: bold; margin-bottom: 5px; }
-    .quadrant-card .q-value { font-size: 1.5rem; font-weight: bold; }
+    .quadrant-card .q-value { font-size: 1.5rem; font-weight: bold; line-height: 1; }
+    .quadrant-card .q-util-label { font-size: 0.7rem; opacity: 0.7; margin-bottom: 8px; }
     .quadrant-card .q-label { font-size: 0.75rem; opacity: 0.8; }
     .quadrant-card.lat_left { background: rgba(231, 76, 60, 0.2); border: 2px solid #e74c3c; }
     .quadrant-card.lat_right { background: rgba(52, 152, 219, 0.2); border: 2px solid #3498db; }
@@ -167,7 +169,7 @@
 
 <!-- File Selection -->
 <div class="row mb-4">
-    <div class="col-md-4">
+    <div class="col-md-6">
         <div class="control-panel">
             <label for="file-select" class="form-label">Select Session</label>
             <select class="form-select" id="file-select" onchange="loadGGDiagram()">
@@ -175,37 +177,12 @@
             </select>
         </div>
     </div>
-    <div class="col-md-2">
-        <div class="control-panel">
-            <label for="color-select" class="form-label">Color By</label>
-            <select class="form-select" id="color-select" onchange="updateColorScheme()">
-                <option value="speed">Speed</option>
-                <option value="throttle">Throttle</option>
-                <option value="lap">Lap Number</option>
-            </select>
-        </div>
-    </div>
-    <div class="col-md-2">
+    <div class="col-md-6">
         <div class="control-panel">
             <label for="lap-select" class="form-label">Lap Filter</label>
             <select class="form-select" id="lap-select" onchange="filterByLap()">
                 <option value="all">All Laps</option>
             </select>
-        </div>
-    </div>
-    <div class="col-md-4">
-        <div class="control-panel">
-            <label class="form-label">Compare Laps</label>
-            <div class="lap-compare-select">
-                <select class="form-select form-select-sm" id="compare-lap-a" disabled>
-                    <option value="">Lap A</option>
-                </select>
-                <span>vs</span>
-                <select class="form-select form-select-sm" id="compare-lap-b" disabled>
-                    <option value="">Lap B</option>
-                </select>
-                <button class="btn btn-sm btn-outline-primary" onclick="compareLaps()" id="btn-compare" disabled>Compare</button>
-            </div>
         </div>
     </div>
 </div>
@@ -229,56 +206,62 @@
         </div>
     </div>
 
-    <!-- Stats Row -->
-    <div class="row mb-4">
-        <div class="col-md-2">
-            <div class="stats-card">
-                <div class="stats-value" id="stat-max-lat">--</div>
-                <div class="stats-label">Max Lateral G</div>
-            </div>
-        </div>
-        <div class="col-md-2">
-            <div class="stats-card warning">
-                <div class="stats-value" id="stat-max-brake">--</div>
-                <div class="stats-label">Max Braking G</div>
-            </div>
-        </div>
-        <div class="col-md-2">
-            <div class="stats-card success">
-                <div class="stats-value" id="stat-max-accel">--</div>
-                <div class="stats-label">Max Accel G</div>
-            </div>
-        </div>
-        <div class="col-md-2">
-            <div class="stats-card" id="stat-braking-ratio-card">
-                <div class="stats-value" id="stat-braking-ratio">--</div>
-                <div class="stats-label">Brake/Lateral Ratio</div>
-            </div>
-        </div>
-        <div class="col-md-2">
-            <div class="stats-card success">
-                <div class="stats-value" id="stat-corner-util">--</div>
-                <div class="stats-label">Corner Grip Used</div>
-            </div>
-        </div>
-        <div class="col-md-2">
-            <div class="stats-card purple">
-                <div class="stats-value" id="stat-power-limited">--</div>
-                <div class="stats-label">Power Limited</div>
-            </div>
-        </div>
-    </div>
-
     <!-- Quadrant Breakdown -->
     <div class="row mb-4">
         <div class="col-12">
             <div class="card">
-                <div class="card-header"><strong>Quadrant Breakdown</strong></div>
+                <div class="card-header"><strong>Quadrant Breakdown</strong> <small class="text-muted ms-2">Grip utilization by direction</small></div>
                 <div class="card-body">
                     <div class="row" id="quadrant-cards">
                         <!-- Populated by JavaScript -->
                     </div>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stats Row - Below Quadrant Breakdown -->
+    <div class="row mb-4">
+        <div class="col-md-2">
+            <div class="stats-card" title="Highest lateral (sideways) g-force recorded. Shows cornering grip limit.">
+                <div class="stats-value" id="stat-max-lat">--</div>
+                <div class="stats-label">Max Lateral G</div>
+                <div class="stats-help">Peak cornering force</div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="stats-card warning" title="Highest deceleration g-force. Shows braking capability.">
+                <div class="stats-value" id="stat-max-brake">--</div>
+                <div class="stats-label">Max Braking G</div>
+                <div class="stats-help">Peak braking force</div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="stats-card success" title="Highest acceleration g-force. Limited by power and traction.">
+                <div class="stats-value" id="stat-max-accel">--</div>
+                <div class="stats-label">Max Accel G</div>
+                <div class="stats-help">Peak acceleration</div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="stats-card" id="stat-braking-ratio-card" title="Braking G divided by Lateral G. Below 85% suggests you could brake harder.">
+                <div class="stats-value" id="stat-braking-ratio">--</div>
+                <div class="stats-label">Brake/Lateral Ratio</div>
+                <div class="stats-help">Braking vs cornering balance</div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="stats-card success" title="Average grip used in corners (lateral G > 0.3). Higher = using more available grip.">
+                <div class="stats-value" id="stat-corner-util">--</div>
+                <div class="stats-label">Corner Grip Used</div>
+                <div class="stats-help">Avg grip in turns</div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="stats-card purple" title="Percent of session at full throttle but low acceleration (engine-limited, not tire-limited).">
+                <div class="stats-value" id="stat-power-limited">--</div>
+                <div class="stats-label">Power Limited</div>
+                <div class="stats-help">Time at max engine output</div>
             </div>
         </div>
     </div>
@@ -290,9 +273,18 @@
             <div class="card">
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <strong>G-G Diagram</strong>
-                    <div class="btn-group btn-group-sm">
-                        <button class="btn btn-outline-secondary" onclick="toggleView('chart')" id="btn-chart">Chart.js</button>
-                        <button class="btn btn-outline-secondary active" onclick="toggleView('svg')" id="btn-svg">SVG</button>
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="d-flex align-items-center gap-2">
+                            <label class="mb-0 small text-muted">Color:</label>
+                            <select class="form-select form-select-sm" id="color-select" onchange="updateColorScheme()" style="width: auto;">
+                                <option value="speed">Speed</option>
+                                <option value="throttle">Throttle</option>
+                            </select>
+                        </div>
+                        <div class="btn-group btn-group-sm">
+                            <button class="btn btn-outline-secondary" onclick="toggleView('chart')" id="btn-chart">Chart.js</button>
+                            <button class="btn btn-outline-secondary active" onclick="toggleView('svg')" id="btn-svg">SVG</button>
+                        </div>
                     </div>
                 </div>
                 <div class="card-body gg-container">
@@ -303,6 +295,22 @@
                     </div>
                     <div id="svg-view" class="svg-container">
                         <div class="text-muted">Loading diagram...</div>
+                    </div>
+                </div>
+                <!-- Compare Laps - inside the G-G Diagram card -->
+                <div class="card-footer">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <span class="small text-muted">Compare Laps:</span>
+                        <div class="d-flex align-items-center gap-2">
+                            <select class="form-select form-select-sm" id="compare-lap-a" disabled style="width: 90px;">
+                                <option value="">Lap A</option>
+                            </select>
+                            <span class="text-muted">vs</span>
+                            <select class="form-select form-select-sm" id="compare-lap-b" disabled style="width: 90px;">
+                                <option value="">Lap B</option>
+                            </select>
+                            <button class="btn btn-sm btn-outline-primary" onclick="compareLaps()" id="btn-compare" disabled>Compare</button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -344,15 +352,27 @@
             <div class="card">
                 <div class="card-header">
                     <strong>Utilization Zones</strong>
-                    <br><small class="text-muted">Click zone to highlight on map</small>
+                    <small class="text-muted ms-2">Click zone to highlight on map</small>
                 </div>
-                <div class="card-body" style="max-height: 300px; overflow-y: auto;">
-                    <div id="low-util-zones">
-                        <p class="text-muted">Select a session to see analysis</p>
+                <div class="card-body">
+                    <!-- Zone filter checkboxes -->
+                    <div class="zone-filters mb-3" id="zone-filters" style="display: none;">
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="checkbox" id="filter-low-grip" checked onchange="applyZoneFilters()">
+                            <label class="form-check-label small" for="filter-low-grip" style="color: #e74c3c;">Low Grip</label>
+                        </div>
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="checkbox" id="filter-power-limited" checked onchange="applyZoneFilters()">
+                            <label class="form-check-label small" for="filter-power-limited" style="color: #9b59b6;">Power Limited</label>
+                        </div>
                     </div>
-                    <hr>
-                    <div id="power-limited-zones">
-                        <!-- Power limited zones -->
+                    <div style="max-height: 250px; overflow-y: auto;">
+                        <div id="low-util-zones">
+                            <p class="text-muted">Select a session to see analysis</p>
+                        </div>
+                        <div id="power-limited-zones">
+                            <!-- Power limited zones -->
+                        </div>
                     </div>
                 </div>
             </div>
@@ -499,9 +519,10 @@
                     <div class="quadrant-card ${q.name}">
                         <div class="q-name">${q.display_name}</div>
                         <div class="q-value">${q.utilization_pct.toFixed(0)}%</div>
+                        <div class="q-util-label">grip used</div>
                         <div class="q-label">
                             Max: ${q.max_g.toFixed(2)}g | Avg: ${q.avg_g.toFixed(2)}g<br>
-                            Time: ${q.time_spent_pct.toFixed(0)}% of session
+                            ${q.time_spent_pct.toFixed(0)}% of session time
                         </div>
                     </div>
                 </div>
@@ -510,16 +531,30 @@
         container.innerHTML = html;
     }
 
+    // Store zones globally for filtering
+    let allLowUtilZones = [];
+    let allPowerLimitedZones = [];
+
     function updateLowUtilZones(zones) {
+        allLowUtilZones = zones || [];
+        document.getElementById('zone-filters').style.display = (allLowUtilZones.length > 0 || allPowerLimitedZones.length > 0) ? 'block' : 'none';
+        renderLowUtilZones();
+    }
+
+    function renderLowUtilZones() {
         const container = document.getElementById('low-util-zones');
-        if (!zones || zones.length === 0) {
-            container.innerHTML = '<p class="text-success">No low utilization zones found. Good grip usage!</p>';
+        const showLowGrip = document.getElementById('filter-low-grip')?.checked ?? true;
+
+        if (!showLowGrip || allLowUtilZones.length === 0) {
+            container.innerHTML = showLowGrip && allLowUtilZones.length === 0
+                ? '<p class="text-success small">No low utilization zones found.</p>'
+                : '';
             return;
         }
 
-        let html = '<h6 class="text-danger">Low Grip Utilization</h6>';
-        for (let i = 0; i < zones.length; i++) {
-            const zone = zones[i];
+        let html = '<h6 class="text-danger small mb-2">Low Grip Utilization</h6>';
+        for (let i = 0; i < allLowUtilZones.length; i++) {
+            const zone = allLowUtilZones[i];
             html += `
                 <div class="low-util-zone" data-zone-type="low_grip" data-zone-idx="${i}" onclick="selectZone(${i}, 'low_grip')">
                     <strong>Time: ${zone.start_time.toFixed(1)}s - ${zone.end_time.toFixed(1)}s</strong>
@@ -539,16 +574,23 @@
 
     function updatePowerLimitedZones(zones, pct) {
         document.getElementById('stat-power-limited').textContent = pct.toFixed(0) + '%';
+        allPowerLimitedZones = zones || [];
+        document.getElementById('zone-filters').style.display = (allLowUtilZones.length > 0 || allPowerLimitedZones.length > 0) ? 'block' : 'none';
+        renderPowerLimitedZones();
+    }
 
+    function renderPowerLimitedZones() {
         const container = document.getElementById('power-limited-zones');
-        if (!zones || zones.length === 0) {
+        const showPowerLimited = document.getElementById('filter-power-limited')?.checked ?? true;
+
+        if (!showPowerLimited || allPowerLimitedZones.length === 0) {
             container.innerHTML = '';
             return;
         }
 
-        let html = '<h6 class="text-purple" style="color: #9b59b6;">Power Limited Zones</h6>';
-        for (let i = 0; i < zones.length; i++) {
-            const zone = zones[i];
+        let html = '<h6 class="small mb-2" style="color: #9b59b6;">Power Limited Zones</h6>';
+        for (let i = 0; i < allPowerLimitedZones.length; i++) {
+            const zone = allPowerLimitedZones[i];
             html += `
                 <div class="low-util-zone power-limited" data-zone-type="power_limited" data-zone-idx="${i}" onclick="selectZone(${i}, 'power_limited')">
                     <strong>Time: ${zone.start_time.toFixed(1)}s - ${zone.end_time.toFixed(1)}s</strong>
@@ -561,6 +603,12 @@
             `;
         }
         container.innerHTML = html;
+    }
+
+    function applyZoneFilters() {
+        renderLowUtilZones();
+        renderPowerLimitedZones();
+        renderMiniTrackMap();
     }
 
     function populateLapFilters(lapNumbers) {
@@ -672,9 +720,15 @@
             }
         }
 
-        // Build zone markers
+        // Build zone markers (respecting filter checkboxes)
         let markers = '';
-        const zones = [...(currentData.low_utilization_zones || []), ...(currentData.power_limited_zones || [])];
+        const showLowGrip = document.getElementById('filter-low-grip')?.checked ?? true;
+        const showPowerLimited = document.getElementById('filter-power-limited')?.checked ?? true;
+
+        const lowGripZones = showLowGrip ? (currentData.low_utilization_zones || []) : [];
+        const powerLimitedZones = showPowerLimited ? (currentData.power_limited_zones || []) : [];
+        const zones = [...lowGripZones, ...powerLimitedZones];
+
         for (let i = 0; i < zones.length; i++) {
             const zone = zones[i];
             if (zone.lat && zone.lon) {
@@ -1039,7 +1093,7 @@
         const filename = document.getElementById('file-select').value;
         const lap = document.getElementById('lap-select').value;
         if (filename) {
-            // Re-fetch JSON data with lap filter to update stats
+            // Re-fetch JSON data with lap filter to update all displays
             try {
                 let url = `/api/gg-diagram/${encodeURIComponent(filename)}?format=json`;
                 if (lap !== 'all') {
@@ -1048,10 +1102,17 @@
                 const response = await fetch(url);
                 if (response.ok) {
                     const data = await response.json();
-                    // Update stats for filtered lap
+                    // Update all data for filtered lap
                     updateStats(data.stats);
                     updateQuadrants(data.quadrants);
-                    // Keep current points for track map (don't reload full data)
+                    updateLowUtilZones(data.low_utilization_zones);
+                    updatePowerLimitedZones(data.power_limited_zones, data.power_limited_pct);
+
+                    // Update points for track map (filtered to selected lap)
+                    currentData.points = data.points;
+                    currentData.low_utilization_zones = data.low_utilization_zones;
+                    currentData.power_limited_zones = data.power_limited_zones;
+                    renderMiniTrackMap();
                 }
             } catch (error) {
                 console.error('Failed to update lap data:', error);
