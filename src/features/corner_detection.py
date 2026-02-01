@@ -737,9 +737,186 @@ class CornerDetector:
         }
 
 
-def detect_corners(parquet_path: str, lap_number: int = 1) -> CornerDetectionResult:
+@dataclass
+class Corner:
+    """Simple corner representation for Phase 3 detection."""
+    start_idx: int
+    end_idx: int
+    direction: str  # "left" or "right"
+    apex_idx: int = 0  # Will be set later if needed
+
+
+def detect_corners(
+    df: pd.DataFrame,
+    curvature_threshold: float = 0.005,
+    lateral_g_threshold: float = 0.3,
+    min_corner_duration: float = 0.5,
+    merge_gap: float = 0.5,
+    sample_rate: float = 10.0
+) -> List[Corner]:
     """
-    Convenience function to detect corners from a parquet file.
+    Detect corners using both GPS curvature and lateral G.
+
+    Phase 3 implementation: Combines curvature analysis with lateral G confirmation
+    for robust corner boundary detection.
+
+    Args:
+        df: DataFrame with GPS Latitude, GPS Longitude, and GPS LatAcc columns
+        curvature_threshold: Minimum curvature (1/m) to consider a corner (default 0.005)
+        lateral_g_threshold: Minimum absolute lateral G to confirm corner (default 0.3g)
+        min_corner_duration: Minimum corner duration in seconds (default 0.5s)
+        merge_gap: Time gap threshold for merging nearby corners (default 0.5s)
+        sample_rate: Sample rate in Hz if time data not in index (default 10.0)
+
+    Returns:
+        List of Corner objects with start_idx, end_idx, and direction
+
+    Algorithm:
+        1. Calculate GPS curvature from lat/lon coordinates
+        2. Create curvature mask (curvature > threshold)
+        3. Create lateral G mask (|lateral_g| > threshold)
+        4. Corner starts when BOTH curvature AND lateral G exceed thresholds
+        5. Corner ends when lateral G drops below threshold
+        6. Filter corners by minimum duration
+        7. Merge nearby corners separated by < merge_gap
+        8. Determine direction from sign of lateral G
+
+    Example:
+        >>> df = pd.read_parquet('session.parquet')
+        >>> corners = detect_corners(df)
+        >>> print(f"Detected {len(corners)} corners")
+        >>> for corner in corners:
+        ...     print(f"Corner at {corner.start_idx}-{corner.end_idx}, direction: {corner.direction}")
+    """
+    # Extract required columns
+    try:
+        lat = df['GPS Latitude'].values if 'GPS Latitude' in df.columns else df['gps_lat'].values
+        lon = df['GPS Longitude'].values if 'GPS Longitude' in df.columns else df['gps_lon'].values
+        lateral_g = df['GPS LatAcc'].values if 'GPS LatAcc' in df.columns else df['lat_acc'].values
+    except KeyError as e:
+        raise ValueError(f"Missing required column: {e}")
+
+    # Get time data from index or create synthetic time array
+    if hasattr(df.index, 'values'):
+        time_data = df.index.values
+    else:
+        time_data = np.arange(len(df)) / sample_rate
+
+    n = len(lat)
+
+    # Step 1: Calculate curvature from GPS coordinates
+    curvature = calc_curvature(lat, lon, window_size=3)
+
+    # Step 2: Create masks for corner detection
+    curvature_mask = curvature > curvature_threshold
+    lateral_g_mask = np.abs(lateral_g) > lateral_g_threshold
+
+    # Step 3: Corners must have BOTH high curvature AND high lateral G
+    # Entry requires both, but we use lateral G for exit detection
+    corner_active_mask = lateral_g_mask  # Corner is active when lateral G exceeds threshold
+    corner_entry_mask = curvature_mask & lateral_g_mask  # Entry requires both conditions
+
+    # Step 4: Find corner boundaries
+    corners = []
+    in_corner = False
+    start_idx = 0
+    corner_lateral_g_values = []
+
+    for i in range(n):
+        if corner_entry_mask[i] and not in_corner:
+            # Corner entry: both curvature AND lateral G exceed threshold
+            in_corner = True
+            start_idx = i
+            corner_lateral_g_values = [lateral_g[i]]
+        elif in_corner:
+            # Track lateral G values within corner
+            corner_lateral_g_values.append(lateral_g[i])
+
+            if not corner_active_mask[i]:
+                # Corner exit: lateral G dropped below threshold
+                in_corner = False
+                end_idx = i - 1
+
+                # Check minimum duration
+                if time_data is not None and isinstance(time_data[0], (int, float)):
+                    duration = time_data[end_idx] - time_data[start_idx]
+                else:
+                    duration = (end_idx - start_idx + 1) / sample_rate
+
+                if duration >= min_corner_duration:
+                    # Determine direction from average lateral G
+                    avg_lat_g = np.mean(corner_lateral_g_values)
+                    direction = "right" if avg_lat_g > 0 else "left"
+
+                    corners.append(Corner(
+                        start_idx=start_idx,
+                        end_idx=end_idx,
+                        direction=direction
+                    ))
+
+                corner_lateral_g_values = []
+
+    # Handle corner at end of data
+    if in_corner:
+        end_idx = n - 1
+        if time_data is not None and isinstance(time_data[0], (int, float)):
+            duration = time_data[end_idx] - time_data[start_idx]
+        else:
+            duration = (end_idx - start_idx + 1) / sample_rate
+
+        if duration >= min_corner_duration:
+            avg_lat_g = np.mean(corner_lateral_g_values)
+            direction = "right" if avg_lat_g > 0 else "left"
+            corners.append(Corner(
+                start_idx=start_idx,
+                end_idx=end_idx,
+                direction=direction
+            ))
+
+    # Step 5: Merge nearby corners (chicanes)
+    if len(corners) > 1:
+        merged_corners = []
+        i = 0
+        while i < len(corners):
+            current = corners[i]
+
+            # Look ahead to see if next corner is close
+            if i + 1 < len(corners):
+                next_corner = corners[i + 1]
+                gap = time_data[next_corner.start_idx] - time_data[current.end_idx]
+
+                if gap < merge_gap:
+                    # Merge corners: extend end to include next corner
+                    # Direction determined by which side had more lateral G
+                    combined_lat_g = np.concatenate([
+                        lateral_g[current.start_idx:current.end_idx+1],
+                        lateral_g[next_corner.start_idx:next_corner.end_idx+1]
+                    ])
+                    avg_lat_g = np.mean(combined_lat_g)
+                    direction = "right" if avg_lat_g > 0 else "left"
+
+                    merged = Corner(
+                        start_idx=current.start_idx,
+                        end_idx=next_corner.end_idx,
+                        direction=direction
+                    )
+                    merged_corners.append(merged)
+                    i += 2  # Skip next corner since we merged it
+                else:
+                    merged_corners.append(current)
+                    i += 1
+            else:
+                merged_corners.append(current)
+                i += 1
+
+        corners = merged_corners
+
+    return corners
+
+
+def detect_corners_from_parquet(parquet_path: str, lap_number: int = 1) -> CornerDetectionResult:
+    """
+    Detect corners from a parquet file using CornerDetector.
 
     Args:
         parquet_path: Path to parquet file
@@ -747,6 +924,24 @@ def detect_corners(parquet_path: str, lap_number: int = 1) -> CornerDetectionRes
 
     Returns:
         CornerDetectionResult
+
+    Note:
+        This is the old API that uses CornerDetector class.
+        For the new Phase 3 API using curvature + lateral G, use detect_corners(df).
     """
     detector = CornerDetector()
     return detector.detect_from_parquet(parquet_path, lap_number)
+
+
+# Module-level functions for different use cases
+
+def detect_corners_simple(parquet_path: str, lap_number: int = 1) -> CornerDetectionResult:
+    """
+    Convenience wrapper for CornerDetector.detect_from_parquet().
+    Maintains backward compatibility with existing code.
+
+    For the new Phase 3 API that returns Corner objects, use:
+        df = pd.read_parquet(path)
+        corners = detect_corners(df)
+    """
+    return detect_corners_from_parquet(parquet_path, lap_number)

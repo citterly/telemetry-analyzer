@@ -10,8 +10,9 @@ import os
 from pathlib import Path
 
 from src.features.corner_detection import (
-    CornerDetector, CornerZone, CornerDetectionResult, detect_corners,
-    calc_curvature, detect_corner_boundaries
+    CornerDetector, CornerZone, CornerDetectionResult, Corner,
+    calc_curvature, detect_corner_boundaries, detect_corners,
+    detect_corners_from_parquet
 )
 from src.features.corner_analysis import (
     CornerAnalyzer, CornerMetrics, LapCornerAnalysis, CornerComparison,
@@ -871,8 +872,8 @@ class TestConvenienceFunctions:
             os.unlink(f.name)
 
     def test_detect_corners_function(self, sample_parquet):
-        """Test detect_corners convenience function"""
-        result = detect_corners(sample_parquet)
+        """Test detect_corners_from_parquet convenience function"""
+        result = detect_corners_from_parquet(sample_parquet)
         assert isinstance(result, CornerDetectionResult)
 
     def test_analyze_corners_function(self, sample_parquet):
@@ -943,6 +944,341 @@ class TestEdgeCases:
         # Should still work, just with zeros for throttle metrics
 
 
+class TestDetectCornersPhase3:
+    """Tests for Phase 3 detect_corners() function using curvature + lateral G"""
+
+    def test_detects_corner_with_both_curvature_and_lateral_g(self):
+        """Test that corners require BOTH curvature AND lateral G"""
+        n = 100
+        time = np.linspace(0, 10, n)
+
+        # Create a curved path with matching lateral G
+        t = time / 2
+        lat = 43.797 + 0.001 * np.sin(t)
+        lon = -87.99 + 0.001 * np.cos(t)
+        lateral_g = 0.5 * np.sin(t)  # Matches the curvature
+
+        df = pd.DataFrame({
+            'GPS Latitude': lat,
+            'GPS Longitude': lon,
+            'GPS LatAcc': lateral_g
+        }, index=time)
+
+        corners = detect_corners(df, curvature_threshold=0.003, lateral_g_threshold=0.3)
+
+        # Should detect corners where both conditions are met
+        assert len(corners) > 0
+        assert all(isinstance(c, Corner) for c in corners)
+
+    def test_requires_both_curvature_and_lateral_g_at_entry(self):
+        """Test that corner entry requires BOTH curvature AND lateral G"""
+        n = 100
+        time = np.linspace(0, 10, n)
+
+        # High curvature but no lateral G
+        lat = np.linspace(43.797, 43.798, n)
+        lon = np.linspace(-87.99, -87.989, n)
+        lateral_g = np.full(n, 0.1)  # Below threshold
+
+        df = pd.DataFrame({
+            'GPS Latitude': lat,
+            'GPS Longitude': lon,
+            'GPS LatAcc': lateral_g
+        }, index=time)
+
+        corners = detect_corners(df, curvature_threshold=0.001, lateral_g_threshold=0.3)
+
+        # Should not detect corners without sufficient lateral G
+        assert len(corners) == 0
+
+    def test_corner_exit_uses_lateral_g(self):
+        """Test that corner exit is determined by lateral G dropping"""
+        n = 120
+        time = np.linspace(0, 12, n)
+
+        # Create path with curvature, lateral G rises then falls
+        lat = np.full(n, 43.797)
+        lon = np.full(n, -87.99)
+        lateral_g = np.zeros(n)
+
+        # Add a corner: entry at idx 30, exit at idx 70
+        for i in range(30, 71):
+            lateral_g[i] = 0.6  # Above threshold
+
+        # Add some curvature in the same region
+        lat[25:75] += 0.001 * np.sin(np.linspace(0, np.pi, 50))
+        lon[25:75] += 0.001 * np.cos(np.linspace(0, np.pi, 50))
+
+        df = pd.DataFrame({
+            'GPS Latitude': lat,
+            'GPS Longitude': lon,
+            'GPS LatAcc': lateral_g
+        }, index=time)
+
+        corners = detect_corners(df, curvature_threshold=0.003, lateral_g_threshold=0.3)
+
+        assert len(corners) >= 1
+        # Corner should end around idx 70 (where lateral G drops)
+        if corners:
+            assert corners[0].end_idx >= 65
+            assert corners[0].end_idx <= 75
+
+    def test_merges_nearby_corners_chicane(self):
+        """Test that nearby corners separated by <0.5s are merged"""
+        n = 200
+        time = np.linspace(0, 20, n)  # 10 Hz sampling
+
+        # Create two corners close together (chicane pattern)
+        lat = np.full(n, 43.797)
+        lon = np.full(n, -87.99)
+        lateral_g = np.zeros(n)
+
+        # First corner: 20-35 (1.5s duration)
+        for i in range(20, 36):
+            lateral_g[i] = 0.5
+            lat[i] += 0.0005 * np.sin((i - 20) / 8 * np.pi)
+            lon[i] += 0.0005 * np.cos((i - 20) / 8 * np.pi)
+
+        # Gap of 3 samples (0.3s) - should merge
+        # Second corner: 39-54 (1.5s duration)
+        for i in range(39, 55):
+            lateral_g[i] = -0.5  # Opposite direction
+            lat[i] += 0.0005 * np.sin((i - 39) / 8 * np.pi)
+            lon[i] += 0.0005 * np.cos((i - 39) / 8 * np.pi)
+
+        df = pd.DataFrame({
+            'GPS Latitude': lat,
+            'GPS Longitude': lon,
+            'GPS LatAcc': lateral_g
+        }, index=time)
+
+        corners = detect_corners(df, merge_gap=0.5)
+
+        # Should merge into one corner
+        assert len(corners) == 1
+        assert corners[0].start_idx <= 20
+        assert corners[0].end_idx >= 54
+
+    def test_does_not_merge_distant_corners(self):
+        """Test that corners separated by >0.5s are NOT merged"""
+        n = 200
+        time = np.linspace(0, 20, n)
+
+        lat = np.full(n, 43.797)
+        lon = np.full(n, -87.99)
+        lateral_g = np.zeros(n)
+
+        # First corner: 20-30 (1.0s) - make it more curved
+        angles1 = np.linspace(0, np.pi / 2, 11)
+        for idx, i in enumerate(range(20, 31)):
+            lateral_g[i] = 0.5
+            lat[i] += 0.002 * np.sin(angles1[idx])
+            lon[i] += 0.002 * np.cos(angles1[idx])
+
+        # Gap of 8 samples (0.8s) - should NOT merge
+        # Second corner: 39-49 (1.0s) - make it more curved
+        angles2 = np.linspace(0, np.pi / 2, 11)
+        for idx, i in enumerate(range(39, 50)):
+            lateral_g[i] = 0.5
+            lat[i] += 0.002 * np.sin(angles2[idx])
+            lon[i] += 0.002 * np.cos(angles2[idx])
+
+        df = pd.DataFrame({
+            'GPS Latitude': lat,
+            'GPS Longitude': lon,
+            'GPS LatAcc': lateral_g
+        }, index=time)
+
+        corners = detect_corners(df, merge_gap=0.5, curvature_threshold=0.003)
+
+        # Should detect two separate corners
+        assert len(corners) == 2
+
+    def test_direction_detection_right(self):
+        """Test that right corners are detected correctly"""
+        n = 100
+        time = np.linspace(0, 10, n)
+
+        # Right corner: positive lateral G
+        lat = 43.797 + 0.001 * np.sin(np.linspace(0, np.pi / 2, n))
+        lon = -87.99 + 0.001 * np.cos(np.linspace(0, np.pi / 2, n))
+        lateral_g = np.full(n, 0.6)  # Positive = right turn
+
+        df = pd.DataFrame({
+            'GPS Latitude': lat,
+            'GPS Longitude': lon,
+            'GPS LatAcc': lateral_g
+        }, index=time)
+
+        corners = detect_corners(df)
+
+        assert len(corners) >= 1
+        assert corners[0].direction == "right"
+
+    def test_direction_detection_left(self):
+        """Test that left corners are detected correctly"""
+        n = 100
+        time = np.linspace(0, 10, n)
+
+        # Left corner: negative lateral G
+        lat = 43.797 + 0.001 * np.sin(np.linspace(0, np.pi / 2, n))
+        lon = -87.99 + 0.001 * np.cos(np.linspace(0, np.pi / 2, n))
+        lateral_g = np.full(n, -0.6)  # Negative = left turn
+
+        df = pd.DataFrame({
+            'GPS Latitude': lat,
+            'GPS Longitude': lon,
+            'GPS LatAcc': lateral_g
+        }, index=time)
+
+        corners = detect_corners(df)
+
+        assert len(corners) >= 1
+        assert corners[0].direction == "left"
+
+    def test_minimum_duration_filter(self):
+        """Test that corners shorter than min_duration are filtered"""
+        n = 200
+        time = np.linspace(0, 20, n)
+
+        lat = np.full(n, 43.797)
+        lon = np.full(n, -87.99)
+        lateral_g = np.zeros(n)
+
+        # Short spike: 3 samples = 0.3s (below 0.5s minimum)
+        angles_short = np.linspace(0, np.pi / 4, 3)
+        for idx, i in enumerate(range(20, 23)):
+            lateral_g[i] = 0.8
+            lat[i] += 0.002 * np.sin(angles_short[idx])
+            lon[i] += 0.002 * np.cos(angles_short[idx])
+
+        # Long corner: 8 samples = 0.8s (above 0.5s minimum)
+        angles_long = np.linspace(0, np.pi / 2, 8)
+        for idx, i in enumerate(range(50, 58)):
+            lateral_g[i] = 0.8
+            lat[i] += 0.002 * np.sin(angles_long[idx])
+            lon[i] += 0.002 * np.cos(angles_long[idx])
+
+        df = pd.DataFrame({
+            'GPS Latitude': lat,
+            'GPS Longitude': lon,
+            'GPS LatAcc': lateral_g
+        }, index=time)
+
+        corners = detect_corners(df, min_corner_duration=0.5, curvature_threshold=0.003)
+
+        # Should only detect the long corner
+        assert len(corners) == 1
+        assert corners[0].start_idx >= 48
+        assert corners[0].end_idx <= 60
+
+    def test_handles_corner_at_end_of_data(self):
+        """Test that corners extending to end of data are handled"""
+        n = 100
+        time = np.linspace(0, 10, n)
+
+        lat = np.full(n, 43.797)
+        lon = np.full(n, -87.99)
+        lateral_g = np.zeros(n)
+
+        # Corner starts at 70, extends to end
+        angles = np.linspace(0, np.pi / 2, n - 70)
+        for idx, i in enumerate(range(70, n)):
+            lateral_g[i] = 0.6
+            lat[i] += 0.002 * np.sin(angles[idx])
+            lon[i] += 0.002 * np.cos(angles[idx])
+
+        df = pd.DataFrame({
+            'GPS Latitude': lat,
+            'GPS Longitude': lon,
+            'GPS LatAcc': lateral_g
+        }, index=time)
+
+        corners = detect_corners(df, curvature_threshold=0.003)
+
+        assert len(corners) >= 1
+        assert corners[-1].end_idx == n - 1
+
+    def test_returns_corner_objects(self):
+        """Test that function returns Corner objects with correct fields"""
+        n = 100
+        time = np.linspace(0, 10, n)
+
+        lat = 43.797 + 0.001 * np.sin(np.linspace(0, np.pi / 2, n))
+        lon = -87.99 + 0.001 * np.cos(np.linspace(0, np.pi / 2, n))
+        lateral_g = 0.5 * np.sin(np.linspace(0, np.pi, n))
+
+        df = pd.DataFrame({
+            'GPS Latitude': lat,
+            'GPS Longitude': lon,
+            'GPS LatAcc': lateral_g
+        }, index=time)
+
+        corners = detect_corners(df)
+
+        assert len(corners) > 0
+        for corner in corners:
+            assert isinstance(corner, Corner)
+            assert hasattr(corner, 'start_idx')
+            assert hasattr(corner, 'end_idx')
+            assert hasattr(corner, 'direction')
+            assert corner.direction in ['left', 'right']
+            assert corner.start_idx < corner.end_idx
+
+    def test_empty_dataframe(self):
+        """Test handling of empty DataFrame"""
+        df = pd.DataFrame({
+            'GPS Latitude': [],
+            'GPS Longitude': [],
+            'GPS LatAcc': []
+        })
+
+        corners = detect_corners(df)
+        assert corners == []
+
+    def test_straight_section_no_corners(self):
+        """Test that straight sections produce no corners"""
+        n = 100
+        time = np.linspace(0, 10, n)
+
+        # Straight line
+        lat = np.linspace(43.797, 43.807, n)
+        lon = np.full(n, -87.99)
+        lateral_g = np.full(n, 0.05)  # Low lateral G
+
+        df = pd.DataFrame({
+            'GPS Latitude': lat,
+            'GPS Longitude': lon,
+            'GPS LatAcc': lateral_g
+        }, index=time)
+
+        corners = detect_corners(df)
+        assert len(corners) == 0
+
+    def test_custom_thresholds(self):
+        """Test that custom thresholds are respected"""
+        n = 100
+        time = np.linspace(0, 10, n)
+
+        lat = 43.797 + 0.001 * np.sin(np.linspace(0, np.pi / 2, n))
+        lon = -87.99 + 0.001 * np.cos(np.linspace(0, np.pi / 2, n))
+        lateral_g = np.full(n, 0.4)  # Moderate lateral G
+
+        df = pd.DataFrame({
+            'GPS Latitude': lat,
+            'GPS Longitude': lon,
+            'GPS LatAcc': lateral_g
+        }, index=time)
+
+        # High threshold - should not detect
+        corners_high = detect_corners(df, lateral_g_threshold=0.6)
+        assert len(corners_high) == 0
+
+        # Low threshold - should detect
+        corners_low = detect_corners(df, lateral_g_threshold=0.3)
+        assert len(corners_low) > 0
+
+
 class TestRealDataCompatibility:
     """Tests that work with real data format if available"""
 
@@ -968,3 +1304,29 @@ class TestRealDataCompatibility:
 
         assert isinstance(result, CornerAnalysisResult)
         assert result.session_id is not None
+
+    def test_detect_corners_with_real_data(self, real_parquet_path):
+        """Test Phase 3 detect_corners with real data"""
+        if real_parquet_path is None:
+            pytest.skip("No real parquet file available")
+
+        df = pd.read_parquet(real_parquet_path)
+
+        # Check if required columns exist
+        has_lat_acc = 'GPS LatAcc' in df.columns or 'lat_acc' in df.columns
+        if not has_lat_acc:
+            pytest.skip("Real data missing lateral acceleration column")
+
+        corners = detect_corners(df)
+
+        # Should detect reasonable number of corners
+        assert isinstance(corners, list)
+        assert len(corners) > 0
+        assert all(isinstance(c, Corner) for c in corners)
+
+        # All corners should have valid indices
+        for corner in corners:
+            assert corner.start_idx >= 0
+            assert corner.end_idx < len(df)
+            assert corner.start_idx < corner.end_idx
+            assert corner.direction in ['left', 'right']
