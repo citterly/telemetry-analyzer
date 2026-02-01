@@ -11,7 +11,7 @@ from pathlib import Path
 
 from src.features.corner_detection import (
     CornerDetector, CornerZone, CornerDetectionResult, detect_corners,
-    calc_curvature
+    calc_curvature, detect_corner_boundaries
 )
 from src.features.corner_analysis import (
     CornerAnalyzer, CornerMetrics, LapCornerAnalysis, CornerComparison,
@@ -218,6 +218,190 @@ class TestCalcCurvature:
         # Both should be close to 1/75 = 0.0133
         assert 0.01 < mean_curv1 < 0.02
         assert 0.01 < mean_curv2 < 0.02
+
+
+class TestDetectCornerBoundaries:
+    """Tests for detect_corner_boundaries function"""
+
+    def test_single_corner_detected(self):
+        """Test detection of a single corner"""
+        # Create lateral G data with one corner
+        lateral_g = np.array([0.1, 0.1, 0.5, 0.8, 0.9, 0.8, 0.5, 0.2, 0.1, 0.1])
+
+        boundaries = detect_corner_boundaries(lateral_g, threshold=0.3)
+
+        # Should detect one corner from index 2 to 6
+        assert len(boundaries) == 1
+        assert boundaries[0][0] == 2
+        assert boundaries[0][1] == 6
+
+    def test_multiple_corners_detected(self):
+        """Test detection of multiple corners"""
+        # Create data with two separate corners (need >5 samples at 10Hz for 0.5s duration)
+        lateral_g = np.array([
+            0.1, 0.1,                           # Straight
+            0.5, 0.8, 0.9, 0.8, 0.5, 0.4,      # First corner (6 samples = 0.6s)
+            0.1, 0.05, 0.05, 0.05, 0.1,        # Straight section
+            -0.6, -0.7, -0.8, -0.7, -0.6, -0.4, # Second corner (6 samples = 0.6s)
+            0.1, 0.1                            # Straight
+        ])
+
+        boundaries = detect_corner_boundaries(lateral_g, threshold=0.3)
+
+        # Should detect two corners
+        assert len(boundaries) == 2
+        assert boundaries[0] == (2, 7)
+        assert boundaries[1] == (13, 18)
+
+    def test_threshold_filtering(self):
+        """Test that threshold properly filters out low lateral G"""
+        # Need >5 samples for 0.5s duration at 10Hz
+        lateral_g = np.array([
+            0.1, 0.2, 0.25, 0.2, 0.1,           # Low G (below threshold)
+            0.8, 0.9, 0.85, 0.8, 0.7, 0.6, 0.5, # High G corner (7 samples = 0.7s)
+            0.1, 0.1
+        ])
+
+        # With threshold 0.3, should only detect the high-G section
+        boundaries = detect_corner_boundaries(lateral_g, threshold=0.3)
+
+        assert len(boundaries) == 1
+        assert boundaries[0][0] == 5
+        assert boundaries[0][1] == 11
+
+    def test_minimum_duration_filter(self):
+        """Test that minimum duration filter eliminates noise spikes"""
+        # Create data at 10 Hz (default)
+        # Corner needs >0.5s = >5 samples to be valid
+        lateral_g = np.array([
+            0.1, 0.1, 0.1,              # Straight
+            0.8, 0.9, 0.8,              # Spike (3 samples = 0.3s, too short)
+            0.1, 0.1, 0.1, 0.1, 0.1,    # Straight
+            0.7, 0.8, 0.9, 0.8, 0.7, 0.6, 0.5, # Real corner (7 samples = 0.7s, valid)
+            0.1, 0.1                     # Straight
+        ])
+
+        boundaries = detect_corner_boundaries(lateral_g, threshold=0.3, min_duration=0.5, sample_rate=10.0)
+
+        # Should only detect the second corner, not the spike
+        assert len(boundaries) == 1
+        assert boundaries[0][0] == 11
+        assert boundaries[0][1] == 17
+
+    def test_with_time_data(self):
+        """Test using actual time data for duration filtering"""
+        # 20 samples over 5 seconds (non-uniform sampling)
+        time_data = np.linspace(0, 5, 20)
+        lateral_g = np.zeros(20)
+
+        # Add a corner from t=1.0s to t=2.5s (1.5s duration, valid)
+        lateral_g[4:10] = 0.8  # indices 4-9
+
+        # Add a spike from t=3.0s to t=3.2s (0.2s duration, too short)
+        lateral_g[12:13] = 0.9  # indices 12
+
+        boundaries = detect_corner_boundaries(
+            lateral_g,
+            threshold=0.3,
+            time_data=time_data,
+            min_duration=0.5
+        )
+
+        # Should only detect the longer corner
+        assert len(boundaries) == 1
+        assert boundaries[0][0] == 4
+        assert boundaries[0][1] == 9
+
+    def test_handles_negative_lateral_g(self):
+        """Test that negative lateral G (opposite direction) is detected"""
+        # Mix of positive and negative lateral G (need >5 samples for 0.5s)
+        lateral_g = np.array([
+            0.1, 0.1,                          # Straight
+            0.6, 0.8, 0.9, 0.8, 0.6, 0.4,     # Right turn (6 samples = 0.6s)
+            0.1, 0.0, 0.0, 0.1,                # Straight
+            -0.5, -0.8, -0.9, -0.8, -0.7, -0.5, -0.4, # Left turn (7 samples = 0.7s)
+            0.1, 0.1
+        ])
+
+        boundaries = detect_corner_boundaries(lateral_g, threshold=0.3)
+
+        # Should detect both corners (absolute value used)
+        assert len(boundaries) == 2
+        assert boundaries[0] == (2, 7)
+        assert boundaries[1] == (12, 18)
+
+    def test_empty_data(self):
+        """Test handling of empty data"""
+        lateral_g = np.array([])
+        boundaries = detect_corner_boundaries(lateral_g, threshold=0.3)
+        assert boundaries == []
+
+    def test_no_corners_detected(self):
+        """Test when no corners exceed threshold"""
+        lateral_g = np.array([0.1, 0.15, 0.2, 0.15, 0.1, 0.05])
+        boundaries = detect_corner_boundaries(lateral_g, threshold=0.3)
+        assert len(boundaries) == 0
+
+    def test_entire_data_is_corner(self):
+        """Test when entire dataset exceeds threshold"""
+        lateral_g = np.array([0.5, 0.6, 0.7, 0.8, 0.7, 0.6, 0.5, 0.6])
+        boundaries = detect_corner_boundaries(lateral_g, threshold=0.3)
+
+        # Should detect one long corner spanning entire dataset
+        assert len(boundaries) == 1
+        assert boundaries[0][0] == 0
+        assert boundaries[0][1] == 7
+
+    def test_corner_at_end_of_data(self):
+        """Test corner that extends to end of data"""
+        lateral_g = np.array([0.1, 0.1, 0.1, 0.5, 0.8, 0.9, 1.0, 1.1])
+        boundaries = detect_corner_boundaries(lateral_g, threshold=0.3)
+
+        assert len(boundaries) == 1
+        assert boundaries[0][0] == 3
+        assert boundaries[0][1] == 7
+
+    def test_different_thresholds(self):
+        """Test that different thresholds produce different results"""
+        # Create longer corner to meet minimum duration requirement
+        # Need at least 6 samples above higher threshold to meet 0.5s duration (0.6s)
+        lateral_g = np.array([
+            0.1, 0.1,                                                    # Straight
+            0.4, 0.5, 0.7, 0.9, 1.0, 1.1, 1.0, 0.9, 0.8, 0.7, 0.5, 0.4, # Corner (12 samples)
+            0.1, 0.1
+        ])
+
+        # Lower threshold detects wider corner (all 12 samples above 0.3)
+        boundaries_low = detect_corner_boundaries(lateral_g, threshold=0.3)
+
+        # Higher threshold detects narrower corner (7 samples above 0.7: indices 4-10 = 0.7s)
+        boundaries_high = detect_corner_boundaries(lateral_g, threshold=0.7)
+
+        assert len(boundaries_low) == 1
+        assert len(boundaries_high) == 1
+
+        # Low threshold corner should be wider
+        low_width = boundaries_low[0][1] - boundaries_low[0][0]
+        high_width = boundaries_high[0][1] - boundaries_high[0][0]
+        assert low_width > high_width
+
+    def test_custom_sample_rate(self):
+        """Test with custom sample rate"""
+        # At 100 Hz, need >50 samples for 0.5s duration
+        lateral_g = np.zeros(200)
+        lateral_g[10:70] = 0.8  # 60 samples = 0.6s at 100 Hz (valid)
+        lateral_g[100:110] = 0.9  # 10 samples = 0.1s at 100 Hz (too short)
+
+        boundaries = detect_corner_boundaries(
+            lateral_g,
+            threshold=0.3,
+            min_duration=0.5,
+            sample_rate=100.0
+        )
+
+        # Should only detect the first corner
+        assert len(boundaries) == 1
+        assert boundaries[0] == (10, 69)
 
 
 class TestCornerZone:

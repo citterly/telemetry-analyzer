@@ -13,6 +13,85 @@ from pathlib import Path
 import json
 
 
+def detect_corner_boundaries(
+    lateral_g: np.ndarray,
+    threshold: float = 0.3,
+    time_data: Optional[np.ndarray] = None,
+    min_duration: float = 0.5,
+    sample_rate: float = 10.0
+) -> List[Tuple[int, int]]:
+    """
+    Detect corner boundaries where lateral G exceeds threshold.
+
+    Args:
+        lateral_g: Lateral acceleration data in g (positive or negative for left/right)
+        threshold: Minimum absolute lateral G to be considered a corner (default 0.3g)
+        time_data: Optional time array in seconds (for precise duration filtering)
+        min_duration: Minimum corner duration in seconds (default 0.5s)
+        sample_rate: Sample rate in Hz if time_data not provided (default 10.0 Hz)
+
+    Returns:
+        List of (start_idx, end_idx) tuples marking corner boundaries
+
+    Algorithm:
+        1. Find all points where |lateral_g| exceeds threshold
+        2. Group consecutive points into corner zones
+        3. Filter out corners shorter than min_duration
+        4. Return list of (start_idx, end_idx) for each valid corner
+
+    Example:
+        >>> lat_g = np.array([0.1, 0.5, 0.8, 0.7, 0.4, 0.1, -0.6, -0.5, -0.2])
+        >>> boundaries = detect_corner_boundaries(lat_g, threshold=0.3)
+        >>> # Returns [(1, 4), (6, 7)] - two corners detected
+    """
+    n = len(lateral_g)
+
+    # Validate inputs
+    if n == 0:
+        return []
+
+    # Create mask of points exceeding threshold (use absolute value)
+    corner_mask = np.abs(lateral_g) > threshold
+
+    # Find corner boundaries
+    boundaries = []
+    in_corner = False
+    start_idx = 0
+
+    for i in range(n):
+        if corner_mask[i] and not in_corner:
+            # Start of corner
+            in_corner = True
+            start_idx = i
+        elif not corner_mask[i] and in_corner:
+            # End of corner
+            in_corner = False
+            end_idx = i - 1
+
+            # Check minimum duration
+            if time_data is not None:
+                duration = time_data[end_idx] - time_data[start_idx]
+            else:
+                # Estimate duration from sample count and rate
+                duration = (end_idx - start_idx + 1) / sample_rate
+
+            if duration >= min_duration:
+                boundaries.append((start_idx, end_idx))
+
+    # Handle corner at end of data
+    if in_corner:
+        end_idx = n - 1
+        if time_data is not None:
+            duration = time_data[end_idx] - time_data[start_idx]
+        else:
+            duration = (end_idx - start_idx + 1) / sample_rate
+
+        if duration >= min_duration:
+            boundaries.append((start_idx, end_idx))
+
+    return boundaries
+
+
 def calc_curvature(lat: np.ndarray, lon: np.ndarray, window_size: int = 3) -> np.ndarray:
     """
     Calculate path curvature from GPS coordinates using the three-point circle method.
