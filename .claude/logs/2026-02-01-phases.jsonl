@@ -1,0 +1,17 @@
+{"timestamp": "2026-02-01T16:57:35.799792Z", "event": "phase_start", "feature_id": "feat-061b", "phase": 3, "phase_name": "Click zone highlights on map"}
+{"timestamp": "2026-02-01T17:00:00.519127Z", "event": "phase_complete", "feature_id": "feat-061b", "phase": 3, "status": "test_pass", "rework_count": 0}
+{"timestamp": "2026-02-01T17:00:00.522815Z", "event": "phase_start", "feature_id": "feat-061b", "phase": 4, "phase_name": "Quadrant reference values from vehicle config"}
+{"timestamp": "2026-02-01T17:14:55.711767Z", "event": "phase_start", "feature_id": "feat-061b", "phase": 4, "phase_name": "Quadrant reference values from vehicle config"}
+{"timestamp": "2026-02-01T17:19:09.705969Z", "event": "phase_complete", "feature_id": "feat-061b", "phase": 4, "status": "test_pass", "rework_count": 0}
+{"timestamp": "2026-02-01T17:19:09.709914Z", "event": "phase_start", "feature_id": "feat-061b", "phase": 5, "phase_name": "Session Overview layout per spec"}
+{"timestamp": "2026-02-01T17:27:58.698836Z", "event": "phase_complete", "feature_id": "feat-061b", "phase": 5, "status": "test_pass", "rework_count": 0}
+{"timestamp": "2026-02-01T17:27:58.702655Z", "event": "phase_start", "feature_id": "feat-061b", "phase": 6, "phase_name": "Quadrant Deep Dive view"}
+{"timestamp": "2026-02-01T17:33:05.170231Z", "event": "phase_complete", "feature_id": "feat-061b", "phase": 6, "status": "test_pass", "rework_count": 0}
+{"timestamp": "2026-02-01T17:33:05.174123Z", "event": "phase_start", "feature_id": "feat-061b", "phase": 7, "phase_name": "Zone Detail view"}
+{"timestamp": "2026-02-01T17:42:56.713782Z", "event": "phase_complete", "feature_id": "feat-061b", "phase": 7, "status": "test_pass", "rework_count": 0}
+{"timestamp": "2026-02-01T17:42:56.717819Z", "event": "phase_start", "feature_id": "feat-061b", "phase": 8, "phase_name": "Comparison mode"}
+{"timestamp": "2026-02-01T17:49:12.712461Z", "event": "phase_complete", "feature_id": "feat-061b", "phase": 8, "status": "test_pass", "rework_count": 0}
+{"timestamp": "2026-02-01T17:49:12.716298Z", "event": "phase_start", "feature_id": "feat-061b", "phase": 9, "phase_name": "Performance validation"}
+{"timestamp": "2026-02-01T17:52:30.470591Z", "event": "phase_complete", "feature_id": "feat-061b", "phase": 9, "status": "test_pass", "rework_count": 0}
+{"timestamp": "2026-02-01T18:35:08.420234Z", "event": "phase_start", "feature_id": "feat-062", "phase": 1, "phase_name": "GPS Curvature Calculation"}
+{"timestamp": "2026-02-01T18:40:00.423747Z", "event": "phase_complete", "feature_id": "feat-062", "phase": 1, "status": "test_pass", "rework_count": 0}

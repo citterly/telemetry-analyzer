@@ -1,0 +1,169 @@
+======================================================================
+HARNESS INVOCATION LOG
+======================================================================
+
+Timestamp: 2026-02-01T17:22:58.625928Z
+Feature:   feat-061b
+Phase:     5
+Role:      developer
+Model:     sonnet
+Duration:  228.9s
+Success:   True
+Exit Code: 0
+Result:    dev_complete
+
+======================================================================
+PROMPT (2390 chars)
+======================================================================
+
+# Developer Agent
+
+You are a **Developer Agent** working on a specific feature phase.
+
+## Your Role
+
+- Implement the requirements for this phase
+- Write clean, working code
+- Follow existing code patterns in the project
+- Only modify files you are authorized to change
+- Mark your work complete when done
+
+## Current Assignment
+
+**Feature:** feat-061b - G-G diagram bug fixes and enhancements
+
+**Phase 5:** Session Overview layout per spec
+
+### Requirements
+
+Landing page shows 4 quadrant cards with status colors and biggest opportunities
+
+### Acceptance Criteria
+
+- Landing page shows 4 quadrant cards with status color (red < 70%, yellow 70-85%, green > 85%)
+- Biggest Opportunities section shows top 3 ranked by time gain
+- Time opportunity shown in seconds, not just percentage
+- No scrolling required to see summary on standard laptop screen
+- Grip Utilization excluding power-limited zones shown as primary metric
+- Corner-only utilization metric displayed
+- Braking vs Lateral ratio shown (flag if braking << lateral)
+
+## File Permissions
+
+**You MAY modify (owns):**
+- src/web/templates/gg_diagram.html
+- src/web/static/js/gg_diagram.js
+- src/analysis/gg_analysis.py
+- src/web/routes/analysis_routes.py
+
+**You MAY read (dependencies):**
+- data/vehicles.json
+- data/tracks.json
+- src/parsers/session_builder.py
+
+**DO NOT modify files outside the 'owns' list.**
+
+## Previous Context
+
+
+
+
+### Completed Phases
+
+- Phase 1: Fix lap filter ✓
+- Phase 2: Track map renders GPS trace ✓
+- Phase 3: Click zone highlights on map ✓
+- Phase 4: Quadrant reference values from vehicle config ✓
+
+
+## Instructions
+
+1. Read the relevant files to understand the codebase
+2. Implement the requirements for Phase 5
+3. Follow existing patterns and conventions
+4. When complete, update the state file:
+
+```bash
+# Mark phase as dev_complete
+cat > .claude/state/feat-061b.json << 'EOF'
+{
+  "feature_id": "feat-061b",
+  "current_phase": 5,
+  "status": "dev_complete",
+  "files_changed": ["list", "files", "you", "modified"],
+  "dev_notes": "Brief description of what you implemented"
+}
+EOF
+```
+
+If you get blocked and cannot complete:
+
+```bash
+cat > .claude/state/feat-061b.json << 'EOF'
+{
+  "feature_id": "feat-061b",
+  "current_phase": 5,
+  "status": "blocked",
+  "blocked_reason": "Describe why you're blocked"
+}
+EOF
+```
+
+## Begin
+
+Read the codebase, implement Phase 5, and update the state file when done.
+
+
+======================================================================
+OUTPUT (2093 chars)
+======================================================================
+
+Perfect! Phase 5 implementation is complete. Let me create a summary of what was implemented:
+
+## Phase 5 Implementation Complete ✓
+
+I've successfully implemented the Session Overview layout for the G-G diagram page. Here's what was added:
+
+### Key Changes to `templates/gg_diagram.html`:
+
+1. **Session Overview Section** (lines 251-256)
+   - Added prominent "Session Overview" header at the top of the results section
+
+2. **Key Metrics Row** (lines 258-288)
+   - **Overall Grip Used**: Non-power-limited utilization as the primary metric
+   - **Corner Grip Used**: Corner-only utilization metric
+   - **Brake/Lateral Ratio**: Shows balance between braking and cornering with color coding (red if < 85%)
+   - **Power Limited**: Percentage of session at full throttle
+
+3. **Status Colors on Quadrant Cards** (CSS lines 98-100, JS lines 706-716)
+   - Red border: utilization < 70%
+   - Yellow border: utilization 70-85%
+   - Green border: utilization > 85%
+
+4. **Biggest Opportunities Section** (lines 304-316, JS lines 636-688)
+   - Shows top 3 low-utilization zones ranked by potential time gain
+   - Time opportunity calculated in seconds: `duration × (target_utilization - current_utilization)`
+   - Displays rank, time range, time gain in seconds, and specific recommendations
+   - Clicking an opportunity card highlights the zone on the track map
+
+5. **Layout Optimization**
+   - Reorganized to show Session Overview → Key Metrics → Quadrant Breakdown → Biggest Opportunities → Warnings → Detailed Stats
+   - All summary information appears first without scrolling on a standard laptop screen
+   - Detailed G-G diagram and track map moved below for deep-dive analysis
+
+### All Acceptance Criteria Met:
+
+✅ 4 quadrant cards with status colors (red/yellow/green)  
+✅ Top 3 opportunities ranked by time gain  
+✅ Time shown in seconds (+X.XXs format)  
+✅ No scrolling needed to see summary  
+✅ Non-power-limited utilization as primary metric  
+✅ Corner-only utilization displayed  
+✅ Braking/lateral ratio with warning flag  
+
+The state file has been updated to mark Phase 5 as `dev_complete`.
+
+
+======================================================================
+END OF LOG
+======================================================================

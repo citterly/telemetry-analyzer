@@ -13,6 +13,121 @@ from pathlib import Path
 import json
 
 
+def calc_curvature(lat: np.ndarray, lon: np.ndarray, window_size: int = 3) -> np.ndarray:
+    """
+    Calculate path curvature from GPS coordinates using the three-point circle method.
+
+    Curvature is the inverse of the turning radius (κ = 1/R), measured in 1/meters.
+    Positive values indicate the path is curving, zero indicates straight sections,
+    and larger values indicate tighter turns.
+
+    Args:
+        lat: GPS latitude array (degrees)
+        lon: GPS longitude array (degrees)
+        window_size: Number of points to use for curvature calculation (must be odd, default=3)
+                    Larger windows smooth the curvature but reduce time resolution.
+
+    Returns:
+        np.ndarray: Curvature values in 1/meters (inverse turning radius)
+                   Returns 0.0 for straight sections, positive values for curves
+
+    Algorithm:
+        For each point, fits a circle through the point and its neighbors within
+        the window. The circumradius of the triangle formed by these points
+        approximates the instantaneous turning radius. Curvature = 1/radius.
+
+    Edge cases:
+        - Points too close together (< 0.1m): returns 0.0 (invalid)
+        - Nearly collinear points (straight): returns 0.0
+        - Array boundaries: uses available points (may have edge effects)
+    """
+    n = len(lat)
+
+    # Validate inputs
+    if n < 3:
+        return np.zeros(n)
+
+    if window_size < 3:
+        window_size = 3
+
+    # Ensure window_size is odd for symmetric neighborhood
+    if window_size % 2 == 0:
+        window_size += 1
+
+    half_window = window_size // 2
+
+    # Initialize curvature array
+    curvature = np.zeros(n)
+
+    # Convert GPS coordinates to local metric coordinates (meters)
+    # Approximate: 1 degree latitude ≈ 111 km
+    # Longitude varies by latitude: 1 degree lon ≈ 111 km * cos(lat)
+    mean_lat = np.mean(lat)
+    lat_m = lat * 111000.0  # meters
+    lon_m = lon * 111000.0 * np.cos(np.radians(mean_lat))  # meters, corrected for latitude
+
+    # Calculate curvature for each point using neighbors within window
+    for i in range(n):
+        # Determine window bounds
+        start_idx = max(0, i - half_window)
+        end_idx = min(n - 1, i + half_window)
+
+        # Need at least 3 points for curvature calculation
+        if end_idx - start_idx < 2:
+            curvature[i] = 0.0
+            continue
+
+        # Use center point and boundary points of window
+        idx_prev = start_idx
+        idx_curr = i
+        idx_next = end_idx
+
+        # Get the three points
+        x1, y1 = lon_m[idx_prev], lat_m[idx_prev]
+        x2, y2 = lon_m[idx_curr], lat_m[idx_curr]
+        x3, y3 = lon_m[idx_next], lat_m[idx_next]
+
+        # Calculate side lengths of triangle
+        a = np.sqrt((x2 - x1)**2 + (y2 - y1)**2)  # distance from prev to curr
+        b = np.sqrt((x3 - x2)**2 + (y3 - y2)**2)  # distance from curr to next
+        c = np.sqrt((x3 - x1)**2 + (y3 - y1)**2)  # distance from prev to next
+
+        # Check if points are too close (invalid GPS data)
+        if a < 0.1 or b < 0.1:
+            curvature[i] = 0.0
+            continue
+
+        # Calculate area of triangle using cross product
+        # Area = 0.5 * |cross product|
+        area = 0.5 * abs((x2 - x1) * (y3 - y1) - (x3 - x1) * (y2 - y1))
+
+        # Check if points are nearly collinear (straight line)
+        # Use adaptive threshold based on triangle size to handle tight turns
+        # For small triangles, use smaller area threshold
+        perimeter = a + b + c
+        # Threshold: area should be at least 0.1% of what an equilateral triangle
+        # with the same perimeter would have
+        equilateral_area = (perimeter ** 2) / (36 * np.sqrt(3)) if perimeter > 0 else 0
+        area_threshold = max(0.001, equilateral_area * 0.001)  # At least 0.001 m²
+
+        if area < area_threshold:  # Nearly collinear (straight)
+            curvature[i] = 0.0
+        else:
+            # Circumradius of triangle: R = (a * b * c) / (4 * Area)
+            # This is the radius of the circle passing through all three points
+            radius = (a * b * c) / (4.0 * area)
+
+            # Curvature = 1 / radius (in 1/meters)
+            # Cap at reasonable maximum (radius >= 1m means curvature <= 1.0)
+            if radius >= 1.0:
+                curvature[i] = 1.0 / radius
+            else:
+                # Extremely tight turn or GPS error - cap curvature
+                curvature[i] = 1.0
+
+    return curvature
+
+
 @dataclass
 class CornerZone:
     """A detected corner zone with entry, apex, and exit points."""

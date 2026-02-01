@@ -933,13 +933,22 @@ async def get_gg_diagram(
         max_braking_g = getattr(vehicle, 'max_braking_g', max_lateral_g * 1.1)
         power_limited_accel_g = getattr(vehicle, 'power_limited_accel_g', 0.4)
 
+        # Parse lap filter
+        lap_filter = None
+        if lap and lap != 'all':
+            try:
+                lap_filter = int(lap)
+            except ValueError:
+                pass
+
         # Run analysis using analyze_from_parquet for full feature support
+        # Pass lap_filter so all stats/zones/quadrants are computed for the filtered lap
         analyzer = GGAnalyzer(
             max_g_reference=max_lateral_g,
             max_braking_g=max_braking_g,
             power_limited_accel_g=power_limited_accel_g
         )
-        result = analyzer.analyze_from_parquet(file_path, session_id=filename)
+        result = analyzer.analyze_from_parquet(file_path, session_id=filename, lap_filter=lap_filter)
 
         # Get arrays for SVG rendering
         df = pd.read_parquet(file_path)
@@ -955,42 +964,40 @@ async def get_gg_diagram(
 
         throttle_data = _find_column(df, ['PedalPos', 'throttle', 'Throttle'])
 
-        # Filter by lap if specified
-        lap_filter = None
-        if lap and lap != 'all':
-            try:
-                lap_filter = int(lap)
-            except ValueError:
-                pass
-
+        # Filter SVG arrays by lap if specified
         if lap_filter is not None and result.lap_numbers:
-            # Filter points to specified lap
-            filtered_points = [p for p in result.points if p.lap_number == lap_filter]
-            if filtered_points:
-                result.points = filtered_points
-                # Recalculate stats for filtered data
-                lat_acc_filtered = np.array([p.lat_acc for p in filtered_points])
-                lon_acc_filtered = np.array([p.lon_acc for p in filtered_points])
-                total_g_filtered = np.sqrt(lat_acc_filtered**2 + lon_acc_filtered**2)
+            # Get lap data for filtering SVG arrays
+            lat_gps = _find_column(df, ['GPS Latitude', 'latitude', 'gps_lat'])
+            lon_gps = _find_column(df, ['GPS Longitude', 'longitude', 'gps_lon'])
 
-                result.stats.max_lateral_g = float(np.max(np.abs(lat_acc_filtered)))
-                result.stats.max_braking_g = float(np.abs(np.min(lon_acc_filtered)))
-                result.stats.max_acceleration_g = float(np.max(lon_acc_filtered))
-                result.stats.max_combined_g = float(np.max(total_g_filtered))
-                result.stats.avg_utilized_g = float(np.mean(total_g_filtered))
-                result.stats.utilization_pct = float(np.mean(total_g_filtered) / result.reference_max_g * 100)
-                result.stats.points_count = len(filtered_points)
-
-                # Also filter arrays for SVG
-                lap_data = np.array([p.lap_number for p in result.points])
-                mask = lap_data == lap_filter
-                if len(mask) == len(lat_acc):
-                    lat_acc = lat_acc[mask]
-                    lon_acc = lon_acc[mask]
-                    if speed_data is not None:
-                        speed_data = speed_data[mask]
-                    if throttle_data is not None:
-                        throttle_data = throttle_data[mask]
+            if lat_gps is not None and lon_gps is not None:
+                try:
+                    from src.analysis.lap_analyzer import LapAnalyzer
+                    time_data = df.index.values
+                    session_data = {
+                        'time': time_data,
+                        'latitude': lat_gps,
+                        'longitude': lon_gps,
+                        'rpm': np.zeros(len(time_data)),
+                        'speed_mph': speed_data if speed_data is not None else np.zeros(len(time_data)),
+                        'speed_ms': (speed_data / 2.237) if speed_data is not None else np.zeros(len(time_data))
+                    }
+                    lap_analyzer = LapAnalyzer(session_data)
+                    laps = lap_analyzer.detect_laps()
+                    if laps:
+                        lap_data_arr = np.zeros(len(time_data))
+                        for l in laps:
+                            lap_data_arr[l.start_index:l.end_index+1] = l.lap_number
+                        lap_mask = lap_data_arr == lap_filter
+                        if np.sum(lap_mask) > 0:
+                            lat_acc = lat_acc[lap_mask]
+                            lon_acc = lon_acc[lap_mask]
+                            if speed_data is not None:
+                                speed_data = speed_data[lap_mask]
+                            if throttle_data is not None:
+                                throttle_data = throttle_data[lap_mask]
+                except Exception:
+                    pass  # Continue without filtering SVG arrays
 
         if format == 'json':
             return result.to_dict()

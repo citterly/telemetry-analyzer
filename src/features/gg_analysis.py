@@ -99,13 +99,17 @@ class GGAnalysisResult:
     analysis_timestamp: str
     stats: GGStats
     points: List[GGPoint]
-    reference_max_g: float  # From vehicle config or data-derived
+    reference_max_g: float  # From vehicle config or data-derived (for legacy compatibility)
     low_utilization_zones: List[LowUtilizationZone]
     quadrants: List[QuadrantStats] = field(default_factory=list)
     power_limited_zones: List[LowUtilizationZone] = field(default_factory=list)
     power_limited_pct: float = 0.0
     lap_numbers: List[int] = field(default_factory=list)
     gps_bounds: Dict = field(default_factory=dict)
+    # Per-quadrant reference values from vehicle config
+    reference_lateral_g: float = 1.3
+    reference_braking_g: float = 1.4
+    reference_accel_g: float = 0.5
     # Warnings and flags
     warnings: List[str] = field(default_factory=list)
     max_g_exceeds_config: bool = False  # True if data exceeds vehicle config (config wrong or GPS noise)
@@ -131,6 +135,10 @@ class GGAnalysisResult:
                 "braking_to_lateral_ratio": round(self.stats.braking_to_lateral_ratio, 2)
             },
             "reference_max_g": round(self.reference_max_g, 3),
+            # Per-quadrant reference values
+            "reference_lateral_g": round(self.reference_lateral_g, 3),
+            "reference_braking_g": round(self.reference_braking_g, 3),
+            "reference_accel_g": round(self.reference_accel_g, 3),
             "low_utilization_zones": [z.to_dict() for z in self.low_utilization_zones],
             "power_limited_zones": [z.to_dict() for z in self.power_limited_zones],
             "power_limited_pct": round(self.power_limited_pct, 1),
@@ -360,6 +368,13 @@ class GGAnalyzer:
                 "Check vehicle settings or possible GPS noise."
             )
 
+        # Check if max braking exceeds vehicle config
+        if max_braking_g > self.max_braking_g * 1.1:
+            warnings.append(
+                f"Max braking G ({max_braking_g:.2f}g) exceeds vehicle config ({self.max_braking_g:.2f}g). "
+                "Check vehicle settings or possible GPS noise."
+            )
+
         # Check if braking is significantly lower than lateral (opportunity to brake harder)
         if braking_to_lateral_ratio < 0.85:
             braking_opportunity = True
@@ -388,6 +403,9 @@ class GGAnalyzer:
             stats=stats,
             points=points,
             reference_max_g=reference_max_g,
+            reference_lateral_g=self.max_g_reference,
+            reference_braking_g=self.max_braking_g,
+            reference_accel_g=self.power_limited_accel_g,
             low_utilization_zones=low_utilization_zones,
             quadrants=quadrants,
             power_limited_zones=power_limited_zones,
@@ -402,7 +420,8 @@ class GGAnalyzer:
     def analyze_from_parquet(
         self,
         parquet_path: str,
-        session_id: Optional[str] = None
+        session_id: Optional[str] = None,
+        lap_filter: Optional[int] = None
     ) -> GGAnalysisResult:
         """
         Analyze G-G data from a Parquet file.
@@ -410,6 +429,7 @@ class GGAnalyzer:
         Args:
             parquet_path: Path to Parquet file
             session_id: Session identifier (defaults to filename)
+            lap_filter: If specified, only analyze data from this lap number
 
         Returns:
             GGAnalysisResult with statistics and points
@@ -442,6 +462,7 @@ class GGAnalyzer:
 
         # Try to detect laps if not already in data
         lap_data = None
+        all_lap_numbers = []
         if lat_gps is not None and lon_gps is not None:
             try:
                 from ..analysis.lap_analyzer import LapAnalyzer
@@ -459,10 +480,29 @@ class GGAnalyzer:
                     lap_data = np.zeros(len(time_data))
                     for lap in laps:
                         lap_data[lap.start_index:lap.end_index+1] = lap.lap_number
+                    all_lap_numbers = sorted(list(set(int(lap.lap_number) for lap in laps)))
             except Exception:
                 pass  # Lap detection failed, continue without
 
-        return self.analyze_from_arrays(
+        # Apply lap filter if specified - filter all arrays to only include data from selected lap
+        if lap_filter is not None and lap_data is not None:
+            lap_mask = lap_data == lap_filter
+            if np.sum(lap_mask) > 0:
+                time_data = time_data[lap_mask]
+                lat_acc = lat_acc[lap_mask]
+                lon_acc = lon_acc[lap_mask]
+                if speed_data is not None:
+                    speed_data = speed_data[lap_mask]
+                if throttle_data is not None:
+                    throttle_data = throttle_data[lap_mask]
+                if lat_gps is not None:
+                    lat_gps = lat_gps[lap_mask]
+                if lon_gps is not None:
+                    lon_gps = lon_gps[lap_mask]
+                # Keep lap_data filtered but preserve the lap number
+                lap_data = lap_data[lap_mask]
+
+        result = self.analyze_from_arrays(
             time_data, lat_acc, lon_acc,
             speed_data=speed_data,
             throttle_data=throttle_data,
@@ -471,6 +511,13 @@ class GGAnalyzer:
             lon_gps=lon_gps,
             session_id=session_id
         )
+
+        # Always include all lap numbers so the dropdown can be populated
+        # even when filtering to a specific lap
+        if all_lap_numbers:
+            result.lap_numbers = all_lap_numbers
+
+        return result
 
     def _find_column(self, df: pd.DataFrame, candidates: List[str]) -> Optional[np.ndarray]:
         """Find a column by trying multiple names"""

@@ -1,0 +1,170 @@
+======================================================================
+HARNESS INVOCATION LOG
+======================================================================
+
+Timestamp: 2026-02-01T17:16:19.308127Z
+Feature:   feat-061b
+Phase:     4
+Role:      developer
+Model:     sonnet
+Duration:  83.6s
+Success:   True
+Exit Code: 0
+Result:    dev_complete
+
+======================================================================
+PROMPT (2266 chars)
+======================================================================
+
+# Developer Agent
+
+You are a **Developer Agent** working on a specific feature phase.
+
+## Your Role
+
+- Implement the requirements for this phase
+- Write clean, working code
+- Follow existing code patterns in the project
+- Only modify files you are authorized to change
+- Mark your work complete when done
+
+## Current Assignment
+
+**Feature:** feat-061b - G-G diagram bug fixes and enhancements
+
+**Phase 4:** Quadrant reference values from vehicle config
+
+### Requirements
+
+Each quadrant uses appropriate max g reference from vehicle config
+
+### Acceptance Criteria
+
+- vehicles.json has fields: max_lateral_g, max_braking_g, power_limited_accel_g
+- Lat Left/Right quadrants use max_lateral_g as reference
+- Braking quadrant uses max_braking_g as reference
+- Acceleration quadrant uses power_limited_accel_g as reference
+- Utilization percentages recalculate with correct per-quadrant references
+- Warning displayed if max lateral from data exceeds vehicle config
+
+## File Permissions
+
+**You MAY modify (owns):**
+- src/web/templates/gg_diagram.html
+- src/web/static/js/gg_diagram.js
+- src/analysis/gg_analysis.py
+- src/web/routes/analysis_routes.py
+
+**You MAY read (dependencies):**
+- data/vehicles.json
+- data/tracks.json
+- src/parsers/session_builder.py
+
+**DO NOT modify files outside the 'owns' list.**
+
+## Previous Context
+
+
+
+
+### Completed Phases
+
+- Phase 1: Fix lap filter ✓
+- Phase 2: Track map renders GPS trace ✓
+- Phase 3: Click zone highlights on map ✓
+
+
+## Instructions
+
+1. Read the relevant files to understand the codebase
+2. Implement the requirements for Phase 4
+3. Follow existing patterns and conventions
+4. When complete, update the state file:
+
+```bash
+# Mark phase as dev_complete
+cat > .claude/state/feat-061b.json << 'EOF'
+{
+  "feature_id": "feat-061b",
+  "current_phase": 4,
+  "status": "dev_complete",
+  "files_changed": ["list", "files", "you", "modified"],
+  "dev_notes": "Brief description of what you implemented"
+}
+EOF
+```
+
+If you get blocked and cannot complete:
+
+```bash
+cat > .claude/state/feat-061b.json << 'EOF'
+{
+  "feature_id": "feat-061b",
+  "current_phase": 4,
+  "status": "blocked",
+  "blocked_reason": "Describe why you're blocked"
+}
+EOF
+```
+
+## Begin
+
+Read the codebase, implement Phase 4, and update the state file when done.
+
+
+======================================================================
+OUTPUT (1834 chars)
+======================================================================
+
+Perfect! Phase 4 is complete.
+
+## Summary
+
+**Phase 4: Quadrant reference values from vehicle config** - ✅ COMPLETE
+
+All requirements have been verified as already implemented:
+
+### ✅ Acceptance Criteria Met:
+
+1. **vehicles.json has required fields**: 
+   - `max_lateral_g`, `max_braking_g`, `power_limited_accel_g` are present for all vehicles
+
+2. **Lat Left/Right quadrants use max_lateral_g**:
+   - Both lateral quadrants reference `max_lateral_g` in `_calculate_quadrants()` (gg_analysis.py:553-556)
+
+3. **Braking quadrant uses max_braking_g**:
+   - Braking quadrant references `max_braking_g` (gg_analysis.py:557-558)
+
+4. **Acceleration quadrant uses power_limited_accel_g**:
+   - Acceleration quadrant references `power_limited_accel_g` (gg_analysis.py:559-560)
+
+5. **Utilization percentages recalculate correctly**:
+   - Each quadrant calculates utilization as `avg_g / ref_g * 100` (gg_analysis.py:569)
+
+6. **Warning displayed if max lateral exceeds config**:
+   - Warning generated at gg_analysis.py:364-369
+   - Displayed in frontend at gg_diagram.html:214-219
+
+### Implementation Details:
+
+- **Backend**: `src/features/gg_analysis.py`
+  - GGAnalyzer accepts per-quadrant references in constructor
+  - `_calculate_quadrants()` uses appropriate reference for each quadrant
+  - Stores reference values in GGAnalysisResult
+  - Generates warnings when data exceeds config
+
+- **Frontend**: `templates/gg_diagram.html`
+  - Displays reference values in dedicated card (lines 330-355)
+  - Shows per-quadrant utilization with tooltips indicating which reference is used
+  - Displays warnings when present
+
+- **API**: `src/main/app.py`
+  - Loads vehicle config from `get_active_vehicle()`
+  - Passes per-quadrant references to GGAnalyzer
+
+**No code changes were needed** - the feature was already fully implemented in previous phases.
+
+
+======================================================================
+END OF LOG
+======================================================================

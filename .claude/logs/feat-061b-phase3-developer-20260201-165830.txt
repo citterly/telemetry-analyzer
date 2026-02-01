@@ -1,0 +1,143 @@
+======================================================================
+HARNESS INVOCATION LOG
+======================================================================
+
+Timestamp: 2026-02-01T16:58:30.336125Z
+Feature:   feat-061b
+Phase:     3
+Role:      developer
+Model:     sonnet
+Duration:  54.5s
+Success:   True
+Exit Code: 0
+Result:    dev_complete
+
+======================================================================
+PROMPT (2026 chars)
+======================================================================
+
+# Developer Agent
+
+You are a **Developer Agent** working on a specific feature phase.
+
+## Your Role
+
+- Implement the requirements for this phase
+- Write clean, working code
+- Follow existing code patterns in the project
+- Only modify files you are authorized to change
+- Mark your work complete when done
+
+## Current Assignment
+
+**Feature:** feat-061b - G-G diagram bug fixes and enhancements
+
+**Phase 3:** Click zone highlights on map
+
+### Requirements
+
+Clicking utilization zone highlights area on track map
+
+### Acceptance Criteria
+
+- Clicking utilization zone in list highlights corresponding area on track map
+- Highlighted zone visually distinct (color, pulse, or border)
+- Clicking different zone moves highlight
+- Clicking same zone toggles highlight off
+
+## File Permissions
+
+**You MAY modify (owns):**
+- src/web/templates/gg_diagram.html
+- src/web/static/js/gg_diagram.js
+- src/analysis/gg_analysis.py
+- src/web/routes/analysis_routes.py
+
+**You MAY read (dependencies):**
+- data/vehicles.json
+- data/tracks.json
+- src/parsers/session_builder.py
+
+**DO NOT modify files outside the 'owns' list.**
+
+## Previous Context
+
+
+
+
+### Completed Phases
+
+- Phase 1: Fix lap filter ✓
+- Phase 2: Track map renders GPS trace ✓
+
+
+## Instructions
+
+1. Read the relevant files to understand the codebase
+2. Implement the requirements for Phase 3
+3. Follow existing patterns and conventions
+4. When complete, update the state file:
+
+```bash
+# Mark phase as dev_complete
+cat > .claude/state/feat-061b.json << 'EOF'
+{
+  "feature_id": "feat-061b",
+  "current_phase": 3,
+  "status": "dev_complete",
+  "files_changed": ["list", "files", "you", "modified"],
+  "dev_notes": "Brief description of what you implemented"
+}
+EOF
+```
+
+If you get blocked and cannot complete:
+
+```bash
+cat > .claude/state/feat-061b.json << 'EOF'
+{
+  "feature_id": "feat-061b",
+  "current_phase": 3,
+  "status": "blocked",
+  "blocked_reason": "Describe why you're blocked"
+}
+EOF
+```
+
+## Begin
+
+Read the codebase, implement Phase 3, and update the state file when done.
+
+
+======================================================================
+OUTPUT (1138 chars)
+======================================================================
+
+Perfect! Phase 3 is now marked as complete. 
+
+## Summary
+
+Phase 3 of feat-061b has been successfully completed. The implementation includes:
+
+### Requirements Met:
+✅ **Clicking utilization zone highlights area on track map** - Both clicking zones in the list and clicking markers on the map trigger the `selectZone()` function
+
+✅ **Highlighted zone visually distinct** - Multiple visual indicators:
+- Map markers: White stroke (3px), pulse animation (fading between 100% and 50% opacity)
+- List items: Enhanced background color (40% opacity), thicker border (5px), glowing box-shadow
+
+✅ **Clicking different zone moves highlight** - Previous selections are cleared before applying new selection
+
+✅ **Clicking same zone toggles highlight off** - State tracking via `selectedZoneInfo` enables toggle behavior
+
+### Implementation Details:
+- **File modified**: `templates/gg_diagram.html`
+- **Key functions**: `selectZone()` (lines 981-1028), marker click handlers (lines 812-824)
+- **CSS classes**: `.zone-marker.selected`, `.low-util-zone.selected`, with animations and visual effects
+
+The feature is ready for testing and user acceptance.
+
+
+======================================================================
+END OF LOG
+======================================================================

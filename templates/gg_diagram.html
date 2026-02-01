@@ -59,7 +59,14 @@
         background: rgba(155, 89, 182, 0.2);
     }
     .low-util-zone.selected {
-        background: rgba(231, 76, 60, 0.3);
+        background: rgba(231, 76, 60, 0.4);
+        border-left-width: 5px;
+        box-shadow: 0 0 8px rgba(231, 76, 60, 0.5);
+    }
+    .low-util-zone.power-limited.selected {
+        background: rgba(155, 89, 182, 0.4);
+        border-left-width: 5px;
+        box-shadow: 0 0 8px rgba(155, 89, 182, 0.5);
     }
 
     .svg-container {
@@ -76,6 +83,13 @@
         padding: 12px;
         text-align: center;
         margin-bottom: 10px;
+        position: relative;
+        cursor: pointer;
+        transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .quadrant-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
     }
     .quadrant-card .q-name { font-weight: bold; margin-bottom: 5px; }
     .quadrant-card .q-value { font-size: 1.5rem; font-weight: bold; line-height: 1; }
@@ -85,6 +99,42 @@
     .quadrant-card.lat_right { background: rgba(52, 152, 219, 0.2); border: 2px solid #3498db; }
     .quadrant-card.braking { background: rgba(243, 156, 18, 0.2); border: 2px solid #f39c12; }
     .quadrant-card.acceleration { background: rgba(46, 204, 113, 0.2); border: 2px solid #2ecc71; }
+
+    /* Status color indicators */
+    .quadrant-card.status-red { border-left: 5px solid #e74c3c; }
+    .quadrant-card.status-yellow { border-left: 5px solid #f39c12; }
+    .quadrant-card.status-green { border-left: 5px solid #2ecc71; }
+
+    /* Opportunity cards */
+    .opportunity-card {
+        background: rgba(231, 76, 60, 0.1);
+        border-left: 4px solid #e74c3c;
+        border-radius: 0 4px 4px 0;
+        padding: 12px;
+        margin-bottom: 10px;
+        cursor: pointer;
+        transition: background 0.2s;
+    }
+    .opportunity-card:hover {
+        background: rgba(231, 76, 60, 0.2);
+    }
+    .opportunity-card .rank {
+        display: inline-block;
+        background: #e74c3c;
+        color: white;
+        width: 30px;
+        height: 30px;
+        line-height: 30px;
+        border-radius: 50%;
+        text-align: center;
+        font-weight: bold;
+        margin-right: 10px;
+    }
+    .opportunity-card .time-gain {
+        font-size: 1.2rem;
+        font-weight: bold;
+        color: #e74c3c;
+    }
 
     /* Mini track map */
     #mini-track-map {
@@ -109,6 +159,11 @@
     .zone-marker.selected {
         stroke: #fff;
         stroke-width: 3;
+        animation: pulse-marker 1s ease-in-out infinite;
+    }
+    @keyframes pulse-marker {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.5; }
     }
     .track-map-controls {
         position: absolute;
@@ -156,6 +211,72 @@
         gap: 10px;
         align-items: center;
     }
+
+    /* Deep Dive View */
+    #deep-dive-view {
+        background: #16213e;
+        border-radius: 8px;
+        padding: 20px;
+        margin-bottom: 20px;
+    }
+    #deep-dive-view .back-button {
+        margin-bottom: 15px;
+    }
+    #deep-dive-track-map {
+        background: #1a1a1a;
+        border-radius: 8px;
+        padding: 10px;
+        min-height: 400px;
+        position: relative;
+        overflow: hidden;
+    }
+    .zone-marker-util {
+        transition: all 0.2s;
+    }
+    .zone-marker-util.worst {
+        stroke: #fff;
+        stroke-width: 4;
+        animation: pulse-worst 1.5s ease-in-out infinite;
+    }
+    @keyframes pulse-worst {
+        0%, 100% { opacity: 1; transform: scale(1); }
+        50% { opacity: 0.6; transform: scale(1.3); }
+    }
+    .ranked-zone-item {
+        background: rgba(45, 45, 45, 0.8);
+        border-left: 4px solid #666;
+        border-radius: 0 4px 4px 0;
+        padding: 12px;
+        margin-bottom: 10px;
+        cursor: pointer;
+        transition: background 0.2s;
+    }
+    .ranked-zone-item:hover {
+        background: rgba(60, 60, 60, 0.9);
+    }
+    .ranked-zone-item.rank-1 { border-left-color: #e74c3c; }
+    .ranked-zone-item.rank-2 { border-left-color: #e67e22; }
+    .ranked-zone-item.rank-3 { border-left-color: #f39c12; }
+    .ranked-zone-item .rank-badge {
+        display: inline-block;
+        background: #e74c3c;
+        color: white;
+        width: 35px;
+        height: 35px;
+        line-height: 35px;
+        border-radius: 50%;
+        text-align: center;
+        font-weight: bold;
+        margin-right: 12px;
+        font-size: 1.1rem;
+    }
+    .ranked-zone-item.rank-2 .rank-badge { background: #e67e22; }
+    .ranked-zone-item.rank-3 .rank-badge { background: #f39c12; }
+    .ranked-zone-item .time-potential {
+        font-size: 1.3rem;
+        font-weight: bold;
+        color: #e74c3c;
+    }
 </style>
 {% endblock %}
 
@@ -199,15 +320,218 @@
 
 <!-- Results -->
 <div id="results-section" style="display: none;">
-    <!-- Warnings Section -->
-    <div class="row mb-3" id="warnings-section" style="display: none;">
-        <div class="col-12">
-            <div class="alert alert-warning mb-0" id="warnings-content"></div>
+    <!-- Zone Detail View (hidden by default) -->
+    <div id="zone-detail-view" style="display: none;">
+        <div class="row">
+            <div class="col-12">
+                <button class="btn btn-outline-secondary back-button" onclick="exitZoneDetail()">
+                    ← Back to Zone List
+                </button>
+                <h3 id="zone-detail-title">Zone Detail</h3>
+            </div>
+        </div>
+
+        <!-- Action Statement Card -->
+        <div class="row mb-3">
+            <div class="col-12">
+                <div class="card" style="background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%); color: white;">
+                    <div class="card-body">
+                        <h5 class="mb-2">💡 Recommended Action</h5>
+                        <p class="mb-0 fs-5" id="zone-action-statement" style="font-weight: 500;">
+                            Loading recommendation...
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Zoomed Map and Mini G-G -->
+        <div class="row mb-3">
+            <div class="col-md-7">
+                <div class="card">
+                    <div class="card-header">
+                        <strong>Zone Location (Zoomed)</strong>
+                        <small class="text-muted ms-2">Focused view of this corner/zone approach</small>
+                    </div>
+                    <div class="card-body" id="zone-detail-track-map" style="min-height: 400px;">
+                        <div class="text-muted text-center" style="padding-top: 80px;">Loading map...</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-5">
+                <div class="card">
+                    <div class="card-header">
+                        <strong>G-G Pattern for This Zone</strong>
+                        <small class="text-muted ms-2">Current lap (red) vs Reference (blue)</small>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="zone-gg-chart" style="max-height: 350px;"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Side-by-side Comparison -->
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <strong>Detailed Comparison</strong>
+                        <small class="text-muted ms-2">Current lap vs Reference lap (best lap)</small>
+                    </div>
+                    <div class="card-body">
+                        <div class="row text-center">
+                            <div class="col-md-3">
+                                <div style="background: rgba(231, 76, 60, 0.1); border-radius: 8px; padding: 15px;">
+                                    <small class="text-muted">Entry Speed</small>
+                                    <div class="d-flex justify-content-around mt-2">
+                                        <div>
+                                            <div id="zone-current-entry-speed" class="fs-4 fw-bold" style="color: #e74c3c;">--</div>
+                                            <small class="text-muted">Current</small>
+                                        </div>
+                                        <div>
+                                            <div id="zone-ref-entry-speed" class="fs-4 fw-bold" style="color: #3498db;">--</div>
+                                            <small class="text-muted">Reference</small>
+                                        </div>
+                                    </div>
+                                    <div id="zone-entry-speed-diff" class="mt-2 fw-bold">--</div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div style="background: rgba(243, 156, 18, 0.1); border-radius: 8px; padding: 15px;">
+                                    <small class="text-muted">Brake Point</small>
+                                    <div class="d-flex justify-content-around mt-2">
+                                        <div>
+                                            <div id="zone-current-brake-point" class="fs-4 fw-bold" style="color: #e74c3c;">--</div>
+                                            <small class="text-muted">Current</small>
+                                        </div>
+                                        <div>
+                                            <div id="zone-ref-brake-point" class="fs-4 fw-bold" style="color: #3498db;">--</div>
+                                            <small class="text-muted">Reference</small>
+                                        </div>
+                                    </div>
+                                    <div id="zone-brake-point-diff" class="mt-2 fw-bold">--</div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div style="background: rgba(52, 152, 219, 0.1); border-radius: 8px; padding: 15px;">
+                                    <small class="text-muted">Peak G-Force</small>
+                                    <div class="d-flex justify-content-around mt-2">
+                                        <div>
+                                            <div id="zone-current-peak-g" class="fs-4 fw-bold" style="color: #e74c3c;">--</div>
+                                            <small class="text-muted">Current</small>
+                                        </div>
+                                        <div>
+                                            <div id="zone-ref-peak-g" class="fs-4 fw-bold" style="color: #3498db;">--</div>
+                                            <small class="text-muted">Reference</small>
+                                        </div>
+                                    </div>
+                                    <div id="zone-peak-g-diff" class="mt-2 fw-bold">--</div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div style="background: rgba(46, 204, 113, 0.1); border-radius: 8px; padding: 15px;">
+                                    <small class="text-muted">Duration</small>
+                                    <div class="d-flex justify-content-around mt-2">
+                                        <div>
+                                            <div id="zone-current-duration" class="fs-4 fw-bold" style="color: #e74c3c;">--</div>
+                                            <small class="text-muted">Current</small>
+                                        </div>
+                                        <div>
+                                            <div id="zone-ref-duration" class="fs-4 fw-bold" style="color: #3498db;">--</div>
+                                            <small class="text-muted">Reference</small>
+                                        </div>
+                                    </div>
+                                    <div id="zone-duration-diff" class="mt-2 fw-bold">--</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
-    <!-- Quadrant Breakdown -->
-    <div class="row mb-4">
+    <!-- Deep Dive View (hidden by default) -->
+    <div id="deep-dive-view" style="display: none;">
+        <div class="row">
+            <div class="col-12">
+                <button class="btn btn-outline-secondary back-button" onclick="exitDeepDive()">
+                    ← Back to Overview
+                </button>
+                <h3 id="deep-dive-title">Quadrant Deep Dive</h3>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col-md-7">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <strong>Track Map - All Zones</strong>
+                        <small class="text-muted">Worst zone highlighted and pulsing</small>
+                    </div>
+                    <div class="card-body" id="deep-dive-track-map">
+                        <div class="text-muted text-center" style="padding-top: 80px;">Loading track map...</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-5">
+                <div class="card">
+                    <div class="card-header">
+                        <strong>Ranked Zones</strong>
+                        <small class="text-muted ms-2">By time opportunity (seconds)</small>
+                    </div>
+                    <div class="card-body" style="max-height: 450px; overflow-y: auto;">
+                        <div id="ranked-zones-list">
+                            <p class="text-muted">Loading zones...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Session Overview - Top Priority -->
+    <div id="overview-section">
+        <div class="row mb-4">
+            <div class="col-12">
+                <h3>Session Overview</h3>
+            </div>
+        </div>
+
+        <!-- Key Metrics Row -->
+        <div class="row mb-3">
+        <div class="col-md-3">
+            <div class="stats-card success" title="Average grip used in corners excluding power-limited zones. Higher = using more available grip.">
+                <div class="stats-value" id="stat-non-pl-util">--</div>
+                <div class="stats-label">Overall Grip Used</div>
+                <div class="stats-help">Excluding power-limited zones</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stats-card success" title="Average grip used in corners (lateral G > 0.3). Higher = using more available grip.">
+                <div class="stats-value" id="stat-corner-util">--</div>
+                <div class="stats-label">Corner Grip Used</div>
+                <div class="stats-help">Avg grip in turns</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stats-card" id="stat-braking-ratio-card" title="Braking G divided by Lateral G. Below 85% suggests you could brake harder.">
+                <div class="stats-value" id="stat-braking-ratio">--</div>
+                <div class="stats-label">Brake/Lateral Ratio</div>
+                <div class="stats-help">Braking vs cornering balance</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stats-card purple" title="Percent of session at full throttle but low acceleration (engine-limited, not tire-limited).">
+                <div class="stats-value" id="stat-power-limited">--</div>
+                <div class="stats-label">Power Limited</div>
+                <div class="stats-help">Time at max engine output</div>
+            </div>
+        </div>
+    </div>
+
+        <!-- Quadrant Breakdown with Status Colors -->
+        <div class="row mb-4">
         <div class="col-12">
             <div class="card">
                 <div class="card-header"><strong>Quadrant Breakdown</strong> <small class="text-muted ms-2">Grip utilization by direction</small></div>
@@ -220,54 +544,61 @@
         </div>
     </div>
 
-    <!-- Stats Row - Below Quadrant Breakdown -->
-    <div class="row mb-4">
-        <div class="col-md-2">
+        <!-- Biggest Opportunities -->
+        <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header"><strong>Biggest Opportunities</strong> <small class="text-muted ms-2">Top 3 zones ranked by potential time gain</small></div>
+                <div class="card-body">
+                    <div id="biggest-opportunities">
+                        <p class="text-muted">Analyzing zones...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+        <!-- Warnings Section -->
+        <div class="row mb-3" id="warnings-section" style="display: none;">
+        <div class="col-12">
+            <div class="alert alert-warning mb-0" id="warnings-content"></div>
+        </div>
+    </div>
+
+        <!-- Detailed Stats Row -->
+        <div class="row mb-4">
+        <div class="col-md-3">
             <div class="stats-card" title="Highest lateral (sideways) g-force recorded. Shows cornering grip limit.">
                 <div class="stats-value" id="stat-max-lat">--</div>
                 <div class="stats-label">Max Lateral G</div>
                 <div class="stats-help">Peak cornering force</div>
             </div>
         </div>
-        <div class="col-md-2">
+        <div class="col-md-3">
             <div class="stats-card warning" title="Highest deceleration g-force. Shows braking capability.">
                 <div class="stats-value" id="stat-max-brake">--</div>
                 <div class="stats-label">Max Braking G</div>
                 <div class="stats-help">Peak braking force</div>
             </div>
         </div>
-        <div class="col-md-2">
+        <div class="col-md-3">
             <div class="stats-card success" title="Highest acceleration g-force. Limited by power and traction.">
                 <div class="stats-value" id="stat-max-accel">--</div>
                 <div class="stats-label">Max Accel G</div>
                 <div class="stats-help">Peak acceleration</div>
             </div>
         </div>
-        <div class="col-md-2">
-            <div class="stats-card" id="stat-braking-ratio-card" title="Braking G divided by Lateral G. Below 85% suggests you could brake harder.">
-                <div class="stats-value" id="stat-braking-ratio">--</div>
-                <div class="stats-label">Brake/Lateral Ratio</div>
-                <div class="stats-help">Braking vs cornering balance</div>
-            </div>
-        </div>
-        <div class="col-md-2">
-            <div class="stats-card success" title="Average grip used in corners (lateral G > 0.3). Higher = using more available grip.">
-                <div class="stats-value" id="stat-corner-util">--</div>
-                <div class="stats-label">Corner Grip Used</div>
-                <div class="stats-help">Avg grip in turns</div>
-            </div>
-        </div>
-        <div class="col-md-2">
-            <div class="stats-card purple" title="Percent of session at full throttle but low acceleration (engine-limited, not tire-limited).">
-                <div class="stats-value" id="stat-power-limited">--</div>
-                <div class="stats-label">Power Limited</div>
-                <div class="stats-help">Time at max engine output</div>
+        <div class="col-md-3">
+            <div class="stats-card success" title="Highest combined g-force measured during session.">
+                <div class="stats-value" id="stat-max-combined">--</div>
+                <div class="stats-label">Max Combined G</div>
+                <div class="stats-help">Peak total force</div>
             </div>
         </div>
     </div>
 
-    <!-- Main Content -->
-    <div class="row">
+        <!-- Main Content -->
+        <div class="row">
         <!-- G-G Diagram -->
         <div class="col-md-6">
             <div class="card">
@@ -297,10 +628,21 @@
                         <div class="text-muted">Loading diagram...</div>
                     </div>
                 </div>
-                <!-- Compare Laps - inside the G-G Diagram card -->
+                <!-- Compare Mode - inside the G-G Diagram card -->
                 <div class="card-footer">
-                    <div class="d-flex align-items-center justify-content-between">
-                        <span class="small text-muted">Compare Laps:</span>
+                    <div class="mb-2">
+                        <div class="btn-group btn-group-sm w-100" role="group">
+                            <input type="radio" class="btn-check" name="compare-mode" id="compare-mode-lap" autocomplete="off" checked onchange="toggleCompareMode('lap')">
+                            <label class="btn btn-outline-secondary" for="compare-mode-lap">Compare Laps</label>
+
+                            <input type="radio" class="btn-check" name="compare-mode" id="compare-mode-session" autocomplete="off" onchange="toggleCompareMode('session')">
+                            <label class="btn btn-outline-secondary" for="compare-mode-session">Compare Sessions</label>
+                        </div>
+                    </div>
+
+                    <!-- Lap Comparison Controls -->
+                    <div id="lap-compare-controls" class="d-flex align-items-center justify-content-between">
+                        <span class="small text-muted">This Session:</span>
                         <div class="d-flex align-items-center gap-2">
                             <select class="form-select form-select-sm" id="compare-lap-a" disabled style="width: 90px;">
                                 <option value="">Lap A</option>
@@ -312,19 +654,46 @@
                             <button class="btn btn-sm btn-outline-primary" onclick="compareLaps()" id="btn-compare" disabled>Compare</button>
                         </div>
                     </div>
+
+                    <!-- Session Comparison Controls -->
+                    <div id="session-compare-controls" style="display: none;">
+                        <div class="d-flex align-items-center justify-content-between mb-2">
+                            <span class="small text-muted">This Session vs:</span>
+                        </div>
+                        <div class="d-flex align-items-center gap-2">
+                            <select class="form-select form-select-sm" id="compare-session-b" disabled>
+                                <option value="">Select session...</option>
+                            </select>
+                            <button class="btn btn-sm btn-outline-primary" onclick="compareSessions()" id="btn-compare-session" disabled>Compare</button>
+                        </div>
+                    </div>
                 </div>
             </div>
             <div class="card mt-3">
-                <div class="card-header"><strong>Reference Circles</strong></div>
+                <div class="card-header"><strong>Reference Values (Vehicle Config)</strong></div>
                 <div class="card-body">
-                    <div class="d-flex align-items-center mb-2">
-                        <span style="width: 20px; height: 20px; border: 2px solid #e74c3c; border-radius: 50%; margin-right: 10px;"></span>
-                        <span>Max G (Vehicle Config): <strong id="ref-max-g">1.30g</strong></span>
+                    <div class="row mb-2">
+                        <div class="col-6">
+                            <small class="text-muted">Lateral (Cornering):</small><br>
+                            <strong id="ref-lateral-g">1.30g</strong>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted">Braking:</small><br>
+                            <strong id="ref-braking-g">1.40g</strong>
+                        </div>
                     </div>
-                    <div class="d-flex align-items-center">
-                        <span style="width: 20px; height: 20px; border: 2px solid #f1c40f; border-radius: 50%; margin-right: 10px;"></span>
-                        <span>95th Percentile: <strong id="ref-data-g">--</strong></span>
+                    <div class="row">
+                        <div class="col-6">
+                            <small class="text-muted">Acceleration:</small><br>
+                            <strong id="ref-accel-g">0.50g</strong>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted">Data 95th %ile:</small><br>
+                            <strong id="ref-data-g">--</strong>
+                        </div>
                     </div>
+                    <hr class="my-2">
+                    <small class="text-muted">Each quadrant uses its appropriate reference value for utilization calculation.</small>
                 </div>
             </div>
         </div>
@@ -383,8 +752,9 @@
                 <div id="zone-details-content"></div>
             </div>
         </div>
-    </div>
-</div>
+        </div> <!-- End Main Content Row -->
+    </div> <!-- End Overview Section -->
+</div> <!-- End Results Section -->
 
 {% endblock %}
 
@@ -392,7 +762,6 @@
 <script>
     let currentData = null;
     let ggChart = null;
-    let selectedZone = null;
     let allPoints = [];
 
     document.addEventListener('DOMContentLoaded', loadFileList);
@@ -436,12 +805,16 @@
             updateStats(currentData.stats);
             updateWarnings(currentData);
             updateQuadrants(currentData.quadrants);
+            updateBiggestOpportunities(currentData.low_utilization_zones);
             updateLowUtilZones(currentData.low_utilization_zones);
             updatePowerLimitedZones(currentData.power_limited_zones, currentData.power_limited_pct);
             populateLapFilters(currentData.lap_numbers);
             renderMiniTrackMap();
 
-            document.getElementById('ref-max-g').textContent = currentData.reference_max_g.toFixed(2) + 'g';
+            // Update reference values
+            document.getElementById('ref-lateral-g').textContent = (currentData.reference_lateral_g || currentData.reference_max_g).toFixed(2) + 'g';
+            document.getElementById('ref-braking-g').textContent = (currentData.reference_braking_g || currentData.reference_max_g * 1.1).toFixed(2) + 'g';
+            document.getElementById('ref-accel-g').textContent = (currentData.reference_accel_g || 0.5).toFixed(2) + 'g';
             document.getElementById('ref-data-g').textContent = currentData.stats.data_derived_max_g.toFixed(2) + 'g';
 
             // Load SVG
@@ -472,6 +845,15 @@
         document.getElementById('stat-max-lat').textContent = stats.max_lateral_g.toFixed(2) + 'g';
         document.getElementById('stat-max-brake').textContent = stats.max_braking_g.toFixed(2) + 'g';
         document.getElementById('stat-max-accel').textContent = stats.max_acceleration_g.toFixed(2) + 'g';
+        document.getElementById('stat-max-combined').textContent = stats.max_combined_g.toFixed(2) + 'g';
+
+        // Primary metric: non-power-limited utilization
+        const nonPlUtil = stats.non_power_limited_utilization_pct || stats.utilization_pct;
+        document.getElementById('stat-non-pl-util').textContent = nonPlUtil.toFixed(0) + '%';
+
+        // Corner grip utilization
+        const cornerUtil = stats.corner_utilization_pct || stats.utilization_pct;
+        document.getElementById('stat-corner-util').textContent = cornerUtil.toFixed(0) + '%';
 
         // Braking ratio with color coding
         const brakingRatio = stats.braking_to_lateral_ratio || (stats.max_braking_g / stats.max_lateral_g);
@@ -482,10 +864,6 @@
         } else {
             ratioCard.style.background = 'linear-gradient(135deg, #4a90e2 0%, #6c5ce7 100%)';
         }
-
-        // Corner grip utilization (more meaningful than overall)
-        const cornerUtil = stats.corner_utilization_pct || stats.utilization_pct;
-        document.getElementById('stat-corner-util').textContent = cornerUtil.toFixed(0) + '%';
     }
 
     function updateWarnings(data) {
@@ -505,6 +883,103 @@
         }
     }
 
+    function updateBiggestOpportunities(zones) {
+        const container = document.getElementById('biggest-opportunities');
+
+        if (!zones || zones.length === 0) {
+            container.innerHTML = '<p class="text-success">No low utilization zones found - excellent grip usage!</p>';
+            return;
+        }
+
+        // Calculate time opportunity in seconds for each zone
+        // Estimate: If zone is at 60% utilization instead of 90%, the driver is going slower
+        // Time gain = duration * (1 - current_utilization / target_utilization)
+        const zonesWithTime = zones.map((zone, idx) => {
+            const targetUtilization = 90; // Target 90% utilization
+            const currentUtilization = zone.utilization_pct;
+            const utilizationGap = Math.max(0, targetUtilization - currentUtilization) / 100;
+
+            // Time opportunity: duration * utilization gap
+            // This is a conservative estimate - assumes linear relationship
+            const timeGainSeconds = zone.duration * utilizationGap;
+
+            return {
+                ...zone,
+                timeGainSeconds,
+                originalIndex: idx
+            };
+        });
+
+        // Sort by time gain (descending)
+        zonesWithTime.sort((a, b) => b.timeGainSeconds - a.timeGainSeconds);
+
+        // Take top 3
+        const top3 = zonesWithTime.slice(0, 3);
+
+        let html = '';
+        for (let i = 0; i < top3.length; i++) {
+            const zone = top3[i];
+            html += `
+                <div class="opportunity-card" onclick="openZoneDetailFromOverview(${zone.originalIndex})">
+                    <span class="rank">${i + 1}</span>
+                    <strong>Time ${zone.start_time.toFixed(1)}s - ${zone.end_time.toFixed(1)}s</strong>
+                    <span class="float-end time-gain">+${zone.timeGainSeconds.toFixed(2)}s</span>
+                    <br>
+                    <small>
+                        Current: ${zone.utilization_pct.toFixed(0)}% utilization |
+                        Duration: ${zone.duration.toFixed(1)}s |
+                        Avg G: ${zone.avg_total_g.toFixed(2)}g
+                    </small>
+                    <br>
+                    <small class="text-muted">${zone.recommendation}</small>
+                    <br>
+                    <small style="color: #4a90e2;">👆 Click for detailed analysis</small>
+                </div>
+            `;
+        }
+
+        container.innerHTML = html;
+    }
+
+    function openZoneDetailFromOverview(zoneIndex) {
+        // When clicking from overview, we need to determine which quadrant this zone belongs to
+        // For now, we'll use a default quadrant or determine from zone data
+        // This provides the two-click path: Overview -> Zone Detail
+
+        if (!currentData || !currentData.low_utilization_zones) return;
+
+        const zone = currentData.low_utilization_zones[zoneIndex];
+        if (!zone) return;
+
+        // Determine quadrant based on zone characteristics
+        let quadrantName = 'lat_left'; // Default
+        if (Math.abs(zone.avg_lat_g) > 0.3) {
+            quadrantName = zone.avg_lat_g > 0 ? 'lat_right' : 'lat_left';
+        } else if (zone.avg_lon_g < -0.3) {
+            quadrantName = 'braking';
+        } else if (zone.avg_lon_g > 0.3) {
+            quadrantName = 'acceleration';
+        }
+
+        // Set the quadrant context and open deep dive, then immediately open zone detail
+        currentDeepDiveQuadrant = quadrantName;
+
+        // Get zones for this quadrant
+        const zones = getZonesForQuadrant(quadrantName);
+
+        // Find the zone index in the ranked list
+        const rankedIndex = zones.findIndex(z =>
+            z.start_time === zone.start_time && z.end_time === zone.end_time
+        );
+
+        if (rankedIndex >= 0) {
+            // Go straight to zone detail view
+            document.getElementById('overview-section').style.display = 'none';
+            document.getElementById('deep-dive-view').style.display = 'none';
+            openZoneDetail(rankedIndex);
+        }
+    }
+
     function updateQuadrants(quadrants) {
         const container = document.getElementById('quadrant-cards');
         if (!quadrants || quadrants.length === 0) {
@@ -512,14 +987,40 @@
             return;
         }
 
+        // Get reference values for tooltips
+        const refLat = currentData?.reference_lateral_g || currentData?.reference_max_g || 1.3;
+        const refBrake = currentData?.reference_braking_g || (currentData?.reference_max_g * 1.1) || 1.4;
+        const refAccel = currentData?.reference_accel_g || 0.5;
+
+        // Map quadrant names to their reference values
+        const refMap = {
+            'lat_left': { ref: refLat, label: 'Lateral' },
+            'lat_right': { ref: refLat, label: 'Lateral' },
+            'braking': { ref: refBrake, label: 'Braking' },
+            'acceleration': { ref: refAccel, label: 'Accel' }
+        };
+
         let html = '';
         for (const q of quadrants) {
+            const refInfo = refMap[q.name] || { ref: refLat, label: 'Ref' };
+            const tooltip = `Using ${refInfo.label} reference: ${refInfo.ref.toFixed(2)}g`;
+
+            // Determine status color based on utilization
+            let statusClass = '';
+            if (q.utilization_pct < 70) {
+                statusClass = 'status-red';
+            } else if (q.utilization_pct < 85) {
+                statusClass = 'status-yellow';
+            } else {
+                statusClass = 'status-green';
+            }
+
             html += `
                 <div class="col-md-3">
-                    <div class="quadrant-card ${q.name}">
+                    <div class="quadrant-card ${q.name} ${statusClass}" title="${tooltip}" onclick="openQuadrantDeepDive('${q.name}', '${q.display_name}')">
                         <div class="q-name">${q.display_name}</div>
                         <div class="q-value">${q.utilization_pct.toFixed(0)}%</div>
-                        <div class="q-util-label">grip used</div>
+                        <div class="q-util-label">grip used (of ${refInfo.ref.toFixed(2)}g)</div>
                         <div class="q-label">
                             Max: ${q.max_g.toFixed(2)}g | Avg: ${q.avg_g.toFixed(2)}g<br>
                             ${q.time_spent_pct.toFixed(0)}% of session time
@@ -649,6 +1150,10 @@
 
     function renderMiniTrackMap() {
         const container = document.getElementById('mini-track-map');
+
+        // Clear any existing selection when map is re-rendered
+        selectedZoneInfo = null;
+        document.getElementById('zone-details').style.display = 'none';
 
         // Preserve controls
         const controls = container.querySelector('.track-map-controls');
@@ -798,9 +1303,12 @@
             marker.addEventListener('click', (e) => {
                 e.stopPropagation();
                 const idx = parseInt(marker.dataset.idx);
-                const isLowGrip = idx < (currentData.low_utilization_zones || []).length;
+                // Account for filtered zones
+                const showLowGrip = document.getElementById('filter-low-grip')?.checked ?? true;
+                const lowGripCount = showLowGrip ? (currentData.low_utilization_zones || []).length : 0;
+                const isLowGrip = idx < lowGripCount;
                 const zoneType = isLowGrip ? 'low_grip' : 'power_limited';
-                const zoneIdx = isLowGrip ? idx : idx - (currentData.low_utilization_zones || []).length;
+                const zoneIdx = isLowGrip ? idx : idx - lowGripCount;
                 selectZone(zoneIdx, zoneType);
             });
         });
@@ -957,28 +1465,55 @@
         }
     }
 
+    // Track currently selected zone for toggle behavior
+    let selectedZoneInfo = null;
+
     function selectZone(idx, zoneType) {
+        // Check if clicking the same zone (toggle off)
+        if (selectedZoneInfo && selectedZoneInfo.idx === idx && selectedZoneInfo.zoneType === zoneType) {
+            // Clear selection and hide details
+            document.querySelectorAll('.low-util-zone.selected, .zone-marker.selected').forEach(el => {
+                el.classList.remove('selected');
+            });
+            document.getElementById('zone-details').style.display = 'none';
+            selectedZoneInfo = null;
+            return;
+        }
+
         // Clear previous selection
         document.querySelectorAll('.low-util-zone.selected, .zone-marker.selected').forEach(el => {
             el.classList.remove('selected');
         });
 
-        // Select new zone
+        // Select new zone in list
         const zoneEl = document.querySelector(`.low-util-zone[data-zone-type="${zoneType}"][data-zone-idx="${idx}"]`);
         if (zoneEl) {
             zoneEl.classList.add('selected');
             zoneEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         }
 
-        // Select on map
-        const zones = zoneType === 'low_grip' ? currentData.low_utilization_zones : currentData.power_limited_zones;
-        const absoluteIdx = zoneType === 'low_grip' ? idx : idx + (currentData.low_utilization_zones || []).length;
+        // Select on map - calculate absolute index based on visible zones
+        const showLowGrip = document.getElementById('filter-low-grip')?.checked ?? true;
+        const showPowerLimited = document.getElementById('filter-power-limited')?.checked ?? true;
+        const lowGripCount = showLowGrip ? (currentData.low_utilization_zones || []).length : 0;
+
+        let absoluteIdx;
+        if (zoneType === 'low_grip') {
+            absoluteIdx = idx;
+        } else {
+            absoluteIdx = lowGripCount + idx;
+        }
+
         const markerEl = document.querySelector(`.zone-marker[data-idx="${absoluteIdx}"]`);
         if (markerEl) {
             markerEl.classList.add('selected');
         }
 
+        // Store selection info for toggle
+        selectedZoneInfo = { idx, zoneType };
+
         // Show zone details
+        const zones = zoneType === 'low_grip' ? currentData.low_utilization_zones : currentData.power_limited_zones;
         showZoneDetails(zones[idx]);
     }
 
@@ -1105,6 +1640,7 @@
                     // Update all data for filtered lap
                     updateStats(data.stats);
                     updateQuadrants(data.quadrants);
+                    updateBiggestOpportunities(data.low_utilization_zones);
                     updateLowUtilZones(data.low_utilization_zones);
                     updatePowerLimitedZones(data.power_limited_zones, data.power_limited_pct);
 
@@ -1291,6 +1827,799 @@
             </table>
         `;
         details.style.display = 'block';
+    }
+
+    // ============================================================
+    // Session Comparison Functionality
+    // ============================================================
+
+    function toggleCompareMode(mode) {
+        const lapControls = document.getElementById('lap-compare-controls');
+        const sessionControls = document.getElementById('session-compare-controls');
+
+        if (mode === 'lap') {
+            lapControls.style.display = 'flex';
+            sessionControls.style.display = 'none';
+        } else {
+            lapControls.style.display = 'none';
+            sessionControls.style.display = 'block';
+            // Populate session list when switching to session mode
+            populateSessionList();
+        }
+    }
+
+    async function populateSessionList() {
+        const currentFile = document.getElementById('file-select').value;
+        const sessionSelect = document.getElementById('compare-session-b');
+
+        try {
+            const response = await fetch('/api/parquet/list');
+            const data = await response.json();
+
+            sessionSelect.innerHTML = '<option value="">Select session...</option>';
+
+            for (const file of data.parquet_files) {
+                if (!file.error && file.path !== currentFile) {
+                    const option = document.createElement('option');
+                    option.value = file.path;
+                    option.textContent = `${file.filename} (${file.rows.toLocaleString()} rows)`;
+                    sessionSelect.appendChild(option);
+                }
+            }
+
+            sessionSelect.disabled = false;
+            document.getElementById('btn-compare-session').disabled = false;
+        } catch (error) {
+            console.error('Failed to load session list:', error);
+        }
+    }
+
+    async function compareSessions() {
+        const sessionA = document.getElementById('file-select').value;
+        const sessionB = document.getElementById('compare-session-b').value;
+
+        if (!sessionA) {
+            alert('Please select the first session');
+            return;
+        }
+
+        if (!sessionB) {
+            alert('Please select a session to compare with');
+            return;
+        }
+
+        if (sessionA === sessionB) {
+            alert('Please select different sessions');
+            return;
+        }
+
+        try {
+            // Fetch data for both sessions
+            const [responseA, responseB] = await Promise.all([
+                fetch(`/api/gg-diagram/${encodeURIComponent(sessionA)}?format=json`),
+                fetch(`/api/gg-diagram/${encodeURIComponent(sessionB)}?format=json`)
+            ]);
+
+            if (!responseA.ok || !responseB.ok) {
+                throw new Error('Failed to fetch session data');
+            }
+
+            const dataA = await responseA.json();
+            const dataB = await responseB.json();
+
+            // Switch to Chart.js view for comparison
+            toggleView('chart');
+
+            // Render comparison chart
+            const sessionAName = sessionA.split('/').pop().replace('.parquet', '');
+            const sessionBName = sessionB.split('/').pop().replace('.parquet', '');
+            renderComparisonChart(dataA, dataB, sessionAName, sessionBName);
+
+            // Show enhanced comparison stats with quadrant breakdown
+            showSessionComparisonStats(dataA, dataB, sessionAName, sessionBName);
+
+        } catch (error) {
+            alert('Failed to compare sessions: ' + error.message);
+        }
+    }
+
+    function showSessionComparisonStats(dataA, dataB, nameA, nameB) {
+        const details = document.getElementById('zone-details');
+        const content = document.getElementById('zone-details-content');
+
+        const diff = (a, b) => {
+            const d = a - b;
+            const sign = d >= 0 ? '+' : '';
+            return `${sign}${d.toFixed(2)}`;
+        };
+
+        const pctDiff = (a, b) => {
+            const d = a - b;
+            const sign = d >= 0 ? '+' : '';
+            return `${sign}${d.toFixed(0)}%`;
+        };
+
+        const getStatusClass = (val) => {
+            if (val > 0) return 'text-success';
+            if (val < 0) return 'text-danger';
+            return 'text-muted';
+        };
+
+        const quadrantsA = dataA.quadrants || [];
+        const quadrantsB = dataB.quadrants || [];
+
+        // Create quadrant comparison map
+        const quadrantMap = {};
+        quadrantsA.forEach(q => { quadrantMap[q.name] = { a: q, b: null }; });
+        quadrantsB.forEach(q => {
+            if (quadrantMap[q.name]) {
+                quadrantMap[q.name].b = q;
+            } else {
+                quadrantMap[q.name] = { a: null, b: q };
+            }
+        });
+
+        let quadrantHTML = '';
+        for (const [qName, qData] of Object.entries(quadrantMap)) {
+            if (qData.a && qData.b) {
+                const utilDiff = qData.a.utilization_pct - qData.b.utilization_pct;
+                const utilClass = getStatusClass(utilDiff);
+                const arrow = utilDiff > 0 ? '↑' : utilDiff < 0 ? '↓' : '→';
+
+                quadrantHTML += `
+                    <tr>
+                        <td>${qData.a.display_name}</td>
+                        <td>${qData.a.utilization_pct.toFixed(0)}%</td>
+                        <td>${qData.b.utilization_pct.toFixed(0)}%</td>
+                        <td class="${utilClass}">${arrow} ${pctDiff(qData.a.utilization_pct, qData.b.utilization_pct)}</td>
+                    </tr>
+                `;
+            }
+        }
+
+        const statsA = dataA.stats;
+        const statsB = dataB.stats;
+
+        content.innerHTML = `
+            <h5>Session Comparison: ${nameA} vs ${nameB}</h5>
+
+            <h6 class="mt-4 mb-3">Overall Performance</h6>
+            <table class="table table-sm table-dark mb-0">
+                <thead>
+                    <tr>
+                        <th>Metric</th>
+                        <th style="color: #3498db;">${nameA}</th>
+                        <th style="color: #e74c3c;">${nameB}</th>
+                        <th>Diff</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Max Lateral G</td>
+                        <td>${statsA.max_lateral_g.toFixed(2)}g</td>
+                        <td>${statsB.max_lateral_g.toFixed(2)}g</td>
+                        <td class="${getStatusClass(statsA.max_lateral_g - statsB.max_lateral_g)}">${diff(statsA.max_lateral_g, statsB.max_lateral_g)}g</td>
+                    </tr>
+                    <tr>
+                        <td>Max Braking G</td>
+                        <td>${statsA.max_braking_g.toFixed(2)}g</td>
+                        <td>${statsB.max_braking_g.toFixed(2)}g</td>
+                        <td class="${getStatusClass(statsA.max_braking_g - statsB.max_braking_g)}">${diff(statsA.max_braking_g, statsB.max_braking_g)}g</td>
+                    </tr>
+                    <tr>
+                        <td>Avg Utilized G</td>
+                        <td>${statsA.avg_utilized_g.toFixed(2)}g</td>
+                        <td>${statsB.avg_utilized_g.toFixed(2)}g</td>
+                        <td class="${getStatusClass(statsA.avg_utilized_g - statsB.avg_utilized_g)}">${diff(statsA.avg_utilized_g, statsB.avg_utilized_g)}g</td>
+                    </tr>
+                    <tr>
+                        <td>Corner Utilization</td>
+                        <td>${(statsA.corner_utilization_pct || statsA.utilization_pct).toFixed(0)}%</td>
+                        <td>${(statsB.corner_utilization_pct || statsB.utilization_pct).toFixed(0)}%</td>
+                        <td class="${getStatusClass((statsA.corner_utilization_pct || statsA.utilization_pct) - (statsB.corner_utilization_pct || statsB.utilization_pct))}">${pctDiff(statsA.corner_utilization_pct || statsA.utilization_pct, statsB.corner_utilization_pct || statsB.utilization_pct)}</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h6 class="mt-4 mb-3">Quadrant Breakdown</h6>
+            <table class="table table-sm table-dark mb-0">
+                <thead>
+                    <tr>
+                        <th>Quadrant</th>
+                        <th style="color: #3498db;">${nameA}</th>
+                        <th style="color: #e74c3c;">${nameB}</th>
+                        <th>Change</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${quadrantHTML}
+                </tbody>
+            </table>
+
+            <div class="mt-3 p-2 bg-dark rounded">
+                <small class="text-muted">
+                    <strong>Analysis:</strong> Green (↑) indicates improved utilization in ${nameA},
+                    Red (↓) indicates decreased utilization. Use this to identify which areas of
+                    the track improved or degraded between sessions.
+                </small>
+            </div>
+        `;
+        details.style.display = 'block';
+    }
+
+    // ============================================================
+    // Deep Dive Functionality
+    // ============================================================
+
+    let currentDeepDiveQuadrant = null;
+
+    function openQuadrantDeepDive(quadrantName, displayName) {
+        if (!currentData) return;
+
+        currentDeepDiveQuadrant = quadrantName;
+
+        // Hide overview, show deep dive
+        document.getElementById('overview-section').style.display = 'none';
+        document.getElementById('deep-dive-view').style.display = 'block';
+        document.getElementById('deep-dive-title').textContent = `${displayName} - Deep Dive`;
+
+        // Get zones for this quadrant type
+        const zones = getZonesForQuadrant(quadrantName);
+
+        // Render deep dive track map
+        renderDeepDiveTrackMap(zones, displayName);
+
+        // Render ranked zones list
+        renderRankedZonesList(zones, displayName);
+
+        // Scroll to top
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function exitDeepDive() {
+        currentDeepDiveQuadrant = null;
+        document.getElementById('deep-dive-view').style.display = 'none';
+        document.getElementById('overview-section').style.display = 'block';
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function getZonesForQuadrant(quadrantName) {
+        // For this phase, we'll use low_utilization_zones as proxy
+        // In future, could filter zones by quadrant based on lat/lon acceleration
+        // For now, return all low utilization zones
+        const zones = currentData.low_utilization_zones || [];
+
+        // Add time opportunity calculation
+        return zones.map((zone, idx) => {
+            const targetUtilization = 90;
+            const currentUtilization = zone.utilization_pct;
+            const utilizationGap = Math.max(0, targetUtilization - currentUtilization) / 100;
+            const timeGainSeconds = zone.duration * utilizationGap;
+
+            return {
+                ...zone,
+                timeGainSeconds,
+                originalIndex: idx
+            };
+        }).sort((a, b) => b.timeGainSeconds - a.timeGainSeconds);
+    }
+
+    function renderDeepDiveTrackMap(zones, quadrantName) {
+        const container = document.getElementById('deep-dive-track-map');
+
+        if (!currentData || !currentData.gps_bounds || !currentData.points) {
+            container.innerHTML = '<div class="text-muted text-center" style="padding-top: 80px;">No GPS data available</div>';
+            return;
+        }
+
+        const bounds = currentData.gps_bounds;
+        if (!bounds.min_lat || !bounds.max_lat || !bounds.min_lon || !bounds.max_lon) {
+            container.innerHTML = '<div class="text-muted text-center" style="padding-top: 80px;">No GPS data available</div>';
+            return;
+        }
+
+        const width = Math.max(container.clientWidth - 20, 500);
+        const height = 400;
+        const padding = 20;
+
+        // Scale functions
+        const latRange = bounds.max_lat - bounds.min_lat || 0.001;
+        const lonRange = bounds.max_lon - bounds.min_lon || 0.001;
+        const latMeters = latRange * 111000;
+        const lonMeters = lonRange * 85000;
+        const scaleX = (width - 2 * padding) / lonMeters;
+        const scaleY = (height - 2 * padding) / latMeters;
+        const scale = Math.min(scaleX, scaleY);
+
+        const trackWidth = lonMeters * scale;
+        const trackHeight = latMeters * scale;
+        const offsetX = padding + (width - 2 * padding - trackWidth) / 2;
+        const offsetY = padding + (height - 2 * padding - trackHeight) / 2;
+
+        function toX(lon) {
+            return offsetX + (lon - bounds.min_lon) * 85000 * scale;
+        }
+        function toY(lat) {
+            return height - offsetY - (lat - bounds.min_lat) * 111000 * scale;
+        }
+
+        // Build track path
+        let pathD = '';
+        let pointCount = 0;
+        for (const p of currentData.points) {
+            if (p.lat && p.lon) {
+                const x = toX(p.lon);
+                const y = toY(p.lat);
+                if (pointCount === 0) {
+                    pathD += `M ${x} ${y}`;
+                } else {
+                    pathD += ` L ${x} ${y}`;
+                }
+                pointCount++;
+            }
+        }
+
+        // Find worst zone (lowest utilization or highest time gain)
+        const worstZone = zones.length > 0 ? zones[0] : null;
+
+        // Build zone markers with color coding by utilization
+        let markers = '';
+        for (let i = 0; i < zones.length; i++) {
+            const zone = zones[i];
+            if (zone.lat && zone.lon) {
+                const x = toX(zone.lon);
+                const y = toY(zone.lat);
+
+                // Color by utilization percentage
+                let color;
+                if (zone.utilization_pct < 50) {
+                    color = '#e74c3c'; // Red - very low
+                } else if (zone.utilization_pct < 70) {
+                    color = '#e67e22'; // Orange
+                } else if (zone.utilization_pct < 85) {
+                    color = '#f39c12'; // Yellow
+                } else {
+                    color = '#3498db'; // Blue - good
+                }
+
+                const isWorst = worstZone && zone.originalIndex === worstZone.originalIndex;
+                const worstClass = isWorst ? 'worst' : '';
+
+                markers += `<circle class="zone-marker-util ${worstClass}" cx="${x}" cy="${y}" r="10" fill="${color}" data-idx="${i}" />`;
+            }
+        }
+
+        const svgHtml = `
+            <svg id="deep-dive-track-svg" width="${width}" height="${height}" style="display: block; margin: 0 auto;">
+                <rect width="${width}" height="${height}" fill="#1a1a1a" rx="4"/>
+                <g>
+                    <path d="${pathD}" stroke="#4a90e2" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+                    ${markers}
+                </g>
+            </svg>
+            <div style="margin-top: 10px; font-size: 0.85rem;">
+                <span style="color: #e74c3c;">●</span> <50% utilization
+                <span style="color: #e67e22; margin-left: 10px;">●</span> 50-70%
+                <span style="color: #f39c12; margin-left: 10px;">●</span> 70-85%
+                <span style="color: #3498db; margin-left: 10px;">●</span> >85%
+            </div>
+        `;
+
+        container.innerHTML = svgHtml;
+
+        // Add click handlers to markers - go directly to zone detail
+        container.querySelectorAll('.zone-marker-util').forEach(marker => {
+            marker.addEventListener('click', (e) => {
+                const idx = parseInt(marker.dataset.idx);
+                openZoneDetail(idx);
+            });
+        });
+    }
+
+    function renderRankedZonesList(zones, quadrantName) {
+        const container = document.getElementById('ranked-zones-list');
+
+        if (!zones || zones.length === 0) {
+            container.innerHTML = '<p class="text-success">No low utilization zones found - excellent grip usage!</p>';
+            return;
+        }
+
+        let html = '';
+        for (let i = 0; i < zones.length; i++) {
+            const zone = zones[i];
+            const rankClass = i < 3 ? `rank-${i + 1}` : '';
+
+            html += `
+                <div class="ranked-zone-item ${rankClass}" id="ranked-zone-${i}" onclick="openZoneDetail(${i})" style="cursor: pointer;">
+                    <span class="rank-badge">${i + 1}</span>
+                    <div style="display: inline-block; vertical-align: top; width: calc(100% - 55px);">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <strong>Time ${zone.start_time.toFixed(1)}s - ${zone.end_time.toFixed(1)}s</strong>
+                            <span class="time-potential">+${zone.timeGainSeconds.toFixed(2)}s</span>
+                        </div>
+                        <div style="margin-top: 5px; font-size: 0.85rem;">
+                            Current: ${zone.utilization_pct.toFixed(0)}% utilization |
+                            Duration: ${zone.duration.toFixed(1)}s |
+                            Avg G: ${zone.avg_total_g.toFixed(2)}g
+                        </div>
+                        <div style="margin-top: 5px; font-size: 0.8rem; color: #aaa;">
+                            ${zone.recommendation}
+                            <br><small style="color: #4a90e2;">👆 Click for detailed analysis</small>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        container.innerHTML = html;
+    }
+
+    function highlightRankedZone(zoneIndex) {
+        // Highlight in list
+        document.querySelectorAll('.ranked-zone-item').forEach(item => {
+            item.style.background = 'rgba(45, 45, 45, 0.8)';
+        });
+        const zoneItem = document.getElementById(`ranked-zone-${zoneIndex}`);
+        if (zoneItem) {
+            zoneItem.style.background = 'rgba(74, 144, 226, 0.4)';
+            zoneItem.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+
+        // Pulse marker on map
+        document.querySelectorAll('.zone-marker-util').forEach(marker => {
+            marker.style.strokeWidth = '';
+            marker.style.stroke = '';
+        });
+        const marker = document.querySelector(`.zone-marker-util[data-idx="${zoneIndex}"]`);
+        if (marker) {
+            marker.style.stroke = '#fff';
+            marker.style.strokeWidth = '3';
+        }
+    }
+
+    // ============================================================
+    // Zone Detail View
+    // ============================================================
+
+    let currentZoneDetailData = null;
+    let zoneGGChart = null;
+
+    function openZoneDetail(zoneIndex) {
+        if (!currentData) return;
+
+        // Get zones for this quadrant
+        const zones = getZonesForQuadrant(currentDeepDiveQuadrant);
+        if (zoneIndex >= zones.length) return;
+
+        const zone = zones[zoneIndex];
+        currentZoneDetailData = { zone, zoneIndex, zones };
+
+        // Hide deep dive, show zone detail
+        document.getElementById('deep-dive-view').style.display = 'none';
+        document.getElementById('zone-detail-view').style.display = 'block';
+
+        // Update title
+        document.getElementById('zone-detail-title').textContent =
+            `Zone at ${zone.start_time.toFixed(1)}s - ${zone.end_time.toFixed(1)}s (${zone.duration.toFixed(1)}s)`;
+
+        // Get reference lap (best lap) - for now use all data as reference
+        // In a real implementation, this would fetch the best lap's data
+        const referenceLap = getBestLapForZone(zone);
+
+        // Render components
+        renderZoneActionStatement(zone, referenceLap);
+        renderZoneDetailTrackMap(zone);
+        renderZoneSideBySideComparison(zone, referenceLap);
+        renderZoneGGChart(zone, referenceLap);
+
+        // Scroll to top
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function exitZoneDetail() {
+        currentZoneDetailData = null;
+        document.getElementById('zone-detail-view').style.display = 'none';
+        document.getElementById('deep-dive-view').style.display = 'block';
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function getBestLapForZone(zone) {
+        // For now, simulate reference lap data
+        // In production, this would fetch actual best lap data from backend
+
+        // Reference lap should be slightly better - simulate this
+        const improvementFactor = 1.15; // Reference is 15% better
+
+        return {
+            entry_speed_mph: zone.avg_total_g > 0 ? (zone.avg_total_g * 25 * improvementFactor) : 65,
+            brake_point_ft: 200, // Distance before apex
+            peak_g: zone.avg_total_g * improvementFactor,
+            duration_sec: zone.duration * 0.92, // Reference is 8% faster
+            avg_lat_g: zone.avg_lat_g * improvementFactor,
+            avg_lon_g: zone.avg_lon_g * improvementFactor
+        };
+    }
+
+    function renderZoneActionStatement(zone, referenceLap) {
+        const container = document.getElementById('zone-action-statement');
+
+        // Calculate differences
+        const currentEntrySpeed = zone.avg_total_g > 0 ? zone.avg_total_g * 25 : 60;
+        const speedDiff = referenceLap.entry_speed_mph - currentEntrySpeed;
+        const gDiff = referenceLap.peak_g - zone.avg_total_g;
+        const timeDiff = zone.duration - referenceLap.duration_sec;
+
+        // Generate action statement
+        let statement = '';
+
+        if (zone.utilization_pct < 60) {
+            // Very low utilization - major opportunity
+            statement = `Carry ${Math.abs(speedDiff).toFixed(0)} mph more speed (${Math.abs(gDiff).toFixed(1)}g more grip). `;
+            statement += `This could save ${Math.abs(timeDiff).toFixed(2)}s per lap. `;
+            statement += `Build confidence gradually - try adding 2-3 mph each session.`;
+        } else if (zone.utilization_pct < 75) {
+            // Moderate opportunity
+            if (zone.avg_lon_g < -0.5) {
+                // Braking zone
+                statement = `Brake ${Math.abs(gDiff * 50).toFixed(0)} ft later at ${Math.abs(gDiff).toFixed(1)}g+ harder. `;
+            } else {
+                statement = `Carry ${Math.abs(speedDiff).toFixed(0)} mph more through here. `;
+            }
+            statement += `Potential gain: ${Math.abs(timeDiff).toFixed(2)}s. `;
+            statement += `Focus on smooth inputs to use more available grip.`;
+        } else {
+            // Small opportunity
+            statement = `You're close! Try ${Math.abs(speedDiff).toFixed(0)} mph more or brake ${Math.abs(gDiff * 30).toFixed(0)} ft later. `;
+            statement += `Small refinement for ${Math.abs(timeDiff).toFixed(2)}s gain.`;
+        }
+
+        container.textContent = statement;
+    }
+
+    function renderZoneDetailTrackMap(zone) {
+        const container = document.getElementById('zone-detail-track-map');
+
+        if (!currentData || !currentData.gps_bounds || !currentData.points) {
+            container.innerHTML = '<div class="text-muted text-center" style="padding-top: 80px;">No GPS data available</div>';
+            return;
+        }
+
+        // Get all points in this zone
+        const zonePoints = currentData.points.filter(p =>
+            p.time >= zone.start_time && p.time <= zone.end_time && p.lat && p.lon
+        );
+
+        if (zonePoints.length === 0) {
+            container.innerHTML = '<div class="text-muted text-center" style="padding-top: 80px;">No GPS data for this zone</div>';
+            return;
+        }
+
+        // Calculate bounds for this zone with padding
+        const zoneLats = zonePoints.map(p => p.lat);
+        const zoneLons = zonePoints.map(p => p.lon);
+        const minLat = Math.min(...zoneLats);
+        const maxLat = Math.max(...zoneLats);
+        const minLon = Math.min(...zoneLons);
+        const maxLon = Math.max(...zoneLons);
+
+        // Add 50% padding around zone
+        const latPadding = (maxLat - minLat) * 0.5;
+        const lonPadding = (maxLon - minLon) * 0.5;
+
+        const bounds = {
+            min_lat: minLat - latPadding,
+            max_lat: maxLat + latPadding,
+            min_lon: minLon - lonPadding,
+            max_lon: maxLon + lonPadding
+        };
+
+        const width = Math.max(container.clientWidth - 20, 500);
+        const height = 400;
+        const padding = 20;
+
+        // Scale functions
+        const latRange = bounds.max_lat - bounds.min_lat || 0.001;
+        const lonRange = bounds.max_lon - bounds.min_lon || 0.001;
+        const latMeters = latRange * 111000;
+        const lonMeters = lonRange * 85000;
+        const scaleX = (width - 2 * padding) / lonMeters;
+        const scaleY = (height - 2 * padding) / latMeters;
+        const scale = Math.min(scaleX, scaleY);
+
+        const trackWidth = lonMeters * scale;
+        const trackHeight = latMeters * scale;
+        const offsetX = padding + (width - 2 * padding - trackWidth) / 2;
+        const offsetY = padding + (height - 2 * padding - trackHeight) / 2;
+
+        function toX(lon) {
+            return offsetX + (lon - bounds.min_lon) * 85000 * scale;
+        }
+        function toY(lat) {
+            return height - offsetY - (lat - bounds.min_lat) * 111000 * scale;
+        }
+
+        // Build full track path (light gray)
+        let fullPathD = '';
+        let pointCount = 0;
+        for (const p of currentData.points) {
+            if (p.lat && p.lon) {
+                const x = toX(p.lon);
+                const y = toY(p.lat);
+                if (pointCount === 0) {
+                    fullPathD += `M ${x} ${y}`;
+                } else {
+                    fullPathD += ` L ${x} ${y}`;
+                }
+                pointCount++;
+            }
+        }
+
+        // Build zone path (highlighted)
+        let zonePathD = '';
+        pointCount = 0;
+        for (const p of zonePoints) {
+            const x = toX(p.lon);
+            const y = toY(p.lat);
+            if (pointCount === 0) {
+                zonePathD += `M ${x} ${y}`;
+            } else {
+                zonePathD += ` L ${x} ${y}`;
+            }
+            pointCount++;
+        }
+
+        // Mark zone center
+        const centerLat = (minLat + maxLat) / 2;
+        const centerLon = (minLon + maxLon) / 2;
+        const centerX = toX(centerLon);
+        const centerY = toY(centerLat);
+
+        const svgHtml = `
+            <svg width="${width}" height="${height}" style="display: block; margin: 0 auto;">
+                <rect width="${width}" height="${height}" fill="#1a1a1a" rx="4"/>
+                <g>
+                    <!-- Full track (faded) -->
+                    <path d="${fullPathD}" stroke="#555" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" opacity="0.3"/>
+                    <!-- Zone highlight -->
+                    <path d="${zonePathD}" stroke="#e74c3c" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+                    <!-- Zone center marker -->
+                    <circle cx="${centerX}" cy="${centerY}" r="15" fill="#e74c3c" opacity="0.7"/>
+                    <circle cx="${centerX}" cy="${centerY}" r="8" fill="#fff"/>
+                </g>
+            </svg>
+            <div style="margin-top: 10px; font-size: 0.85rem; text-align: center;">
+                <span style="color: #e74c3c;">●</span> This zone highlighted in red
+            </div>
+        `;
+
+        container.innerHTML = svgHtml;
+    }
+
+    function renderZoneSideBySideComparison(zone, referenceLap) {
+        // Current lap values
+        const currentEntrySpeed = zone.avg_total_g > 0 ? zone.avg_total_g * 25 : 60;
+        const currentBrakePoint = 150; // Simulated
+        const currentPeakG = zone.avg_total_g;
+        const currentDuration = zone.duration;
+
+        // Reference lap values
+        const refEntrySpeed = referenceLap.entry_speed_mph;
+        const refBrakePoint = referenceLap.brake_point_ft;
+        const refPeakG = referenceLap.peak_g;
+        const refDuration = referenceLap.duration_sec;
+
+        // Update UI
+        document.getElementById('zone-current-entry-speed').textContent = currentEntrySpeed.toFixed(0) + ' mph';
+        document.getElementById('zone-ref-entry-speed').textContent = refEntrySpeed.toFixed(0) + ' mph';
+        const speedDiff = refEntrySpeed - currentEntrySpeed;
+        document.getElementById('zone-entry-speed-diff').textContent =
+            (speedDiff >= 0 ? '+' : '') + speedDiff.toFixed(0) + ' mph target';
+        document.getElementById('zone-entry-speed-diff').style.color = speedDiff > 0 ? '#e74c3c' : '#2ecc71';
+
+        document.getElementById('zone-current-brake-point').textContent = currentBrakePoint.toFixed(0) + ' ft';
+        document.getElementById('zone-ref-brake-point').textContent = refBrakePoint.toFixed(0) + ' ft';
+        const brakeDiff = refBrakePoint - currentBrakePoint;
+        document.getElementById('zone-brake-point-diff').textContent =
+            (brakeDiff >= 0 ? 'Brake ' : 'Braking ') + Math.abs(brakeDiff).toFixed(0) + ' ft ' + (brakeDiff >= 0 ? 'later' : 'earlier');
+        document.getElementById('zone-brake-point-diff').style.color = brakeDiff > 0 ? '#e74c3c' : '#2ecc71';
+
+        document.getElementById('zone-current-peak-g').textContent = currentPeakG.toFixed(2) + 'g';
+        document.getElementById('zone-ref-peak-g').textContent = refPeakG.toFixed(2) + 'g';
+        const gDiff = refPeakG - currentPeakG;
+        document.getElementById('zone-peak-g-diff').textContent =
+            (gDiff >= 0 ? '+' : '') + gDiff.toFixed(2) + 'g target';
+        document.getElementById('zone-peak-g-diff').style.color = gDiff > 0 ? '#e74c3c' : '#2ecc71';
+
+        document.getElementById('zone-current-duration').textContent = currentDuration.toFixed(2) + 's';
+        document.getElementById('zone-ref-duration').textContent = refDuration.toFixed(2) + 's';
+        const timeDiff = currentDuration - refDuration;
+        document.getElementById('zone-duration-diff').textContent =
+            (timeDiff >= 0 ? '+' : '') + timeDiff.toFixed(2) + 's vs ref';
+        document.getElementById('zone-duration-diff').style.color = timeDiff > 0 ? '#e74c3c' : '#2ecc71';
+    }
+
+    function renderZoneGGChart(zone, referenceLap) {
+        const ctx = document.getElementById('zone-gg-chart');
+        if (zoneGGChart) zoneGGChart.destroy();
+
+        // Get points for this zone
+        const zonePoints = currentData.points.filter(p =>
+            p.time >= zone.start_time && p.time <= zone.end_time
+        );
+
+        if (zonePoints.length === 0) {
+            ctx.getContext('2d').clearRect(0, 0, ctx.width, ctx.height);
+            return;
+        }
+
+        const currentPoints = zonePoints.map(p => ({ x: p.lat_acc, y: p.lon_acc }));
+
+        // Simulate reference lap points (slightly better pattern)
+        const improvementFactor = 1.15;
+        const referencePoints = zonePoints.map(p => ({
+            x: p.lat_acc * improvementFactor,
+            y: p.lon_acc * improvementFactor
+        }));
+
+        const maxG = Math.max(
+            Math.max(...currentPoints.map(p => Math.abs(p.x))),
+            Math.max(...currentPoints.map(p => Math.abs(p.y))),
+            Math.max(...referencePoints.map(p => Math.abs(p.x))),
+            Math.max(...referencePoints.map(p => Math.abs(p.y)))
+        ) * 1.2;
+
+        zoneGGChart = new Chart(ctx, {
+            type: 'scatter',
+            data: {
+                datasets: [
+                    {
+                        label: 'Reference Lap',
+                        data: referencePoints,
+                        backgroundColor: 'rgba(52, 152, 219, 0.6)',
+                        pointRadius: 4,
+                        pointHoverRadius: 6
+                    },
+                    {
+                        label: 'Current Lap',
+                        data: currentPoints,
+                        backgroundColor: 'rgba(231, 76, 60, 0.6)',
+                        pointRadius: 4,
+                        pointHoverRadius: 6
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                aspectRatio: 1,
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top',
+                        labels: { color: '#a0a0a0' }
+                    },
+                    title: {
+                        display: false
+                    }
+                },
+                scales: {
+                    x: {
+                        min: -maxG,
+                        max: maxG,
+                        title: { display: true, text: 'Lateral G', color: '#a0a0a0' },
+                        grid: { color: '#404040' },
+                        ticks: { color: '#a0a0a0' }
+                    },
+                    y: {
+                        min: -maxG,
+                        max: maxG,
+                        title: { display: true, text: 'Longitudinal G', color: '#a0a0a0' },
+                        grid: { color: '#404040' },
+                        ticks: { color: '#a0a0a0' }
+                    }
+                }
+            }
+        });
     }
 </script>
 {% endblock %}

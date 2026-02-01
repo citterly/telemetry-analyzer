@@ -10,12 +10,214 @@ import os
 from pathlib import Path
 
 from src.features.corner_detection import (
-    CornerDetector, CornerZone, CornerDetectionResult, detect_corners
+    CornerDetector, CornerZone, CornerDetectionResult, detect_corners,
+    calc_curvature
 )
 from src.features.corner_analysis import (
     CornerAnalyzer, CornerMetrics, LapCornerAnalysis, CornerComparison,
     CornerAnalysisResult, analyze_corners
 )
+
+
+class TestCalcCurvature:
+    """Tests for calc_curvature function"""
+
+    def test_straight_line_returns_zero_curvature(self):
+        """Test that a straight line has zero curvature"""
+        # Create a straight line from (0, 0) to (0, 0.001) - moving north
+        lat = np.array([0.0, 0.0001, 0.0002, 0.0003, 0.0004])
+        lon = np.array([0.0, 0.0, 0.0, 0.0, 0.0])
+
+        curvature = calc_curvature(lat, lon)
+
+        # Straight line should have zero or near-zero curvature
+        assert np.allclose(curvature, 0.0, atol=1e-6)
+
+    def test_circular_path_curvature_accuracy(self):
+        """Test curvature calculation accuracy with a known circle radius"""
+        # Create a circular path with known radius
+        # Using a 100-meter radius circle
+        radius_meters = 100.0
+        expected_curvature = 1.0 / radius_meters  # 0.01 per meter
+
+        # Generate points on a circle
+        n_points = 50
+        angles = np.linspace(0, np.pi / 2, n_points)  # Quarter circle
+
+        # Convert radius from meters to degrees (approximate)
+        # At equator: 1 degree ≈ 111 km
+        radius_deg = radius_meters / 111000.0
+
+        # Center the circle at origin for simplicity
+        center_lat = 0.0
+        center_lon = 0.0
+
+        lat = center_lat + radius_deg * np.sin(angles)
+        lon = center_lon + radius_deg * np.cos(angles)
+
+        curvature = calc_curvature(lat, lon, window_size=3)
+
+        # Check middle points (avoid edge effects)
+        middle_curvature = curvature[10:-10]
+
+        # Should be close to expected curvature (within 5% tolerance)
+        mean_curvature = np.mean(middle_curvature)
+        assert abs(mean_curvature - expected_curvature) / expected_curvature < 0.05, \
+            f"Expected curvature {expected_curvature:.6f}, got {mean_curvature:.6f}"
+
+    def test_tight_turn_higher_curvature(self):
+        """Test that tight turns have higher curvature than gentle turns"""
+        # Create two circular paths with different radii
+        n_points = 30
+
+        # Tight turn: 30m radius
+        radius_tight = 30.0
+        angles_tight = np.linspace(0, np.pi / 4, n_points)
+        radius_deg_tight = radius_tight / 111000.0
+        lat_tight = radius_deg_tight * np.sin(angles_tight)
+        lon_tight = radius_deg_tight * np.cos(angles_tight)
+        curvature_tight = calc_curvature(lat_tight, lon_tight)
+
+        # Gentle turn: 200m radius
+        radius_gentle = 200.0
+        angles_gentle = np.linspace(0, np.pi / 4, n_points)
+        radius_deg_gentle = radius_gentle / 111000.0
+        lat_gentle = radius_deg_gentle * np.sin(angles_gentle)
+        lon_gentle = radius_deg_gentle * np.cos(angles_gentle)
+        curvature_gentle = calc_curvature(lat_gentle, lon_gentle)
+
+        # Average curvature in the middle section
+        tight_avg = np.mean(curvature_tight[5:-5])
+        gentle_avg = np.mean(curvature_gentle[5:-5])
+
+        # Tight turn should have higher curvature
+        assert tight_avg > gentle_avg
+        assert tight_avg > 0.02  # Should be around 1/30 = 0.033
+        assert gentle_avg < 0.01  # Should be around 1/200 = 0.005
+
+    def test_curvature_units_inverse_meters(self):
+        """Test that curvature is in correct units (1/meters)"""
+        # Create a 50-meter radius circle
+        radius_meters = 50.0
+        expected_curvature = 1.0 / radius_meters  # 0.02 per meter
+
+        n_points = 40
+        angles = np.linspace(0, np.pi / 3, n_points)
+        radius_deg = radius_meters / 111000.0
+
+        lat = radius_deg * np.sin(angles)
+        lon = radius_deg * np.cos(angles)
+
+        curvature = calc_curvature(lat, lon)
+
+        # Check that curvature values are in the right ballpark
+        middle_curvature = curvature[8:-8]
+        mean_curvature = np.mean(middle_curvature)
+
+        # Should be approximately 0.02 (1/50)
+        assert 0.015 < mean_curvature < 0.025
+
+    def test_window_size_smoothing(self):
+        """Test that larger window sizes produce smoother curvature"""
+        # Create a circle with some noise
+        radius_meters = 80.0
+        n_points = 60
+        angles = np.linspace(0, np.pi / 2, n_points)
+        radius_deg = radius_meters / 111000.0
+
+        lat = radius_deg * np.sin(angles)
+        lon = radius_deg * np.cos(angles)
+
+        # Add small noise
+        lat += np.random.randn(n_points) * 1e-6
+        lon += np.random.randn(n_points) * 1e-6
+
+        # Calculate with different window sizes
+        curv_small = calc_curvature(lat, lon, window_size=3)
+        curv_large = calc_curvature(lat, lon, window_size=9)
+
+        # Larger window should have lower variance (smoother)
+        variance_small = np.var(curv_small[10:-10])
+        variance_large = np.var(curv_large[10:-10])
+
+        assert variance_large < variance_small
+
+    def test_handles_minimal_data(self):
+        """Test handling of minimal data points"""
+        # Test with exactly 3 points
+        lat = np.array([0.0, 0.0001, 0.0002])
+        lon = np.array([0.0, 0.0, 0.0])
+
+        curvature = calc_curvature(lat, lon)
+        assert len(curvature) == 3
+        assert np.all(curvature >= 0)
+
+        # Test with 2 points (too few)
+        lat = np.array([0.0, 0.0001])
+        lon = np.array([0.0, 0.0])
+
+        curvature = calc_curvature(lat, lon)
+        assert len(curvature) == 2
+        assert np.all(curvature == 0)
+
+    def test_handles_edge_cases(self):
+        """Test edge cases: duplicate points, very close points"""
+        # Duplicate points
+        lat = np.array([0.0, 0.0, 0.0001, 0.0002])
+        lon = np.array([0.0, 0.0, 0.0, 0.0])
+
+        curvature = calc_curvature(lat, lon)
+        assert len(curvature) == 4
+        # Should handle gracefully without errors
+
+        # Points very close together (< 0.1m threshold)
+        lat = np.array([0.0, 0.0000001, 0.0000002, 0.0000003])
+        lon = np.array([0.0, 0.0, 0.0, 0.0])
+
+        curvature = calc_curvature(lat, lon)
+        assert len(curvature) == 4
+        assert np.all(curvature == 0)  # Too close, should return 0
+
+    def test_curvature_always_positive_or_zero(self):
+        """Test that curvature is always >= 0 (magnitude only)"""
+        # Create various paths
+        n = 100
+        t = np.linspace(0, 2 * np.pi, n)
+
+        # Sine wave path
+        lat = 0.001 * np.sin(t)
+        lon = 0.001 * t / (2 * np.pi)
+
+        curvature = calc_curvature(lat, lon)
+
+        # Curvature should never be negative (it's a magnitude)
+        assert np.all(curvature >= 0)
+
+    def test_consistency_across_coordinate_systems(self):
+        """Test that curvature is consistent regardless of absolute GPS coordinates"""
+        radius_meters = 75.0
+        n_points = 40
+        angles = np.linspace(0, np.pi / 4, n_points)
+        radius_deg = radius_meters / 111000.0
+
+        # Same circle at different lat/lon origins
+        # Origin 1: Equator
+        lat1 = 0.0 + radius_deg * np.sin(angles)
+        lon1 = 0.0 + radius_deg * np.cos(angles)
+        curv1 = calc_curvature(lat1, lon1)
+
+        # Origin 2: Mid-latitude (Road America latitude)
+        lat2 = 43.8 + radius_deg * np.sin(angles)
+        lon2 = -87.99 + radius_deg * np.cos(angles)
+        curv2 = calc_curvature(lat2, lon2)
+
+        # Curvature should be similar (within 10% due to latitude correction)
+        mean_curv1 = np.mean(curv1[5:-5])
+        mean_curv2 = np.mean(curv2[5:-5])
+
+        # Both should be close to 1/75 = 0.0133
+        assert 0.01 < mean_curv1 < 0.02
+        assert 0.01 < mean_curv2 < 0.02
 
 
 class TestCornerZone:
