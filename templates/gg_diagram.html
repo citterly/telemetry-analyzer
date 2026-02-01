@@ -681,7 +681,7 @@
                 const x = toX(zone.lon);
                 const y = toY(zone.lat);
                 const cls = zone.zone_type === 'power_limited' ? 'power-limited' : 'low-grip';
-                markers += `<circle class="zone-marker ${cls}" cx="${x}" cy="${y}" r="8" data-idx="${i}" />`;
+                markers += `<circle class="zone-marker ${cls}" cx="${x}" cy="${y}" r="8" data-idx="${i}" data-base-r="8" />`;
             }
         }
 
@@ -881,6 +881,25 @@
         const el = document.getElementById('zoom-level');
         if (el) {
             el.textContent = `${Math.round(trackMapState.zoom * 100)}%`;
+        }
+        updateTrackMapScaling();
+    }
+
+    function updateTrackMapScaling() {
+        // Scale markers inversely with zoom so they don't dominate when zoomed in
+        const zoom = trackMapState.zoom;
+        const markerScale = Math.max(0.3, 1 / Math.sqrt(zoom)); // Square root for gentler scaling
+
+        document.querySelectorAll('.zone-marker').forEach(marker => {
+            const baseR = parseFloat(marker.dataset.baseR) || 8;
+            marker.setAttribute('r', baseR * markerScale);
+        });
+
+        // Also scale stroke width
+        const trackPath = document.querySelector('#track-content path');
+        if (trackPath) {
+            const baseStroke = 3;
+            trackPath.setAttribute('stroke-width', baseStroke * markerScale);
         }
     }
 
