@@ -644,9 +644,9 @@ class CornerDetector:
         lat_acc_data: np.ndarray
     ) -> CornerZone:
         """Create a CornerZone from indices."""
-        # Find apex (minimum speed point within corner)
-        corner_speeds = speed_data[start_idx:end_idx+1]
-        apex_local_idx = np.argmin(corner_speeds)
+        # Phase 4: Find apex as point of MAXIMUM lateral G within corner
+        corner_lat_acc = np.abs(lat_acc_data[start_idx:end_idx+1])
+        apex_local_idx = np.argmax(corner_lat_acc)
         apex_idx = start_idx + apex_local_idx
 
         # Determine direction from lateral acceleration at apex
@@ -743,7 +743,8 @@ class Corner:
     start_idx: int
     end_idx: int
     direction: str  # "left" or "right"
-    apex_idx: int = 0  # Will be set later if needed
+    apex_idx: int = 0  # Point of maximum lateral G (Phase 4)
+    min_speed_idx: int = 0  # Point of minimum speed (secondary apex, Phase 4)
 
 
 def detect_corners(
@@ -760,8 +761,12 @@ def detect_corners(
     Phase 3 implementation: Combines curvature analysis with lateral G confirmation
     for robust corner boundary detection.
 
+    Phase 4 enhancement: Apex detection using maximum lateral G with secondary
+    minimum speed point for comparison.
+
     Args:
         df: DataFrame with GPS Latitude, GPS Longitude, and GPS LatAcc columns
+            Optional: GPS Speed for secondary apex detection
         curvature_threshold: Minimum curvature (1/m) to consider a corner (default 0.005)
         lateral_g_threshold: Minimum absolute lateral G to confirm corner (default 0.3g)
         min_corner_duration: Minimum corner duration in seconds (default 0.5s)
@@ -769,7 +774,7 @@ def detect_corners(
         sample_rate: Sample rate in Hz if time data not in index (default 10.0)
 
     Returns:
-        List of Corner objects with start_idx, end_idx, and direction
+        List of Corner objects with start_idx, end_idx, direction, apex_idx, and min_speed_idx
 
     Algorithm:
         1. Calculate GPS curvature from lat/lon coordinates
@@ -780,13 +785,16 @@ def detect_corners(
         6. Filter corners by minimum duration
         7. Merge nearby corners separated by < merge_gap
         8. Determine direction from sign of lateral G
+        9. Find apex as point of maximum absolute lateral G (Phase 4)
+        10. Find secondary apex as point of minimum speed (Phase 4)
 
     Example:
         >>> df = pd.read_parquet('session.parquet')
         >>> corners = detect_corners(df)
         >>> print(f"Detected {len(corners)} corners")
         >>> for corner in corners:
-        ...     print(f"Corner at {corner.start_idx}-{corner.end_idx}, direction: {corner.direction}")
+        ...     print(f"Corner at {corner.start_idx}-{corner.end_idx}, "
+        ...           f"apex: {corner.apex_idx}, direction: {corner.direction}")
     """
     # Extract required columns
     try:
@@ -795,6 +803,14 @@ def detect_corners(
         lateral_g = df['GPS LatAcc'].values if 'GPS LatAcc' in df.columns else df['lat_acc'].values
     except KeyError as e:
         raise ValueError(f"Missing required column: {e}")
+
+    # Get speed data if available (for secondary apex detection)
+    try:
+        speed = df['GPS Speed'].values if 'GPS Speed' in df.columns else df['gps_speed'].values
+        if speed.max() < 100:  # Likely in m/s, convert to mph
+            speed = speed * 2.237
+    except (KeyError, AttributeError):
+        speed = None
 
     # Get time data from index or create synthetic time array
     if hasattr(df.index, 'values'):
@@ -848,10 +864,24 @@ def detect_corners(
                     avg_lat_g = np.mean(corner_lateral_g_values)
                     direction = "right" if avg_lat_g > 0 else "left"
 
+                    # Phase 4: Find apex as point of maximum lateral G
+                    corner_lat_g_abs = np.abs(lateral_g[start_idx:end_idx+1])
+                    apex_local_idx = np.argmax(corner_lat_g_abs)
+                    apex_idx = start_idx + apex_local_idx
+
+                    # Secondary apex: minimum speed point (if speed data available)
+                    min_speed_idx = apex_idx  # Default to same as apex
+                    if speed is not None:
+                        corner_speeds = speed[start_idx:end_idx+1]
+                        min_speed_local_idx = np.argmin(corner_speeds)
+                        min_speed_idx = start_idx + min_speed_local_idx
+
                     corners.append(Corner(
                         start_idx=start_idx,
                         end_idx=end_idx,
-                        direction=direction
+                        direction=direction,
+                        apex_idx=apex_idx,
+                        min_speed_idx=min_speed_idx
                     ))
 
                 corner_lateral_g_values = []
@@ -867,10 +897,25 @@ def detect_corners(
         if duration >= min_corner_duration:
             avg_lat_g = np.mean(corner_lateral_g_values)
             direction = "right" if avg_lat_g > 0 else "left"
+
+            # Phase 4: Find apex as point of maximum lateral G
+            corner_lat_g_abs = np.abs(lateral_g[start_idx:end_idx+1])
+            apex_local_idx = np.argmax(corner_lat_g_abs)
+            apex_idx = start_idx + apex_local_idx
+
+            # Secondary apex: minimum speed point (if speed data available)
+            min_speed_idx = apex_idx  # Default to same as apex
+            if speed is not None:
+                corner_speeds = speed[start_idx:end_idx+1]
+                min_speed_local_idx = np.argmin(corner_speeds)
+                min_speed_idx = start_idx + min_speed_local_idx
+
             corners.append(Corner(
                 start_idx=start_idx,
                 end_idx=end_idx,
-                direction=direction
+                direction=direction,
+                apex_idx=apex_idx,
+                min_speed_idx=min_speed_idx
             ))
 
     # Step 5: Merge nearby corners (chicanes)
@@ -895,10 +940,26 @@ def detect_corners(
                     avg_lat_g = np.mean(combined_lat_g)
                     direction = "right" if avg_lat_g > 0 else "left"
 
+                    # Recalculate apex for merged corner
+                    merged_start = current.start_idx
+                    merged_end = next_corner.end_idx
+                    merged_lat_g_abs = np.abs(lateral_g[merged_start:merged_end+1])
+                    apex_local_idx = np.argmax(merged_lat_g_abs)
+                    apex_idx = merged_start + apex_local_idx
+
+                    # Recalculate min speed for merged corner
+                    min_speed_idx = apex_idx  # Default
+                    if speed is not None:
+                        merged_speeds = speed[merged_start:merged_end+1]
+                        min_speed_local_idx = np.argmin(merged_speeds)
+                        min_speed_idx = merged_start + min_speed_local_idx
+
                     merged = Corner(
-                        start_idx=current.start_idx,
-                        end_idx=next_corner.end_idx,
-                        direction=direction
+                        start_idx=merged_start,
+                        end_idx=merged_end,
+                        direction=direction,
+                        apex_idx=apex_idx,
+                        min_speed_idx=min_speed_idx
                     )
                     merged_corners.append(merged)
                     i += 2  # Skip next corner since we merged it

@@ -1279,6 +1279,189 @@ class TestDetectCornersPhase3:
         assert len(corners_low) > 0
 
 
+class TestApexDetectionPhase4:
+    """Tests for Phase 4 apex detection using maximum lateral G"""
+
+    def test_apex_is_max_lateral_g_point(self):
+        """Test that apex_idx corresponds to maximum lateral G"""
+        n = 100
+        time = np.linspace(0, 10, n)
+
+        # Create corner with clear max lateral G point
+        lat = np.full(n, 43.797)
+        lon = np.full(n, -87.99)
+        lateral_g = np.zeros(n)
+
+        # Corner from 20-60, with peak lateral G at index 40
+        for i in range(20, 61):
+            # Triangular distribution peaking at 40
+            if i <= 40:
+                lateral_g[i] = 0.3 + 0.5 * (i - 20) / 20
+            else:
+                lateral_g[i] = 0.8 - 0.5 * (i - 40) / 20
+
+        # Add curvature
+        lat[20:61] += 0.001 * np.sin(np.linspace(0, np.pi, 41))
+        lon[20:61] += 0.001 * np.cos(np.linspace(0, np.pi, 41))
+
+        df = pd.DataFrame({
+            'GPS Latitude': lat,
+            'GPS Longitude': lon,
+            'GPS LatAcc': lateral_g
+        }, index=time)
+
+        corners = detect_corners(df, curvature_threshold=0.003)
+
+        assert len(corners) >= 1
+        corner = corners[0]
+        # Apex should be at or very near index 40 (max lateral G)
+        assert abs(corner.apex_idx - 40) <= 2
+
+    def test_min_speed_idx_different_from_apex(self):
+        """Test that min_speed_idx can differ from apex_idx"""
+        n = 100
+        time = np.linspace(0, 10, n)
+
+        lat = np.full(n, 43.797)
+        lon = np.full(n, -87.99)
+        lateral_g = np.zeros(n)
+        speed = np.full(n, 80.0)
+
+        # Corner from 20-60
+        # Max lateral G at index 35
+        for i in range(20, 61):
+            if i <= 35:
+                lateral_g[i] = 0.3 + 0.5 * (i - 20) / 15
+            else:
+                lateral_g[i] = 0.8 - 0.5 * (i - 35) / 25
+
+        # Min speed at index 45 (later than max lateral G)
+        for i in range(20, 61):
+            if i <= 45:
+                speed[i] = 80 - 30 * (i - 20) / 25
+            else:
+                speed[i] = 50 + 30 * (i - 45) / 15
+
+        # Add curvature
+        lat[20:61] += 0.001 * np.sin(np.linspace(0, np.pi, 41))
+        lon[20:61] += 0.001 * np.cos(np.linspace(0, np.pi, 41))
+
+        df = pd.DataFrame({
+            'GPS Latitude': lat,
+            'GPS Longitude': lon,
+            'GPS LatAcc': lateral_g,
+            'GPS Speed': speed * 0.44704  # Convert to m/s
+        }, index=time)
+
+        corners = detect_corners(df, curvature_threshold=0.003)
+
+        assert len(corners) >= 1
+        corner = corners[0]
+        # Apex should be near index 35 (max lateral G)
+        assert abs(corner.apex_idx - 35) <= 2
+        # Min speed should be near index 45
+        assert abs(corner.min_speed_idx - 45) <= 2
+        # They should be different
+        assert abs(corner.apex_idx - corner.min_speed_idx) > 5
+
+    def test_apex_handles_negative_lateral_g(self):
+        """Test that apex uses absolute lateral G (handles left turns)"""
+        n = 100
+        time = np.linspace(0, 10, n)
+
+        lat = np.full(n, 43.797)
+        lon = np.full(n, -87.99)
+        lateral_g = np.zeros(n)
+
+        # Left turn: negative lateral G, peak at index 40
+        for i in range(20, 61):
+            if i <= 40:
+                lateral_g[i] = -0.3 - 0.5 * (i - 20) / 20
+            else:
+                lateral_g[i] = -0.8 + 0.5 * (i - 40) / 20
+
+        lat[20:61] += 0.001 * np.sin(np.linspace(0, np.pi, 41))
+        lon[20:61] += 0.001 * np.cos(np.linspace(0, np.pi, 41))
+
+        df = pd.DataFrame({
+            'GPS Latitude': lat,
+            'GPS Longitude': lon,
+            'GPS LatAcc': lateral_g
+        }, index=time)
+
+        corners = detect_corners(df, curvature_threshold=0.003)
+
+        assert len(corners) >= 1
+        corner = corners[0]
+        assert corner.direction == "left"
+        # Apex should be at max absolute lateral G (index 40)
+        assert abs(corner.apex_idx - 40) <= 2
+
+    def test_apex_in_merged_corners(self):
+        """Test that merged corners recalculate apex correctly"""
+        n = 200
+        time = np.linspace(0, 20, n)
+
+        lat = np.full(n, 43.797)
+        lon = np.full(n, -87.99)
+        lateral_g = np.zeros(n)
+
+        # First corner: 20-35, peak lateral G at 27
+        for i in range(20, 36):
+            lateral_g[i] = 0.5 if i == 27 else 0.4
+
+        # Second corner (chicane): 38-53, peak lateral G at 45
+        for i in range(38, 54):
+            lateral_g[i] = -0.7 if i == 45 else -0.5
+
+        # Add curvature to both
+        lat[20:36] += 0.001 * np.sin(np.linspace(0, np.pi, 16))
+        lon[20:36] += 0.001 * np.cos(np.linspace(0, np.pi, 16))
+        lat[38:54] += 0.001 * np.sin(np.linspace(0, np.pi, 16))
+        lon[38:54] += 0.001 * np.cos(np.linspace(0, np.pi, 16))
+
+        df = pd.DataFrame({
+            'GPS Latitude': lat,
+            'GPS Longitude': lon,
+            'GPS LatAcc': lateral_g
+        }, index=time)
+
+        corners = detect_corners(df, merge_gap=0.5, curvature_threshold=0.003)
+
+        # Should merge into one corner
+        assert len(corners) == 1
+        corner = corners[0]
+        # Apex should be at max absolute lateral G across merged corner (index 45, |0.7|)
+        assert abs(corner.apex_idx - 45) <= 2
+
+    def test_corner_zone_uses_max_lateral_g(self):
+        """Test that CornerZone from CornerDetector uses max lateral G"""
+        n = 200
+        time = np.linspace(0, 20, n)
+        t = time / 5
+
+        lat = 43.797 + 0.003 * np.sin(t)
+        lon = -87.99 + 0.003 * np.cos(t)
+        speed = 80 - 30 * np.abs(np.sin(t))
+        radius = 1000 - 900 * np.abs(np.sin(t))
+        lat_acc = 0.8 * np.sin(t)
+        lon_acc = -0.5 * np.sin(t + 0.5)
+
+        detector = CornerDetector()
+        result = detector.detect_from_arrays(
+            time, lat, lon, speed, radius, lat_acc, lon_acc
+        )
+
+        # Check that detected corners have apex set
+        for corner in result.corners:
+            assert corner.apex_idx >= corner.entry_idx
+            assert corner.apex_idx <= corner.exit_idx
+            # Verify apex is at max lateral G
+            corner_lat_acc = np.abs(lat_acc[corner.entry_idx:corner.exit_idx+1])
+            max_idx = corner.entry_idx + np.argmax(corner_lat_acc)
+            assert corner.apex_idx == max_idx
+
+
 class TestRealDataCompatibility:
     """Tests that work with real data format if available"""
 
@@ -1330,3 +1513,8 @@ class TestRealDataCompatibility:
             assert corner.end_idx < len(df)
             assert corner.start_idx < corner.end_idx
             assert corner.direction in ['left', 'right']
+            # Phase 4: Check apex indices
+            assert corner.apex_idx >= corner.start_idx
+            assert corner.apex_idx <= corner.end_idx
+            assert corner.min_speed_idx >= corner.start_idx
+            assert corner.min_speed_idx <= corner.end_idx
