@@ -51,6 +51,11 @@ class CornerMetrics:
     max_lateral_g: float = 0.0
     avg_lateral_g: float = 0.0
     max_braking_g: float = 0.0
+    max_accel_g: float = 0.0        # Maximum acceleration (positive longitudinal g)
+
+    # Distances (feet)
+    brake_point_distance: float = 0.0   # Distance before apex where braking started
+    throttle_on_distance: float = 0.0   # Distance after apex where throttle applied
 
     # Quality indicators
     consistency_score: float = 0.0  # 0-100, how consistent vs other laps
@@ -88,7 +93,12 @@ class CornerMetrics:
             "g_forces": {
                 "max_lateral": round(self.max_lateral_g, 2),
                 "avg_lateral": round(self.avg_lateral_g, 2),
-                "max_braking": round(self.max_braking_g, 2)
+                "max_braking": round(self.max_braking_g, 2),
+                "max_accel": round(self.max_accel_g, 2)
+            },
+            "distances": {
+                "brake_point": round(self.brake_point_distance, 1),
+                "throttle_on": round(self.throttle_on_distance, 1)
             },
             "quality": {
                 "consistency_score": round(self.consistency_score, 1),
@@ -333,9 +343,23 @@ class CornerAnalyzer:
         for corner in detection.corners:
             metrics = self._analyze_corner(
                 corner, time_data, speed_data,
-                lat_acc_data, lon_acc_data, throttle_data
+                lat_acc_data, lon_acc_data, throttle_data,
+                lat_data, lon_data
             )
             lap_analysis.corners.append(metrics)
+
+            # Phase 6: Set metrics on corner zone for easy access via corner.metrics
+            corner.set_metrics(
+                entry_speed=metrics.entry_speed,
+                apex_speed=metrics.min_speed,  # min_speed is apex speed
+                exit_speed=metrics.exit_speed,
+                max_lateral_g=metrics.max_lateral_g,
+                max_braking_g=metrics.max_braking_g,
+                max_accel_g=metrics.max_accel_g,
+                brake_point_distance=metrics.brake_point_distance,
+                throttle_on_distance=metrics.throttle_on_distance,
+                time_in_corner=metrics.time_in_corner
+            )
 
         # Calculate lap summary
         if lap_analysis.corners:
@@ -386,7 +410,9 @@ class CornerAnalyzer:
         speed_data: np.ndarray,
         lat_acc_data: np.ndarray,
         lon_acc_data: np.ndarray,
-        throttle_data: np.ndarray
+        throttle_data: np.ndarray,
+        lat_data: Optional[np.ndarray] = None,
+        lon_data: Optional[np.ndarray] = None
     ) -> CornerMetrics:
         """Analyze a single corner passage."""
         entry_idx = corner.entry_idx
@@ -436,6 +462,32 @@ class CornerAnalyzer:
         max_lateral_g = float(np.max(np.abs(corner_lat_acc))) if len(corner_lat_acc) > 0 else 0
         avg_lateral_g = float(np.mean(np.abs(corner_lat_acc))) if len(corner_lat_acc) > 0 else 0
         max_braking_g = float(np.abs(np.min(corner_lon_acc))) if len(corner_lon_acc) > 0 else 0
+        max_accel_g = float(np.max(corner_lon_acc)) if len(corner_lon_acc) > 0 else 0
+
+        # Distance calculations (in feet)
+        brake_point_distance = 0.0
+        throttle_on_distance = 0.0
+
+        if lat_data is not None and lon_data is not None:
+            # Calculate brake point distance (from brake start to apex)
+            brake_start_idx = corner.brake_start_idx
+            if brake_start_idx >= 0 and brake_start_idx < apex_idx:
+                brake_point_distance = self._calculate_distance_feet(
+                    lat_data, lon_data, brake_start_idx, apex_idx
+                )
+
+            # Calculate throttle pickup distance (from apex to throttle pickup point)
+            # Find throttle pickup index relative to entry
+            throttle_pickup_idx = entry_idx
+            for i in range(entry_idx, exit_idx + 1):
+                if i < len(throttle_data) and throttle_data[i] > self.THROTTLE_PICKUP_THRESHOLD:
+                    throttle_pickup_idx = i
+                    break
+
+            if throttle_pickup_idx > apex_idx:
+                throttle_on_distance = self._calculate_distance_feet(
+                    lat_data, lon_data, apex_idx, throttle_pickup_idx
+                )
 
         return CornerMetrics(
             corner_name=corner.name,
@@ -458,6 +510,9 @@ class CornerAnalyzer:
             max_lateral_g=max_lateral_g,
             avg_lateral_g=avg_lateral_g,
             max_braking_g=max_braking_g,
+            max_accel_g=max_accel_g,
+            brake_point_distance=brake_point_distance,
+            throttle_on_distance=throttle_on_distance,
             consistency_score=100.0,  # Will be calculated in multi-lap comparison
             optimal_line=True
         )
@@ -536,6 +591,46 @@ class CornerAnalyzer:
 
         duration = time_data[indices[-1]] - time_data[indices[0]]
         return True, float(duration)
+
+    def _calculate_distance_feet(
+        self,
+        lat_data: np.ndarray,
+        lon_data: np.ndarray,
+        start_idx: int,
+        end_idx: int
+    ) -> float:
+        """
+        Calculate distance between two points in feet.
+
+        Args:
+            lat_data: GPS latitude array (degrees)
+            lon_data: GPS longitude array (degrees)
+            start_idx: Starting index
+            end_idx: Ending index
+
+        Returns:
+            Distance in feet
+        """
+        if start_idx >= end_idx or start_idx < 0 or end_idx >= len(lat_data):
+            return 0.0
+
+        # Sum the distances between consecutive points
+        total_distance_meters = 0.0
+        mean_lat = np.mean(lat_data[start_idx:end_idx+1])
+
+        for i in range(start_idx, end_idx):
+            # Convert lat/lon to meters
+            lat_m1 = lat_data[i] * 111000.0
+            lon_m1 = lon_data[i] * 111000.0 * np.cos(np.radians(mean_lat))
+            lat_m2 = lat_data[i+1] * 111000.0
+            lon_m2 = lon_data[i+1] * 111000.0 * np.cos(np.radians(mean_lat))
+
+            # Calculate distance
+            distance = np.sqrt((lat_m2 - lat_m1)**2 + (lon_m2 - lon_m1)**2)
+            total_distance_meters += distance
+
+        # Convert meters to feet (1 meter = 3.28084 feet)
+        return total_distance_meters * 3.28084
 
     def _find_column(self, df: pd.DataFrame, candidates: List[str]) -> Optional[np.ndarray]:
         """Find a column by trying multiple names."""

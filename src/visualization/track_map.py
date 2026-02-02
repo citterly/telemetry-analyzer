@@ -733,3 +733,186 @@ class TrackMap:
 
         svg += '</g>\n'
         return svg
+
+    def render_corner_overlay_svg(
+        self,
+        latitude_data: np.ndarray,
+        longitude_data: np.ndarray,
+        corners: List[Dict],
+        color_data: np.ndarray = None,
+        color_scheme: str = 'speed',
+        title: str = "Track Map with Corners",
+        selected_corner: Optional[str] = None
+    ) -> str:
+        """
+        Render track map with corner markers and boundaries overlaid.
+
+        Args:
+            latitude_data: GPS latitude values
+            longitude_data: GPS longitude values
+            corners: List of corner dicts with keys: name, apex_lat, apex_lon,
+                     entry_idx, apex_idx, exit_idx, corner_type, direction
+            color_data: Values for color coding the track (e.g., speed)
+            color_scheme: Predefined scheme ('speed', 'rpm', etc.)
+            title: Map title
+            selected_corner: Name of currently selected corner (for highlighting)
+
+        Returns:
+            SVG string with corner overlay
+        """
+        # Get color scale
+        scale = self.COLOR_SCHEMES.get(color_scheme, self.COLOR_SCHEMES['speed'])
+        if color_data is not None and len(color_data) > 0:
+            scale = ColorScale(
+                name=scale.name,
+                min_val=float(np.nanmin(color_data)),
+                max_val=float(np.nanmax(color_data)),
+                colors=scale.colors
+            )
+
+        # Transform GPS to SVG coordinates
+        coords = self._transform_coordinates(latitude_data, longitude_data)
+
+        # Build SVG
+        svg = self._build_svg_header()
+
+        # Background
+        svg += f'<rect width="{self.config.width}" height="{self.config.height}" fill="{self.config.background_color}"/>\n'
+
+        # Track outline (faint)
+        svg += self._build_track_outline(coords)
+
+        # Colored track trace
+        svg += self._build_colored_trace(coords, color_data, scale)
+
+        # Corner boundaries (highlighted segments)
+        svg += self._build_corner_boundaries(coords, corners, selected_corner)
+
+        # Corner markers (numbered circles at apex)
+        svg += self._build_corner_markers(latitude_data, longitude_data, corners, selected_corner)
+
+        # Start/finish marker
+        if self.config.show_start_finish and len(coords) > 0:
+            svg += self._build_start_finish_marker(coords[0])
+
+        # Legend
+        if self.config.show_legend:
+            svg += self._build_legend(scale)
+
+        # Title
+        if self.config.show_title:
+            svg += self._build_title(title)
+
+        svg += '</svg>'
+        return svg
+
+    def _build_corner_boundaries(
+        self,
+        coords: List[Tuple[float, float]],
+        corners: List[Dict],
+        selected_corner: Optional[str]
+    ) -> str:
+        """Build highlighted segments for corner boundaries"""
+        if len(coords) < 2 or not corners:
+            return ""
+
+        svg = '<g class="corner-boundaries">\n'
+
+        for corner in corners:
+            entry_idx = corner.get('entry_idx', 0)
+            exit_idx = corner.get('exit_idx', 0)
+            corner_name = corner.get('name', '')
+            is_selected = (corner_name == selected_corner)
+
+            # Validate indices
+            entry_idx = max(0, min(entry_idx, len(coords) - 1))
+            exit_idx = max(0, min(exit_idx, len(coords) - 1))
+
+            if entry_idx >= exit_idx:
+                continue
+
+            # Draw corner boundary segment with thicker, semi-transparent line
+            # Different color based on selection
+            if is_selected:
+                boundary_color = "rgba(241, 196, 15, 0.6)"  # Yellow for selected
+                width = 6
+            else:
+                boundary_color = "rgba(52, 152, 219, 0.3)"  # Blue for unselected
+                width = 5
+
+            # Draw the boundary as a polyline
+            boundary_points = coords[entry_idx:exit_idx+1]
+            if boundary_points:
+                points_str = " ".join(f"{x:.1f},{y:.1f}" for x, y in boundary_points)
+                svg += f'<polyline points="{points_str}" fill="none" stroke="{boundary_color}" stroke-width="{width}" stroke-linecap="round" stroke-linejoin="round" class="corner-boundary" data-corner="{corner_name}"/>\n'
+
+        svg += '</g>\n'
+        return svg
+
+    def _build_corner_markers(
+        self,
+        latitude_data: np.ndarray,
+        longitude_data: np.ndarray,
+        corners: List[Dict],
+        selected_corner: Optional[str]
+    ) -> str:
+        """Build numbered circle markers at corner apex positions"""
+        if not corners:
+            return ""
+
+        svg = '<g class="corner-markers">\n'
+
+        # Corner type colors
+        type_colors = {
+            'hairpin': '#e74c3c',
+            'sweeper': '#3498db',
+            'chicane': '#9b59b6',
+            'kink': '#2ecc71',
+            'normal': '#95a5a6'
+        }
+
+        for corner in corners:
+            apex_lat = corner.get('apex_lat', 0.0)
+            apex_lon = corner.get('apex_lon', 0.0)
+            corner_name = corner.get('name', '')
+            corner_type = corner.get('corner_type', 'normal')
+            direction = corner.get('direction', 'left')
+            alias = corner.get('alias', '')
+            is_selected = (corner_name == selected_corner)
+
+            # Transform apex to SVG coordinates
+            apex_coords = self._transform_coordinates(
+                np.array([apex_lat]),
+                np.array([apex_lon])
+            )
+            if not apex_coords:
+                continue
+
+            x, y = apex_coords[0]
+
+            # Marker appearance
+            marker_radius = 12 if is_selected else 10
+            marker_color = type_colors.get(corner_type, '#95a5a6')
+            outline_width = 3 if is_selected else 2
+            outline_color = '#f1c40f' if is_selected else '#1a1a2e'
+
+            # Extract corner number from name (e.g., "T1" -> "1")
+            corner_number = corner_name.replace('T', '') if corner_name.startswith('T') else corner_name
+
+            # Tooltip text
+            tooltip_lines = [
+                f"{corner_name}" + (f" ({alias})" if alias else ""),
+                f"Type: {corner_type.capitalize()}",
+                f"Direction: {direction.capitalize()}"
+            ]
+            tooltip_text = " - ".join(tooltip_lines)
+
+            # Draw marker circle
+            svg += f'<g class="corner-marker" data-corner="{corner_name}" style="cursor:pointer;">\n'
+            svg += f'  <title>{tooltip_text}</title>\n'
+            svg += f'  <circle cx="{x:.1f}" cy="{y:.1f}" r="{marker_radius}" fill="{marker_color}" stroke="{outline_color}" stroke-width="{outline_width}"/>\n'
+            svg += f'  <text x="{x:.1f}" y="{y + 4:.1f}" text-anchor="middle" fill="#ffffff" font-size="11" font-weight="bold" font-family="sans-serif" pointer-events="none">{corner_number}</text>\n'
+            svg += f'</g>\n'
+
+        svg += '</g>\n'
+        return svg

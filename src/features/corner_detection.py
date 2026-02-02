@@ -11,6 +11,92 @@ from dataclasses import dataclass, field
 from typing import List, Dict, Optional, Tuple
 from pathlib import Path
 import json
+import math
+
+
+def classify_corner(
+    apex_speed_mph: float,
+    entry_speed_mph: float,
+    duration_seconds: float,
+    min_radius: float,
+    lat_acc_data: np.ndarray,
+    entry_idx: int,
+    exit_idx: int
+) -> Tuple[str, int]:
+    """
+    Classify corner type and calculate severity rating.
+
+    Args:
+        apex_speed_mph: Speed at apex
+        entry_speed_mph: Speed at corner entry
+        duration_seconds: Time spent in corner
+        min_radius: Minimum turning radius in meters
+        lat_acc_data: Lateral acceleration data array
+        entry_idx: Entry index in data
+        exit_idx: Exit index in data
+
+    Returns:
+        Tuple of (corner_type, severity_rating)
+
+    Corner types:
+        - "hairpin": <40mph apex speed
+        - "sweeper": >60mph apex, >2s duration
+        - "chicane": Direction change detected (<1s per direction)
+        - "kink": >80mph apex, <1s duration
+        - "normal": Default classification
+
+    Severity (1-5):
+        Based on speed loss percentage:
+        - 1: <10% speed loss (very easy)
+        - 2: 10-25% speed loss (easy)
+        - 3: 25-40% speed loss (moderate)
+        - 4: 40-55% speed loss (hard)
+        - 5: >55% speed loss (very hard)
+    """
+    # Calculate speed loss percentage
+    if entry_speed_mph > 0:
+        speed_loss_pct = ((entry_speed_mph - apex_speed_mph) / entry_speed_mph) * 100
+    else:
+        speed_loss_pct = 0.0
+
+    # Classify corner type based on Phase 5 requirements
+    corner_type = "normal"  # Default
+
+    # Check for chicane: direction change in lateral G within corner
+    if exit_idx > entry_idx + 1:
+        corner_lat_acc = lat_acc_data[entry_idx:exit_idx+1]
+        # Chicane detected if lateral G changes sign (direction change)
+        has_positive = np.any(corner_lat_acc > 0.3)
+        has_negative = np.any(corner_lat_acc < -0.3)
+        if has_positive and has_negative and duration_seconds < 1.0:
+            corner_type = "chicane"
+
+    # Only classify as other types if not a chicane
+    # Order matters: check most specific criteria first
+    if corner_type == "normal":
+        if apex_speed_mph < 40:
+            # Hairpin: very slow apex regardless of duration
+            corner_type = "hairpin"
+        elif apex_speed_mph > 80 and duration_seconds < 1.0:
+            # Kink: very fast and very short
+            corner_type = "kink"
+        elif apex_speed_mph > 60 and duration_seconds > 2.0:
+            # Sweeper: fast and long (but not slow enough for hairpin)
+            corner_type = "sweeper"
+
+    # Calculate severity rating (1-5) based on speed loss
+    if speed_loss_pct < 10:
+        severity = 1
+    elif speed_loss_pct < 25:
+        severity = 2
+    elif speed_loss_pct < 40:
+        severity = 3
+    elif speed_loss_pct < 55:
+        severity = 4
+    else:
+        severity = 5
+
+    return corner_type, severity
 
 
 def detect_corner_boundaries(
@@ -234,7 +320,64 @@ class CornerZone:
     min_radius: float = 0.0      # Minimum GPS radius in the corner
     apex_speed_mph: float = 0.0  # Speed at apex
     direction: str = "left"      # "left" or "right" based on lateral acc sign
-    corner_type: str = "normal"  # "normal", "hairpin", "kink", "chicane"
+    corner_type: str = "normal"  # "hairpin", "sweeper", "chicane", "kink", "normal"
+    severity: int = 3            # 1-5 rating based on speed loss percentage
+
+    # Phase 6: Metrics storage (populated by CornerAnalyzer)
+    _metrics: Optional[Dict] = field(default=None, repr=False)
+
+    @property
+    def metrics(self) -> Dict:
+        """
+        Access corner metrics as a dictionary.
+
+        Returns dict with keys: entry_speed, apex_speed, exit_speed,
+        max_lateral_g, max_braking_g, max_accel_g, brake_point_distance,
+        throttle_on_distance, time_in_corner.
+
+        Note: Metrics are only available after corner analysis.
+        If not analyzed, returns basic metrics from detection.
+        """
+        if self._metrics is not None:
+            return self._metrics
+
+        # Return basic metrics from detection if full analysis not available
+        return {
+            "entry_speed": 0.0,
+            "apex_speed": self.apex_speed_mph,
+            "exit_speed": 0.0,
+            "max_lateral_g": 0.0,
+            "max_braking_g": 0.0,
+            "max_accel_g": 0.0,
+            "brake_point_distance": 0.0,
+            "throttle_on_distance": 0.0,
+            "time_in_corner": 0.0
+        }
+
+    def set_metrics(
+        self,
+        entry_speed: float,
+        apex_speed: float,
+        exit_speed: float,
+        max_lateral_g: float,
+        max_braking_g: float,
+        max_accel_g: float,
+        brake_point_distance: float,
+        throttle_on_distance: float,
+        time_in_corner: float
+    ):
+        """Set metrics for this corner (called by CornerAnalyzer)."""
+        self._metrics = {
+            "entry_speed": entry_speed,
+            "apex_speed": apex_speed,
+            "exit_speed": exit_speed,
+            "max_lateral_g": max_lateral_g,
+            "max_braking_g": max_braking_g,
+            "max_accel_g": max_accel_g,
+            "brake_point_distance": brake_point_distance,
+            "throttle_on_distance": throttle_on_distance,
+            "time_in_corner": time_in_corner
+        }
 
     def to_dict(self) -> dict:
         """Convert to dictionary for JSON serialization."""
@@ -252,7 +395,8 @@ class CornerZone:
             "min_radius": round(self.min_radius, 1),
             "apex_speed_mph": round(self.apex_speed_mph, 1),
             "direction": self.direction,
-            "corner_type": self.corner_type
+            "corner_type": self.corner_type,
+            "severity": self.severity
         }
 
     @classmethod
@@ -275,7 +419,8 @@ class CornerZone:
             min_radius=data.get("min_radius", 0.0),
             apex_speed_mph=data.get("apex_speed_mph", 0.0),
             direction=data.get("direction", "left"),
-            corner_type=data.get("corner_type", "normal")
+            corner_type=data.get("corner_type", "normal"),
+            severity=data.get("severity", 3)
         )
 
 
@@ -653,16 +798,26 @@ class CornerDetector:
         lat_acc_at_apex = lat_acc_data[apex_idx] if apex_idx < len(lat_acc_data) else 0
         direction = "right" if lat_acc_at_apex > 0 else "left"
 
-        # Classify corner type based on apex speed and radius
+        # Get speeds and calculate duration
         apex_speed = speed_data[apex_idx]
         min_radius = np.min(radius_data[start_idx:end_idx+1])
+        duration = float(time_data[end_idx] - time_data[start_idx])
 
-        if apex_speed < 40 and min_radius < 30:
-            corner_type = "hairpin"
-        elif apex_speed > 100 and min_radius > 150:
-            corner_type = "kink"
-        else:
-            corner_type = "normal"
+        # Find maximum speed before corner (lookback up to 30 samples / 3 seconds)
+        lookback_start = max(0, start_idx - 30)
+        pre_corner_speed = np.max(speed_data[lookback_start:start_idx+1]) if lookback_start < start_idx else speed_data[start_idx]
+        entry_speed = max(pre_corner_speed, speed_data[start_idx])
+
+        # Phase 5: Classify corner type and calculate severity
+        corner_type, severity = classify_corner(
+            apex_speed_mph=float(apex_speed),
+            entry_speed_mph=float(entry_speed),
+            duration_seconds=duration,
+            min_radius=float(min_radius),
+            lat_acc_data=lat_acc_data,
+            entry_idx=start_idx,
+            exit_idx=end_idx
+        )
 
         return CornerZone(
             name=f"T{corner_num}",
@@ -678,7 +833,8 @@ class CornerDetector:
             min_radius=float(min_radius),
             apex_speed_mph=float(apex_speed),
             direction=direction,
-            corner_type=corner_type
+            corner_type=corner_type,
+            severity=severity
         )
 
     def _find_braking_zones(
@@ -992,6 +1148,340 @@ def detect_corners_from_parquet(parquet_path: str, lap_number: int = 1) -> Corne
     """
     detector = CornerDetector()
     return detector.detect_from_parquet(parquet_path, lap_number)
+
+
+# Phase 7: Corner Numbering and Persistence
+
+def calculate_gps_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """
+    Calculate distance between two GPS points in meters using Haversine formula.
+
+    Args:
+        lat1, lon1: First point (degrees)
+        lat2, lon2: Second point (degrees)
+
+    Returns:
+        Distance in meters
+    """
+    # Convert to radians
+    lat1_rad = math.radians(lat1)
+    lat2_rad = math.radians(lat2)
+    delta_lat = math.radians(lat2 - lat1)
+    delta_lon = math.radians(lon2 - lon1)
+
+    # Haversine formula
+    a = math.sin(delta_lat / 2) ** 2 + math.cos(lat1_rad) * math.cos(lat2_rad) * math.sin(delta_lon / 2) ** 2
+    c = 2 * math.asin(math.sqrt(a))
+
+    # Earth radius in meters
+    radius_earth = 6371000
+
+    return radius_earth * c
+
+
+def load_track_corners(track_name: str, corners_file: str = "data/track_corners.json") -> Optional[List[Dict]]:
+    """
+    Load corner definitions for a specific track.
+
+    Args:
+        track_name: Name of the track
+        corners_file: Path to track corners JSON file
+
+    Returns:
+        List of corner definitions, or None if track not found
+    """
+    corners_path = Path(corners_file)
+
+    if not corners_path.exists():
+        return None
+
+    try:
+        with open(corners_path, 'r') as f:
+            data = json.load(f)
+
+        # Normalize track name for lookup
+        track_key = track_name.lower().replace(' ', '_')
+
+        if track_key in data:
+            return data[track_key]
+
+        return None
+    except (json.JSONDecodeError, IOError):
+        return None
+
+
+def save_track_corners(
+    track_name: str,
+    corners: List[CornerZone],
+    corners_file: str = "data/track_corners.json"
+) -> None:
+    """
+    Save corner definitions for a specific track.
+
+    Args:
+        track_name: Name of the track
+        corners: List of CornerZone objects to save
+        corners_file: Path to track corners JSON file
+    """
+    corners_path = Path(corners_file)
+
+    # Load existing data or create new
+    if corners_path.exists():
+        try:
+            with open(corners_path, 'r') as f:
+                data = json.load(f)
+        except (json.JSONDecodeError, IOError):
+            data = {}
+    else:
+        # Create directory if it doesn't exist
+        corners_path.parent.mkdir(parents=True, exist_ok=True)
+        data = {}
+
+    # Normalize track name
+    track_key = track_name.lower().replace(' ', '_')
+
+    # Convert corners to serializable format
+    corners_data = []
+    for corner in corners:
+        corner_dict = {
+            "name": corner.name,
+            "alias": corner.alias,
+            "apex_lat": corner.apex_lat,
+            "apex_lon": corner.apex_lon,
+            "entry_lat": corner.entry_lat,
+            "entry_lon": corner.entry_lon,
+            "exit_lat": corner.exit_lat,
+            "exit_lon": corner.exit_lon,
+            "corner_type": corner.corner_type,
+            "direction": corner.direction
+        }
+        corners_data.append(corner_dict)
+
+    # Update data
+    data[track_key] = corners_data
+
+    # Save to file
+    with open(corners_path, 'w') as f:
+        json.dump(data, f, indent=2)
+
+
+def match_corner_to_definition(
+    corner: CornerZone,
+    definitions: List[Dict],
+    proximity_threshold: float = 50.0
+) -> Optional[Dict]:
+    """
+    Match a detected corner to a stored corner definition by GPS proximity.
+
+    Args:
+        corner: CornerZone to match
+        definitions: List of stored corner definitions
+        proximity_threshold: Maximum distance in meters for a match (default 50m)
+
+    Returns:
+        Matching definition dict, or None if no match found
+    """
+    best_match = None
+    best_distance = float('inf')
+
+    for definition in definitions:
+        # Calculate distance between apex points
+        distance = calculate_gps_distance(
+            corner.apex_lat, corner.apex_lon,
+            definition["apex_lat"], definition["apex_lon"]
+        )
+
+        if distance < best_distance and distance < proximity_threshold:
+            best_distance = distance
+            best_match = definition
+
+    return best_match
+
+
+def number_corners_by_track_position(
+    corners: List[CornerZone],
+    start_lat: Optional[float] = None,
+    start_lon: Optional[float] = None
+) -> List[CornerZone]:
+    """
+    Number corners T1, T2, T3... based on track position.
+
+    Args:
+        corners: List of CornerZone objects
+        start_lat: Optional start/finish line latitude
+        start_lon: Optional start/finish line longitude
+
+    Returns:
+        List of CornerZone objects with updated names
+    """
+    if not corners:
+        return corners
+
+    # If start position provided, find nearest corner and start numbering from there
+    if start_lat is not None and start_lon is not None:
+        distances = []
+        for i, corner in enumerate(corners):
+            dist = calculate_gps_distance(start_lat, start_lon, corner.entry_lat, corner.entry_lon)
+            distances.append((i, dist))
+
+        # Sort by distance to find first corner
+        distances.sort(key=lambda x: x[1])
+        first_corner_idx = distances[0][0]
+
+        # Reorder corners starting from first corner
+        reordered = corners[first_corner_idx:] + corners[:first_corner_idx]
+    else:
+        # Use corners as-is (already in order from detection)
+        reordered = corners
+
+    # Number corners T1, T2, T3...
+    for i, corner in enumerate(reordered, start=1):
+        corner.name = f"T{i}"
+
+    return reordered
+
+
+def apply_corner_definitions(
+    corners: List[CornerZone],
+    track_name: str,
+    corners_file: str = "data/track_corners.json",
+    proximity_threshold: float = 50.0,
+    auto_save_new: bool = True
+) -> List[CornerZone]:
+    """
+    Apply stored corner definitions to detected corners, or save new definitions.
+
+    This is the main Phase 7 API: loads stored corner definitions for a track,
+    matches detected corners to stored definitions by GPS proximity, applies
+    stored names/aliases, or creates new corner definitions if track is unknown.
+
+    Args:
+        corners: List of detected CornerZone objects
+        track_name: Name of the track
+        corners_file: Path to track corners JSON file
+        proximity_threshold: Maximum distance in meters for GPS matching
+        auto_save_new: If True, automatically save corner definitions for new tracks
+
+    Returns:
+        List of CornerZone objects with names/aliases applied
+    """
+    # Load stored definitions
+    definitions = load_track_corners(track_name, corners_file)
+
+    if definitions is None:
+        # New track - number corners and optionally save
+        numbered_corners = number_corners_by_track_position(corners)
+
+        if auto_save_new and numbered_corners:
+            save_track_corners(track_name, numbered_corners, corners_file)
+
+        return numbered_corners
+
+    # Match corners to definitions
+    matched_corners = []
+    unmatched_corners = []
+
+    for corner in corners:
+        match = match_corner_to_definition(corner, definitions, proximity_threshold)
+
+        if match:
+            # Apply stored name and alias
+            corner.name = match.get("name", corner.name)
+            corner.alias = match.get("alias")
+            matched_corners.append(corner)
+        else:
+            unmatched_corners.append(corner)
+
+    # Number any unmatched corners
+    if unmatched_corners:
+        # Find highest T-number in both matched corners AND stored definitions
+        max_t_num = 0
+        for corner in matched_corners:
+            if corner.name.startswith("T") and corner.name[1:].isdigit():
+                num = int(corner.name[1:])
+                max_t_num = max(max_t_num, num)
+
+        # Also check stored definitions for max T-number
+        for defn in definitions:
+            name = defn.get("name", "")
+            if name.startswith("T") and name[1:].isdigit():
+                num = int(name[1:])
+                max_t_num = max(max_t_num, num)
+
+        # Number unmatched corners starting after max
+        for i, corner in enumerate(unmatched_corners, start=max_t_num + 1):
+            corner.name = f"T{i}"
+
+    # Combine and sort by entry position (assuming they're already in order)
+    all_corners = matched_corners + unmatched_corners
+
+    # Update stored definitions if we have new corners
+    if unmatched_corners and auto_save_new:
+        save_track_corners(track_name, all_corners, corners_file)
+
+    return all_corners
+
+
+def rename_corner(
+    track_name: str,
+    corner_name: str,
+    new_name: Optional[str] = None,
+    new_alias: Optional[str] = None,
+    corners_file: str = "data/track_corners.json"
+) -> bool:
+    """
+    Rename a corner or set its alias in the stored track definition.
+
+    Args:
+        track_name: Name of the track
+        corner_name: Current name of the corner (e.g., "T1")
+        new_name: New name for the corner (optional)
+        new_alias: Alias for the corner (optional, e.g., "Carousel")
+        corners_file: Path to track corners JSON file
+
+    Returns:
+        True if successful, False otherwise
+    """
+    corners_path = Path(corners_file)
+
+    if not corners_path.exists():
+        return False
+
+    try:
+        with open(corners_path, 'r') as f:
+            data = json.load(f)
+    except (json.JSONDecodeError, IOError):
+        return False
+
+    # Normalize track name
+    track_key = track_name.lower().replace(' ', '_')
+
+    if track_key not in data:
+        return False
+
+    # Find and update corner
+    corners = data[track_key]
+    found = False
+
+    for corner in corners:
+        if corner["name"] == corner_name:
+            if new_name is not None:
+                corner["name"] = new_name
+            if new_alias is not None:
+                corner["alias"] = new_alias
+            found = True
+            break
+
+    if not found:
+        return False
+
+    # Save updated data
+    try:
+        with open(corners_path, 'w') as f:
+            json.dump(data, f, indent=2)
+        return True
+    except IOError:
+        return False
 
 
 # Module-level functions for different use cases

@@ -137,14 +137,40 @@
         background: #2d2d2d;
         padding: 10px;
         text-align: center;
+        cursor: pointer;
+        user-select: none;
+    }
+    .corner-comparison-table th:hover {
+        background: #3d3d3d;
     }
     .corner-comparison-table td {
         padding: 8px;
         text-align: center;
         border-bottom: 1px solid #2d2d2d;
     }
-    .corner-comparison-table tr:hover {
-        background: rgba(74, 144, 226, 0.1);
+    .corner-comparison-table tbody tr {
+        cursor: pointer;
+    }
+    .corner-comparison-table tbody tr:hover {
+        background: rgba(74, 144, 226, 0.2);
+    }
+    .corner-comparison-table tbody tr.selected {
+        background: rgba(74, 144, 226, 0.3);
+    }
+    .sort-indicator {
+        margin-left: 5px;
+        font-size: 0.7rem;
+    }
+    .delta-positive {
+        color: #2ecc71;
+        font-weight: bold;
+    }
+    .delta-negative {
+        color: #e74c3c;
+        font-weight: bold;
+    }
+    .delta-neutral {
+        color: #888;
     }
 </style>
 {% endblock %}
@@ -174,6 +200,7 @@
                 <option value="cards">Corner Cards</option>
                 <option value="table">Comparison Table</option>
                 <option value="chart">Speed Chart</option>
+                <option value="map">Track Map</option>
             </select>
         </div>
     </div>
@@ -246,19 +273,24 @@
                 <table class="corner-comparison-table" id="comparison-table">
                     <thead>
                         <tr>
-                            <th>Corner</th>
-                            <th>Entry</th>
-                            <th>Min</th>
-                            <th>Exit</th>
-                            <th>Scrub</th>
-                            <th>Time</th>
-                            <th>Throttle Pickup</th>
-                            <th>Max Lat G</th>
-                            <th>Notes</th>
+                            <th onclick="sortComparisonTable('corner')">Corner <span class="sort-indicator"></span></th>
+                            <th onclick="sortComparisonTable('entry_delta')">Entry Δ <span class="sort-indicator"></span></th>
+                            <th onclick="sortComparisonTable('apex_delta')">Apex Δ <span class="sort-indicator"></span></th>
+                            <th onclick="sortComparisonTable('exit_delta')">Exit Δ <span class="sort-indicator"></span></th>
+                            <th onclick="sortComparisonTable('time_delta')">Time Δ <span class="sort-indicator"></span></th>
                         </tr>
                     </thead>
                     <tbody>
                     </tbody>
+                    <tfoot>
+                        <tr style="font-weight: bold; border-top: 2px solid #4a90e2;">
+                            <td>Total</td>
+                            <td id="total-entry-delta">--</td>
+                            <td id="total-apex-delta">--</td>
+                            <td id="total-exit-delta">--</td>
+                            <td id="total-time-delta">--</td>
+                        </tr>
+                    </tfoot>
                 </table>
             </div>
         </div>
@@ -271,6 +303,35 @@
             <div class="card-body">
                 <div id="corner-chart-container">
                     <canvas id="corner-chart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- View: Track Map -->
+    <div id="view-map" style="display: none;">
+        <div class="card">
+            <div class="card-header">
+                <strong>Track Map - Corner Overlay</strong>
+                <div class="float-end">
+                    <label for="map-color-scheme" style="font-size: 0.9rem; font-weight: normal; margin-right: 10px;">Color by:</label>
+                    <select id="map-color-scheme" class="form-select form-select-sm" style="display: inline-block; width: auto;" onchange="reloadTrackMap()">
+                        <option value="speed">Speed</option>
+                        <option value="throttle">Throttle</option>
+                        <option value="gear">Gear</option>
+                        <option value="rpm">RPM</option>
+                    </select>
+                </div>
+            </div>
+            <div class="card-body" style="text-align: center;">
+                <div id="track-map-container" style="min-height: 600px;">
+                    <p class="text-muted">Loading track map...</p>
+                </div>
+                <div id="selected-corner-info" style="margin-top: 15px; display: none;">
+                    <h5 id="selected-corner-name"></h5>
+                    <div id="selected-corner-metrics" class="row">
+                        <!-- Populated by JavaScript when corner is selected -->
+                    </div>
                 </div>
             </div>
         </div>
@@ -444,36 +505,190 @@
         container.innerHTML = html;
     }
 
+    let comparisonTableData = [];
+    let currentSortColumn = 'corner';
+    let currentSortDirection = 'asc';
+
     function renderComparisonTable() {
         if (!currentData || !currentData.laps || currentData.laps.length === 0) return;
 
-        const tbody = document.querySelector('#comparison-table tbody');
         const corners = currentData.laps[0].corners;
 
+        // Find best values for each corner (from current lap since we only have one lap)
+        // In a multi-lap scenario, we'd compare across laps
+        const avgEntry = currentData.laps[0].summary.avg_entry_speed;
+        const avgApex = corners.reduce((sum, c) => sum + c.speeds.min, 0) / corners.length;
+        const avgExit = currentData.laps[0].summary.avg_exit_speed;
+
+        // Build comparison data
+        comparisonTableData = corners.map(corner => {
+            // Calculate deltas from session averages (in multi-lap, would be from best lap)
+            const entryDelta = corner.speeds.entry - avgEntry;
+            const apexDelta = corner.speeds.min - avgApex;
+            const exitDelta = corner.speeds.exit - avgExit;
+
+            // For time delta, use difference from average corner time
+            const avgTime = currentData.laps[0].summary.total_corner_time / corners.length;
+            const timeDelta = corner.timing.total - avgTime;
+
+            return {
+                corner_name: corner.corner_name,
+                entry_delta: entryDelta,
+                apex_delta: apexDelta,
+                exit_delta: exitDelta,
+                time_delta: timeDelta,
+                corner: corner  // Keep full corner data for click handling
+            };
+        });
+
+        // Sort the data
+        sortComparisonTableData();
+    }
+
+    function sortComparisonTableData() {
+        comparisonTableData.sort((a, b) => {
+            let valA, valB;
+
+            if (currentSortColumn === 'corner') {
+                valA = a.corner_name;
+                valB = b.corner_name;
+                if (currentSortDirection === 'asc') {
+                    return valA.localeCompare(valB);
+                } else {
+                    return valB.localeCompare(valA);
+                }
+            } else {
+                valA = a[currentSortColumn];
+                valB = b[currentSortColumn];
+                if (currentSortDirection === 'asc') {
+                    return valA - valB;
+                } else {
+                    return valB - valA;
+                }
+            }
+        });
+
+        renderComparisonTableRows();
+    }
+
+    function renderComparisonTableRows() {
+        const tbody = document.querySelector('#comparison-table tbody');
+
         let html = '';
-        for (const corner of corners) {
-            let notes = [];
-            if (corner.lift.detected) notes.push('Lift detected');
-            if (corner.trail_brake.detected) notes.push('Trail brake');
-            if (corner.throttle.pickup_pct > 70) notes.push('Late throttle');
-            if (corner.speeds.scrub > 40) notes.push('High scrub');
+        let totalEntryDelta = 0;
+        let totalApexDelta = 0;
+        let totalExitDelta = 0;
+        let totalTimeDelta = 0;
+
+        for (const row of comparisonTableData) {
+            totalEntryDelta += row.entry_delta;
+            totalApexDelta += row.apex_delta;
+            totalExitDelta += row.exit_delta;
+            totalTimeDelta += row.time_delta;
 
             html += `
-                <tr>
-                    <td><strong>${corner.corner_name}</strong></td>
-                    <td>${corner.speeds.entry.toFixed(0)}</td>
-                    <td>${corner.speeds.min.toFixed(0)}</td>
-                    <td>${corner.speeds.exit.toFixed(0)}</td>
-                    <td>${corner.speeds.scrub.toFixed(0)}</td>
-                    <td>${corner.timing.total.toFixed(2)}s</td>
-                    <td>${corner.throttle.pickup_pct.toFixed(0)}%</td>
-                    <td>${corner.g_forces.max_lateral.toFixed(2)}g</td>
-                    <td class="text-muted">${notes.join(', ') || '-'}</td>
+                <tr onclick="selectCornerFromTable('${row.corner_name}')">
+                    <td><strong>${row.corner_name}</strong></td>
+                    <td class="${getDeltaClass(row.entry_delta, true)}">${formatDelta(row.entry_delta, 'mph')}</td>
+                    <td class="${getDeltaClass(row.apex_delta, true)}">${formatDelta(row.apex_delta, 'mph')}</td>
+                    <td class="${getDeltaClass(row.exit_delta, true)}">${formatDelta(row.exit_delta, 'mph')}</td>
+                    <td class="${getDeltaClass(row.time_delta, false)}">${formatDelta(row.time_delta, 's')}</td>
                 </tr>
             `;
         }
 
         tbody.innerHTML = html;
+
+        // Update totals
+        document.getElementById('total-entry-delta').textContent = formatDelta(totalEntryDelta, 'mph');
+        document.getElementById('total-entry-delta').className = getDeltaClass(totalEntryDelta, true);
+
+        document.getElementById('total-apex-delta').textContent = formatDelta(totalApexDelta, 'mph');
+        document.getElementById('total-apex-delta').className = getDeltaClass(totalApexDelta, true);
+
+        document.getElementById('total-exit-delta').textContent = formatDelta(totalExitDelta, 'mph');
+        document.getElementById('total-exit-delta').className = getDeltaClass(totalExitDelta, true);
+
+        document.getElementById('total-time-delta').textContent = formatDelta(totalTimeDelta, 's');
+        document.getElementById('total-time-delta').className = getDeltaClass(totalTimeDelta, false);
+
+        // Update sort indicators
+        updateSortIndicators();
+    }
+
+    function getDeltaClass(delta, higherIsBetter) {
+        const threshold = 0.01;  // Small threshold to treat near-zero as neutral
+
+        if (Math.abs(delta) < threshold) {
+            return 'delta-neutral';
+        }
+
+        if (higherIsBetter) {
+            return delta > 0 ? 'delta-positive' : 'delta-negative';
+        } else {
+            return delta < 0 ? 'delta-positive' : 'delta-negative';
+        }
+    }
+
+    function formatDelta(delta, unit) {
+        const sign = delta >= 0 ? '+' : '';
+        if (unit === 's') {
+            return `${sign}${delta.toFixed(3)}s`;
+        } else if (unit === 'mph') {
+            return `${sign}${delta.toFixed(1)} ${unit}`;
+        }
+        return `${sign}${delta.toFixed(1)}`;
+    }
+
+    function sortComparisonTable(column) {
+        if (currentSortColumn === column) {
+            // Toggle direction
+            currentSortDirection = currentSortDirection === 'asc' ? 'desc' : 'asc';
+        } else {
+            currentSortColumn = column;
+            currentSortDirection = 'asc';
+        }
+        sortComparisonTableData();
+    }
+
+    function updateSortIndicators() {
+        // Clear all indicators
+        document.querySelectorAll('.sort-indicator').forEach(el => el.textContent = '');
+
+        // Find the header for current sort column
+        const headers = document.querySelectorAll('#comparison-table th');
+        const columnMap = {
+            'corner': 0,
+            'entry_delta': 1,
+            'apex_delta': 2,
+            'exit_delta': 3,
+            'time_delta': 4
+        };
+
+        const headerIndex = columnMap[currentSortColumn];
+        if (headerIndex !== undefined && headers[headerIndex]) {
+            const indicator = headers[headerIndex].querySelector('.sort-indicator');
+            if (indicator) {
+                indicator.textContent = currentSortDirection === 'asc' ? '▲' : '▼';
+            }
+        }
+    }
+
+    function selectCornerFromTable(cornerName) {
+        // Switch to map view
+        document.getElementById('view-mode').value = 'map';
+        toggleViewMode();
+
+        // Select the corner
+        selectCorner(cornerName);
+
+        // Highlight the selected row
+        document.querySelectorAll('#comparison-table tbody tr').forEach(tr => {
+            tr.classList.remove('selected');
+            if (tr.textContent.includes(cornerName)) {
+                tr.classList.add('selected');
+            }
+        });
     }
 
     function renderChart() {
@@ -571,9 +786,213 @@
         document.getElementById('view-cards').style.display = mode === 'cards' ? 'block' : 'none';
         document.getElementById('view-table').style.display = mode === 'table' ? 'block' : 'none';
         document.getElementById('view-chart').style.display = mode === 'chart' ? 'block' : 'none';
+        document.getElementById('view-map').style.display = mode === 'map' ? 'block' : 'none';
 
         if (mode === 'chart' && currentData) {
             renderChart();
+        }
+        if (mode === 'map' && currentData) {
+            renderTrackMap();
+        }
+    }
+
+    let selectedCorner = null;
+
+    async function renderTrackMap() {
+        const filename = document.getElementById('file-select').value;
+        if (!filename || !currentData) return;
+
+        const colorScheme = document.getElementById('map-color-scheme').value;
+        const container = document.getElementById('track-map-container');
+
+        container.innerHTML = '<p class="text-muted">Loading track map...</p>';
+
+        try {
+            const params = new URLSearchParams({
+                track_name: currentData.track_name || 'Unknown Track',
+                color_scheme: colorScheme
+            });
+
+            if (selectedCorner) {
+                params.set('selected_corner', selectedCorner);
+            }
+
+            const response = await fetch(`/api/corner-track-map/${encodeURIComponent(filename)}?${params}`);
+            if (!response.ok) throw new Error('Failed to load track map');
+
+            const svg = await response.text();
+            container.innerHTML = svg;
+
+            // Add click handlers to corner markers
+            attachCornerClickHandlers();
+
+        } catch (error) {
+            container.innerHTML = `<p class="text-danger">Failed to load track map: ${error.message}</p>`;
+        }
+    }
+
+    function attachCornerClickHandlers() {
+        const markers = document.querySelectorAll('.corner-marker');
+        markers.forEach(marker => {
+            marker.addEventListener('click', function() {
+                const cornerName = this.getAttribute('data-corner');
+                selectCorner(cornerName);
+            });
+        });
+    }
+
+    function selectCorner(cornerName) {
+        selectedCorner = cornerName;
+
+        // Reload track map with selected corner highlighted
+        renderTrackMap();
+
+        // Show corner details
+        displaySelectedCornerInfo(cornerName);
+    }
+
+    function displaySelectedCornerInfo(cornerName) {
+        if (!currentData || !currentData.laps || currentData.laps.length === 0) return;
+
+        const corner = currentData.laps[0].corners.find(c => c.corner_name === cornerName);
+        const zone = currentData.corner_zones.find(z => z.name === cornerName);
+
+        if (!corner || !zone) return;
+
+        const infoDiv = document.getElementById('selected-corner-info');
+        const nameDiv = document.getElementById('selected-corner-name');
+        const metricsDiv = document.getElementById('selected-corner-metrics');
+
+        nameDiv.textContent = cornerName + (corner.corner_alias ? ` (${corner.corner_alias})` : '') +
+            ` - ${zone.corner_type.toUpperCase()} ${zone.direction.toUpperCase()}`;
+
+        // Calculate session averages for color coding
+        const lap = currentData.laps[0];
+        const avgEntry = lap.summary.avg_entry_speed;
+        const avgExit = lap.summary.avg_exit_speed;
+        const avgTime = lap.summary.total_corner_time / lap.corners.length;
+        const avgLatG = lap.corners.reduce((sum, c) => sum + c.g_forces.max_lateral, 0) / lap.corners.length;
+
+        // Helper function to determine card class based on comparison
+        function getMetricClass(value, avg, higherIsBetter = true) {
+            const diff = value - avg;
+            if (Math.abs(diff) < avg * 0.05) return ''; // Within 5% is neutral
+            if (higherIsBetter) {
+                return diff > 0 ? 'success' : 'danger';
+            } else {
+                return diff < 0 ? 'success' : 'danger';
+            }
+        }
+
+        let metricsHtml = `
+            <div class="col-md-2">
+                <div class="stats-card ${getMetricClass(corner.speeds.entry, avgEntry, true)}">
+                    <div class="stats-value">${corner.speeds.entry.toFixed(0)} mph</div>
+                    <div class="stats-label">Entry Speed</div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="stats-card">
+                    <div class="stats-value">${corner.speeds.min.toFixed(0)} mph</div>
+                    <div class="stats-label">Apex Speed</div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="stats-card ${getMetricClass(corner.speeds.exit, avgExit, true)}">
+                    <div class="stats-value">${corner.speeds.exit.toFixed(0)} mph</div>
+                    <div class="stats-label">Exit Speed</div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="stats-card ${getMetricClass(corner.timing.total, avgTime, false)}">
+                    <div class="stats-value">${corner.timing.total.toFixed(2)}s</div>
+                    <div class="stats-label">Time in Corner</div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="stats-card ${corner.throttle.pickup_pct > 70 ? 'warning' : 'success'}">
+                    <div class="stats-value">${corner.throttle.pickup_pct.toFixed(0)}%</div>
+                    <div class="stats-label">Throttle Pickup</div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="stats-card ${getMetricClass(corner.g_forces.max_lateral, avgLatG, true)}">
+                    <div class="stats-value">${corner.g_forces.max_lateral.toFixed(2)}g</div>
+                    <div class="stats-label">Max Lateral G</div>
+                </div>
+            </div>
+        `;
+
+        // Add mini speed trace
+        metricsHtml += `
+            <div class="col-12 mt-3">
+                <div class="card" style="background: #16213e; border: 1px solid #333;">
+                    <div class="card-body">
+                        <h6 style="color: #fff; margin-bottom: 10px;">Speed Profile</h6>
+                        <div style="display: flex; align-items: flex-end; height: 100px; gap: 2px;">
+                            <div style="flex: 1; background: linear-gradient(135deg, #fdcb6e, #e17055); height: ${(corner.speeds.entry / Math.max(corner.speeds.entry, corner.speeds.exit) * 100)}%; border-radius: 3px 3px 0 0; position: relative;">
+                                <div style="position: absolute; bottom: -20px; left: 50%; transform: translateX(-50%); color: #aaa; font-size: 0.7rem; white-space: nowrap;">Entry</div>
+                            </div>
+                            <div style="flex: 1; background: linear-gradient(135deg, #e74c3c, #c0392b); height: ${(corner.speeds.min / Math.max(corner.speeds.entry, corner.speeds.exit) * 100)}%; border-radius: 3px 3px 0 0; position: relative;">
+                                <div style="position: absolute; bottom: -20px; left: 50%; transform: translateX(-50%); color: #aaa; font-size: 0.7rem; white-space: nowrap;">Apex</div>
+                            </div>
+                            <div style="flex: 1; background: linear-gradient(135deg, #00b894, #00cec9); height: ${(corner.speeds.exit / Math.max(corner.speeds.entry, corner.speeds.exit) * 100)}%; border-radius: 3px 3px 0 0; position: relative;">
+                                <div style="position: absolute; bottom: -20px; left: 50%; transform: translateX(-50%); color: #aaa; font-size: 0.7rem; white-space: nowrap;">Exit</div>
+                            </div>
+                        </div>
+                        <div style="margin-top: 25px; color: #888; font-size: 0.8rem; text-align: center;">
+                            ${corner.speeds.entry.toFixed(0)} → ${corner.speeds.min.toFixed(0)} → ${corner.speeds.exit.toFixed(0)} mph
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // Add distance metrics if available
+        if (corner.distances && (corner.distances.brake_point > 0 || corner.distances.throttle_on > 0)) {
+            metricsHtml += `
+                <div class="col-md-6 mt-2">
+                    <div class="stats-card">
+                        <div class="stats-value">${corner.distances.brake_point.toFixed(0)} ft</div>
+                        <div class="stats-label">Brake Point Distance</div>
+                    </div>
+                </div>
+                <div class="col-md-6 mt-2">
+                    <div class="stats-card">
+                        <div class="stats-value">${corner.distances.throttle_on.toFixed(0)} ft</div>
+                        <div class="stats-label">Throttle On Distance</div>
+                    </div>
+                </div>
+            `;
+        }
+
+        if (corner.lift.detected) {
+            metricsHtml += `
+                <div class="col-12 mt-2">
+                    <div class="alert alert-warning">
+                        <strong>⚠ Throttle Lift Detected</strong> at ${corner.lift.time.toFixed(2)}s for ${corner.lift.duration.toFixed(2)}s
+                    </div>
+                </div>
+            `;
+        }
+
+        if (corner.trail_brake.detected) {
+            metricsHtml += `
+                <div class="col-12 mt-2">
+                    <div class="alert alert-success">
+                        <strong>✓ Trail Braking</strong> for ${corner.trail_brake.duration.toFixed(2)}s
+                    </div>
+                </div>
+            `;
+        }
+
+        metricsDiv.innerHTML = metricsHtml;
+        infoDiv.style.display = 'block';
+    }
+
+    function reloadTrackMap() {
+        if (currentData) {
+            renderTrackMap();
         }
     }
 </script>

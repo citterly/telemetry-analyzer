@@ -1087,6 +1087,94 @@ async def get_corner_analysis(
         raise HTTPException(status_code=500, detail=f"Corner analysis failed: {str(e)}")
 
 
+@app.get("/api/corner-track-map/{filename:path}")
+async def get_corner_track_map(
+    filename: str,
+    track_name: str = "Unknown Track",
+    color_scheme: str = "speed",
+    selected_corner: Optional[str] = None
+):
+    """
+    Generate track map SVG with corner overlay.
+
+    Shows corner markers (numbered circles) at apex positions,
+    highlighted corner boundaries, and track colored by speed/gear/etc.
+    """
+    import pandas as pd
+    import numpy as np
+    from src.visualization.track_map import TrackMap
+
+    file_path = _find_parquet_file(filename)
+    if not file_path:
+        raise HTTPException(status_code=404, detail=f"Parquet file not found: {filename}")
+
+    try:
+        df = pd.read_parquet(file_path)
+
+        # Get GPS data
+        lat_data = _find_column(df, ['GPS Latitude', 'gps_lat', 'latitude'])
+        lon_data = _find_column(df, ['GPS Longitude', 'gps_lon', 'longitude'])
+
+        if lat_data is None or lon_data is None:
+            raise HTTPException(status_code=400, detail="GPS latitude/longitude data not found")
+
+        # Get color data based on scheme
+        if color_scheme == 'speed':
+            color_data = _find_column(df, ['GPS Speed', 'gps_speed', 'speed'])
+            if color_data is not None and color_data.max() < 100:
+                color_data = color_data * 2.237  # Convert m/s to mph
+        elif color_scheme == 'rpm':
+            color_data = _find_column(df, ['RPM', 'engine_rpm', 'rpm'])
+        elif color_scheme == 'gear':
+            color_data = _find_column(df, ['Gear', 'gear'])
+        elif color_scheme == 'throttle':
+            color_data = _find_column(df, ['PedalPos', 'throttle', 'Throttle'])
+        else:
+            color_data = None
+
+        # Detect corners
+        analyzer = CornerAnalyzer()
+        result = analyzer.analyze_from_parquet(
+            str(file_path),
+            session_id=Path(filename).stem,
+            track_name=track_name
+        )
+
+        # Convert corner zones to dicts for rendering
+        corners = []
+        for zone in result.corner_zones:
+            corners.append({
+                'name': zone.name,
+                'alias': zone.alias,
+                'apex_lat': zone.apex_lat,
+                'apex_lon': zone.apex_lon,
+                'entry_idx': zone.entry_idx,
+                'apex_idx': zone.apex_idx,
+                'exit_idx': zone.exit_idx,
+                'corner_type': zone.corner_type,
+                'direction': zone.direction
+            })
+
+        # Render track map with corner overlay
+        track_map = TrackMap()
+        svg = track_map.render_corner_overlay_svg(
+            lat_data,
+            lon_data,
+            corners,
+            color_data=color_data,
+            color_scheme=color_scheme,
+            title=f"{track_name} - Corner Map",
+            selected_corner=selected_corner
+        )
+
+        return Response(content=svg, media_type="image/svg+xml")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Track map generation failed: {str(e)}")
+
+
 # ============================================================
 # Queue Dashboard Endpoints
 # ============================================================
