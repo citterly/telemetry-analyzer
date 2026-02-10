@@ -633,3 +633,38 @@ Test results: 694/694 passing (3 new)
 Status: cleanup-003 marked PASSING
 Features: 31/33 (2 planned cleanup features remaining)
 
+
+=== Session 9 continued (2026-02-10) ===
+Working on: cleanup-004 (Break up app.py into routers)
+
+Work completed:
+
+1. Created src/main/deps.py - shared dependencies module:
+   - config (singleton), file_manager (singleton)
+   - find_parquet_file() helper for parquet resolution
+
+2. Created 6 router modules under src/main/routers/:
+   - analysis.py: shifts, laps, laps/compare, gears, power, report (6 endpoints)
+   - parquet.py: list, view, summary (3 endpoints)
+   - queue.py: stats, jobs, job detail, retry, retry-all, delete, clear (7 endpoints)
+   - sessions.py: list, import, get, laps, classify, confirm, setup get/save (8 endpoints)
+   - vehicles.py: list, get, update, set active (4 endpoints)
+   - visualization.py: track-map, delta track-map, gg-diagram, corner-analysis, corner-track-map (5 endpoints)
+
+3. Rewrote src/main/app.py:
+   - 1,711 lines → 456 lines (73% reduction)
+   - Keeps: app creation, static files, templates, HTML page routes, file management APIs, error handlers, health check
+   - All 33 API endpoints moved to routers
+   - Routers included via app.include_router()
+
+4. Updated tests:
+   - test_analysis_api.py: imports changed from app._find_column to utils.find_column
+   - test_analysis_api.py: mock patches target routers.analysis.find_parquet_file
+   - test_session_api.py: monkeypatch targets routers.sessions module
+
+4 new tests in TestRouterStructure (imports, endpoint registration, deps, line count)
+Test results: 698/698 passing (4 new)
+
+Status: cleanup-004 marked PASSING
+Features: 32/33 (1 planned cleanup feature remaining)
+

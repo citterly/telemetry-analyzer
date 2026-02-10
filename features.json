@@ -404,20 +404,21 @@
       "name": "Break up app.py into routers",
       "category": "cleanup",
       "description": "Split 1,776-line God object into focused modules. See docs/CLEANUP_AUDIT.md Phase 4. (1) Create SessionDataLoader class that handles parquet loading + column finding + speed conversion. (2) Create FastAPI Depends() for parquet file resolution (replaces 11 identical if-checks). (3) Split into routers: api/files.py, api/analysis.py, api/visualization.py, api/sessions.py, api/vehicles.py, api/queue.py. (4) Move helper functions into utility modules.",
-      "status": "planned",
+      "status": "passing",
       "priority": 26,
-      "tests": ["pytest tests/", "test_all_endpoints_still_work"],
+      "tests": ["pytest tests/", "test_all_endpoints_still_work", "test_router_structure"],
       "files": [
         "src/main/app.py",
-        "src/main/api/files.py",
-        "src/main/api/analysis.py",
-        "src/main/api/visualization.py",
-        "src/main/api/sessions.py",
-        "src/main/api/vehicles.py",
-        "src/main/api/queue.py",
-        "src/utils/session_loader.py"
+        "src/main/deps.py",
+        "src/main/routers/__init__.py",
+        "src/main/routers/analysis.py",
+        "src/main/routers/parquet.py",
+        "src/main/routers/queue.py",
+        "src/main/routers/sessions.py",
+        "src/main/routers/vehicles.py",
+        "src/main/routers/visualization.py"
       ],
-      "notes": "Ref: docs/CLEANUP_AUDIT.md Phase 4. app.py has 49 endpoints mixing file management, analysis, visualization, queue, sessions, and vehicles. All existing API tests must still pass - this is a pure refactor."
+      "notes": "DONE: Split 1,711-line app.py into 456-line app.py + 6 focused routers. Created src/main/deps.py for shared config/file_manager/find_parquet_file. Routers: analysis (shifts, laps, gears, power, report), parquet (list, view, summary), queue (stats, jobs, retry), sessions (v2 API CRUD), vehicles (CRUD, active), visualization (track maps, GG diagram, corners). 4 new tests. 698 tests passing."
     },
     {
       "id": "cleanup-005",
@@ -445,9 +446,9 @@
     "created_at": "2025-01-29T01:00:00Z",
     "last_updated": "2026-02-10T14:00:00Z",
     "total_features": 33,
-    "passing": 31,
+    "passing": 32,
     "failing": 0,
-    "planned": 2
+    "planned": 1
   },
   "categories": {
     "bugfix": "Bug fixes and corrections",

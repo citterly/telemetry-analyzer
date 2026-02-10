@@ -53,10 +53,10 @@ class TestSessionAPIWithData:
             from src.session.session_database import SessionDatabase
             return SessionDatabase(str(db_path))
 
-        # Import app and patch
-        from src.main import app as app_module
-        monkeypatch.setattr(app_module, "get_session_db", mock_get_session_db)
-        monkeypatch.setattr(app_module, "_session_db", None)
+        # Import app and patch the sessions router
+        from src.main.routers import sessions as sessions_router
+        monkeypatch.setattr(sessions_router, "get_session_db", mock_get_session_db)
+        monkeypatch.setattr(sessions_router, "_session_db", None)
 
         from src.main.app import app
         return TestClient(app)

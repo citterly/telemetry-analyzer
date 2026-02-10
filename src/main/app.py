@@ -3,23 +3,25 @@ Main FastAPI application for Telemetry Analyzer
 Minimal web interface for trackside use
 """
 
-from fastapi import FastAPI, UploadFile, File, HTTPException, Request, Form
+from fastapi import FastAPI, UploadFile, File, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, Response
+from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
-import shutil
-import json
 from pathlib import Path
-from typing import List, Optional
+from typing import Optional
 import traceback
 
 from src.config.config import get_config
 from src.io.file_manager import FileManager
-from src.utils.dataframe_helpers import (
-    find_column as _find_column_shared,
-    sanitize_for_json as _sanitize_for_json,
-    SPEED_MS_TO_MPH,
-    ensure_speed_mph,
+
+# Import routers
+from src.main.routers import (
+    analysis,
+    parquet,
+    queue,
+    sessions,
+    vehicles,
+    visualization,
 )
 
 
@@ -44,13 +46,22 @@ templates = Jinja2Templates(directory="templates")
 # Initialize file manager
 file_manager = FileManager(config.DATA_DIR)
 
+# Include API routers
+app.include_router(analysis.router)
+app.include_router(parquet.router)
+app.include_router(queue.router)
+app.include_router(sessions.router)
+app.include_router(vehicles.router)
+app.include_router(visualization.router)
+
+
 # Global stats for the dashboard
 def get_dashboard_stats():
     """Get statistics for the main dashboard"""
     try:
         stats = file_manager.get_stats()
         recent_files = file_manager.get_file_list()[:5]  # Last 5 files
-        
+
         return {
             "stats": stats,
             "recent_files": [
@@ -68,7 +79,9 @@ def get_dashboard_stats():
         return {"stats": {}, "recent_files": [], "error": str(e)}
 
 
-# Routes
+# ============================================================
+# HTML Page Routes
+# ============================================================
 
 @app.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request):
@@ -81,7 +94,7 @@ async def dashboard(request: Request):
     })
 
 
-@app.get("/upload", response_class=HTMLResponse) 
+@app.get("/upload", response_class=HTMLResponse)
 async def upload_page(request: Request):
     """File upload page"""
     return templates.TemplateResponse("upload.html", {
@@ -91,6 +104,107 @@ async def upload_page(request: Request):
     })
 
 
+@app.get("/files", response_class=HTMLResponse)
+async def files_page(request: Request):
+    """File management page"""
+    try:
+        files = file_manager.get_file_list()
+        return templates.TemplateResponse("files.html", {
+            "request": request,
+            "title": "File Management",
+            "files": files
+        })
+    except Exception as e:
+        return templates.TemplateResponse("error.html", {
+            "request": request,
+            "title": "Error",
+            "error": str(e)
+        })
+
+
+@app.get("/parquet", response_class=HTMLResponse)
+async def parquet_viewer_page(request: Request):
+    """Parquet file viewer page"""
+    return templates.TemplateResponse("parquet.html", {
+        "request": request,
+        "title": "Session Data Viewer"
+    })
+
+
+@app.get("/analysis", response_class=HTMLResponse)
+async def analysis_page(request: Request):
+    """Analysis results viewer page"""
+    return templates.TemplateResponse("analysis.html", {
+        "request": request,
+        "title": "Session Analysis"
+    })
+
+
+@app.get("/gg-diagram")
+async def gg_diagram_page(request: Request):
+    """G-G Diagram page"""
+    return templates.TemplateResponse("gg_diagram.html", {"request": request})
+
+
+@app.get("/corner-analysis")
+async def corner_analysis_page(request: Request):
+    """Corner analysis page"""
+    return templates.TemplateResponse("corner_analysis.html", {"request": request})
+
+
+@app.get("/queue", response_class=HTMLResponse)
+async def queue_dashboard_page(request: Request):
+    """Queue status dashboard page"""
+    return templates.TemplateResponse("queue.html", {
+        "request": request,
+        "title": "Extraction Queue"
+    })
+
+
+@app.get("/vehicles")
+async def vehicles_page(request: Request):
+    """Vehicle settings page"""
+    return templates.TemplateResponse("vehicles.html", {"request": request})
+
+
+@app.get("/sessions", response_class=HTMLResponse)
+async def sessions_page(request: Request):
+    """Session browser page"""
+    return templates.TemplateResponse("sessions.html", {
+        "request": request,
+        "title": "Sessions",
+    })
+
+
+@app.get("/sessions/import", response_class=HTMLResponse)
+async def session_import_page(request: Request):
+    """Session import wizard page"""
+    return templates.TemplateResponse("session_import.html", {
+        "request": request,
+        "title": "Import Session",
+    })
+
+
+@app.get("/sessions/{session_id}", response_class=HTMLResponse)
+async def session_detail_page(request: Request, session_id: int):
+    """Session detail page"""
+    db = sessions.get_session_db()
+    session = db.get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    return templates.TemplateResponse("session_detail.html", {
+        "request": request,
+        "title": f"Session: {session.track_name or 'Unknown'} - {session.session_date or 'Unknown'}",
+        "session": session.to_dict(),
+        "session_id": session_id,
+    })
+
+
+# ============================================================
+# File Management API Endpoints
+# ============================================================
+
 @app.post("/api/upload")
 async def upload_file(file: UploadFile = File(...)):
     """Upload and import XRK file"""
@@ -98,25 +212,25 @@ async def upload_file(file: UploadFile = File(...)):
         # Validate file
         if not file.filename:
             raise HTTPException(status_code=400, detail="No file selected")
-        
+
         if not any(file.filename.lower().endswith(ext) for ext in config.ALLOWED_EXTENSIONS):
             raise HTTPException(status_code=400, detail="Only XRK files are supported")
-        
+
         # Check file size
         file_content = await file.read()
         file_size_mb = len(file_content) / (1024 * 1024)
-        
+
         if file_size_mb > config.MAX_UPLOAD_SIZE_MB:
             raise HTTPException(
-                status_code=413, 
+                status_code=413,
                 detail=f"File too large. Maximum size: {config.MAX_UPLOAD_SIZE_MB}MB"
             )
-        
+
         # Save temporary file
         temp_path = config.get_upload_path(f"temp_{file.filename}")
         with open(temp_path, "wb") as temp_file:
             temp_file.write(file_content)
-        
+
         # Import using file manager
         try:
             metadata = file_manager.import_file(
@@ -126,10 +240,10 @@ async def upload_file(file: UploadFile = File(...)):
                     "original_filename": file.filename
                 }
             )
-            
+
             # Clean up temp file
             temp_path.unlink()
-            
+
             return {
                 "status": "success",
                 "message": f"File {file.filename} imported successfully",
@@ -138,13 +252,13 @@ async def upload_file(file: UploadFile = File(...)):
                 "session_duration": metadata.session_duration_seconds,
                 "sample_count": metadata.sample_count
             }
-            
+
         except Exception as e:
             # Clean up temp file on error
             if temp_path.exists():
                 temp_path.unlink()
             raise HTTPException(status_code=500, detail=f"Import failed: {str(e)}")
-            
+
     except HTTPException:
         raise
     except Exception as e:
@@ -156,7 +270,7 @@ async def list_files(processed: Optional[bool] = None):
     """Get list of uploaded files"""
     try:
         files = file_manager.get_file_list(filter_processed=processed)
-        
+
         return {
             "files": [
                 {
@@ -187,10 +301,10 @@ async def process_file(filename: str):
         metadata = file_manager.get_file_metadata(filename)
         if not metadata:
             raise HTTPException(status_code=404, detail="File not found")
-        
+
         # Process the file
         results = file_manager.process_file(filename)
-        
+
         # Return processing results
         response_data = {
             "status": "success",
@@ -200,7 +314,7 @@ async def process_file(filename: str):
             "session_duration": results['session_data']['session_duration'],
             "sample_count": results['session_data']['sample_count']
         }
-        
+
         # Add fastest lap info if available
         if results['fastest_lap_data']:
             lap_info = results['fastest_lap_data']['lap_info']
@@ -212,7 +326,7 @@ async def process_file(filename: str):
                     "max_rpm": lap_info.max_rpm
                 }
             })
-        
+
         # Add lap summary
         if results['laps']:
             lap_times = [lap.lap_time for lap in results['laps']]
@@ -222,9 +336,9 @@ async def process_file(filename: str):
                 "slowest_time": max(lap_times),
                 "average_time": sum(lap_times) / len(lap_times)
             }
-        
+
         return response_data
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -241,7 +355,7 @@ async def get_file_details(filename: str):
         metadata = file_manager.get_file_metadata(filename)
         if not metadata:
             raise HTTPException(status_code=404, detail="File not found")
-        
+
         return {
             "filename": metadata.filename,
             "file_size_mb": round(metadata.file_size_bytes / (1024 * 1024), 2),
@@ -258,7 +372,7 @@ async def get_file_details(filename: str):
             "max_rpm": metadata.max_rpm,
             "custom_attributes": metadata.custom_attributes
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -272,9 +386,9 @@ async def delete_file(filename: str):
         success = file_manager.delete_file(filename)
         if not success:
             raise HTTPException(status_code=404, detail="File not found")
-        
+
         return {"status": "success", "message": f"File {filename} deleted"}
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -291,1030 +405,10 @@ async def get_stats():
         raise HTTPException(status_code=500, detail=f"Failed to get stats: {str(e)}")
 
 
-@app.get("/files", response_class=HTMLResponse)
-async def files_page(request: Request):
-    """File management page"""
-    try:
-        files = file_manager.get_file_list()
-        return templates.TemplateResponse("files.html", {
-            "request": request,
-            "title": "File Management",
-            "files": files
-        })
-    except Exception as e:
-        return templates.TemplateResponse("error.html", {
-            "request": request,
-            "title": "Error",
-            "error": str(e)
-        })
-
-
 # ============================================================
-# Parquet Viewer (Linux-compatible, no DLL required)
+# Error Handlers & Health Check
 # ============================================================
 
-@app.get("/api/parquet/list")
-async def list_parquet_files():
-    """List all available Parquet files"""
-    import pandas as pd
-    from pathlib import Path
-
-    exports_dir = Path(config.EXPORTS_DIR)
-    uploads_dir = Path(config.UPLOAD_DIR)
-
-    parquet_files = []
-
-    # Check exports directory (processed files)
-    if exports_dir.exists():
-        for pq_file in exports_dir.rglob("*.parquet"):
-            try:
-                df = pd.read_parquet(pq_file)
-                parquet_files.append({
-                    "filename": pq_file.name,
-                    "path": str(pq_file.relative_to(Path(config.DATA_DIR))),
-                    "full_path": str(pq_file),
-                    "rows": len(df),
-                    "columns": len(df.columns),
-                    "size_mb": round(pq_file.stat().st_size / (1024 * 1024), 2),
-                    "source": "exports"
-                })
-            except Exception as e:
-                parquet_files.append({
-                    "filename": pq_file.name,
-                    "path": str(pq_file),
-                    "error": str(e),
-                    "source": "exports"
-                })
-
-    # Check uploads directory (may have parquet alongside xrk)
-    if uploads_dir.exists():
-        for pq_file in uploads_dir.glob("*.parquet"):
-            try:
-                df = pd.read_parquet(pq_file)
-                parquet_files.append({
-                    "filename": pq_file.name,
-                    "path": str(pq_file.relative_to(Path(config.DATA_DIR))),
-                    "full_path": str(pq_file),
-                    "rows": len(df),
-                    "columns": len(df.columns),
-                    "size_mb": round(pq_file.stat().st_size / (1024 * 1024), 2),
-                    "source": "uploads"
-                })
-            except Exception as e:
-                pass
-
-    return {"parquet_files": parquet_files}
-
-
-@app.get("/api/parquet/view/{filename:path}")
-async def view_parquet_file(filename: str, limit: int = 100, offset: int = 0):
-    """View contents of a Parquet file"""
-    import pandas as pd
-    from pathlib import Path
-
-    # Try to find the file
-    data_dir = Path(config.DATA_DIR)
-    file_path = data_dir / filename
-
-    if not file_path.exists():
-        # Try exports subdirectories
-        for pq in data_dir.rglob(filename):
-            file_path = pq
-            break
-
-    if not file_path.exists():
-        raise HTTPException(status_code=404, detail=f"Parquet file not found: {filename}")
-
-    try:
-        df = pd.read_parquet(file_path)
-
-        # Get subset of data
-        subset = df.iloc[offset:offset + limit]
-
-        # Convert to records, handling NaN
-        records = subset.fillna("NaN").to_dict(orient="records")
-
-        # Get column stats
-        col_stats = {}
-        for col in df.columns:
-            valid = df[col].notna().sum()
-            col_stats[col] = {
-                "valid_count": int(valid),
-                "valid_pct": round(100 * valid / len(df), 1),
-                "min": float(df[col].min()) if valid > 0 and df[col].dtype.kind in 'fi' else None,
-                "max": float(df[col].max()) if valid > 0 and df[col].dtype.kind in 'fi' else None,
-            }
-
-        return {
-            "filename": filename,
-            "total_rows": len(df),
-            "total_columns": len(df.columns),
-            "columns": list(df.columns),
-            "column_stats": col_stats,
-            "offset": offset,
-            "limit": limit,
-            "data": records,
-            "index_range": [float(df.index.min()), float(df.index.max())] if len(df) > 0 else [0, 0]
-        }
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to read Parquet: {str(e)}")
-
-
-@app.get("/api/parquet/summary/{filename:path}")
-async def parquet_summary(filename: str):
-    """Get summary statistics for a Parquet file"""
-    import pandas as pd
-    from pathlib import Path
-
-    data_dir = Path(config.DATA_DIR)
-    file_path = data_dir / filename
-
-    if not file_path.exists():
-        for pq in data_dir.rglob(filename):
-            file_path = pq
-            break
-
-    if not file_path.exists():
-        raise HTTPException(status_code=404, detail=f"Parquet file not found: {filename}")
-
-    try:
-        df = pd.read_parquet(file_path)
-
-        summary = {
-            "filename": filename,
-            "rows": len(df),
-            "columns": len(df.columns),
-            "duration_seconds": float(df.index.max() - df.index.min()) if len(df) > 0 else 0,
-            "sample_rate_hz": round(len(df) / (df.index.max() - df.index.min()), 1) if len(df) > 1 else 0,
-            "channels": {}
-        }
-
-        for col in df.columns:
-            valid = df[col].notna().sum()
-            if valid > 0 and df[col].dtype.kind in 'fi':
-                summary["channels"][col] = {
-                    "min": round(float(df[col].min()), 2),
-                    "max": round(float(df[col].max()), 2),
-                    "mean": round(float(df[col].mean()), 2),
-                    "valid_pct": round(100 * valid / len(df), 1)
-                }
-            else:
-                summary["channels"][col] = {"valid_pct": round(100 * valid / len(df), 1)}
-
-        return summary
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to summarize: {str(e)}")
-
-
-@app.get("/parquet", response_class=HTMLResponse)
-async def parquet_viewer_page(request: Request):
-    """Parquet file viewer page"""
-    return templates.TemplateResponse("parquet.html", {
-        "request": request,
-        "title": "Session Data Viewer"
-    })
-
-
-@app.get("/analysis", response_class=HTMLResponse)
-async def analysis_page(request: Request):
-    """Analysis results viewer page"""
-    return templates.TemplateResponse("analysis.html", {
-        "request": request,
-        "title": "Session Analysis"
-    })
-
-
-# ============================================================
-# Analysis API Endpoints
-# ============================================================
-
-from src.features import (
-    ShiftAnalyzer, LapAnalysis, GearAnalysis,
-    PowerAnalysis, SessionReportGenerator
-)
-from src.features.lap_analysis import compare_laps_detailed
-from src.visualization.track_map import TrackMap
-
-
-@app.get("/api/analyze/shifts/{filename:path}")
-async def analyze_shifts(filename: str):
-    """Run shift analysis on a Parquet file"""
-    import pandas as pd
-    import numpy as np
-
-    file_path = _find_parquet_file(filename)
-    if not file_path:
-        raise HTTPException(status_code=404, detail=f"Parquet file not found: {filename}")
-
-    try:
-        df = pd.read_parquet(file_path)
-
-        # Find required columns
-        time_data = df.index.values
-        rpm_data = _find_column(df, ['RPM', 'rpm'])
-        speed_data = _find_column(df, ['GPS Speed', 'speed', 'Speed'])
-
-        if rpm_data is None:
-            raise HTTPException(status_code=400, detail="RPM data not found in file")
-        if speed_data is None:
-            raise HTTPException(status_code=400, detail="Speed data not found in file")
-
-        # Convert speed if needed
-        if speed_data.max() < 100:
-            speed_data = speed_data * SPEED_MS_TO_MPH
-
-        analyzer = ShiftAnalyzer()
-        report = analyzer.analyze_session(rpm_data, speed_data, time_data, filename)
-
-        return report.to_dict()
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Shift analysis failed: {str(e)}")
-
-
-@app.get("/api/analyze/laps/compare/{filename:path}")
-async def compare_laps(filename: str, lap_a: int, lap_b: int, segments: int = 10):
-    """Compare two laps showing where time/speed was gained or lost"""
-    file_path = _find_parquet_file(filename)
-    if not file_path:
-        raise HTTPException(status_code=404, detail=f"Parquet file not found: {filename}")
-
-    try:
-        result = compare_laps_detailed(str(file_path), lap_a, lap_b, segments)
-        if result is None:
-            raise HTTPException(status_code=400, detail=f"Could not compare laps {lap_a} and {lap_b}")
-        return result.to_dict()
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Lap comparison failed: {str(e)}")
-
-
-@app.get("/api/analyze/laps/{filename:path}")
-async def analyze_laps(filename: str):
-    """Run lap analysis on a Parquet file"""
-    import pandas as pd
-    import numpy as np
-
-    file_path = _find_parquet_file(filename)
-    if not file_path:
-        raise HTTPException(status_code=404, detail=f"Parquet file not found: {filename}")
-
-    try:
-        df = pd.read_parquet(file_path)
-
-        time_data = df.index.values
-        lat_data = _find_column(df, ['GPS Latitude', 'latitude'])
-        lon_data = _find_column(df, ['GPS Longitude', 'longitude'])
-        rpm_data = _find_column(df, ['RPM', 'rpm'])
-        speed_data = _find_column(df, ['GPS Speed', 'speed', 'Speed'])
-
-        if lat_data is None or lon_data is None:
-            raise HTTPException(status_code=400, detail="GPS data not found in file")
-
-        if speed_data is None:
-            raise HTTPException(status_code=422, detail="Speed data not found in file - required for lap analysis")
-        if speed_data.max() < 100:
-            speed_data = speed_data * SPEED_MS_TO_MPH
-        if rpm_data is None:
-            rpm_data = np.zeros(len(time_data))
-
-        analyzer = LapAnalysis()
-        report = analyzer.analyze_from_arrays(
-            time_data, lat_data, lon_data, rpm_data, speed_data, filename
-        )
-
-        return report.to_dict()
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Lap analysis failed: {str(e)}")
-
-
-@app.get("/api/analyze/gears/{filename:path}")
-async def analyze_gears(filename: str):
-    """Run gear usage analysis on a Parquet file"""
-    import pandas as pd
-    import numpy as np
-
-    file_path = _find_parquet_file(filename)
-    if not file_path:
-        raise HTTPException(status_code=404, detail=f"Parquet file not found: {filename}")
-
-    try:
-        df = pd.read_parquet(file_path)
-
-        time_data = df.index.values
-        rpm_data = _find_column(df, ['RPM', 'rpm'])
-        speed_data = _find_column(df, ['GPS Speed', 'speed', 'Speed'])
-        lat_data = _find_column(df, ['GPS Latitude', 'latitude'])
-        lon_data = _find_column(df, ['GPS Longitude', 'longitude'])
-
-        if rpm_data is None:
-            raise HTTPException(status_code=400, detail="RPM data not found in file")
-        if speed_data is None:
-            raise HTTPException(status_code=400, detail="Speed data not found in file")
-
-        if speed_data.max() < 100:
-            speed_data = speed_data * SPEED_MS_TO_MPH
-
-        analyzer = GearAnalysis()
-        report = analyzer.analyze_from_arrays(
-            time_data, rpm_data, speed_data, lat_data, lon_data, filename
-        )
-
-        return report.to_dict()
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Gear analysis failed: {str(e)}")
-
-
-@app.get("/api/analyze/power/{filename:path}")
-async def analyze_power(filename: str):
-    """Run power/acceleration analysis on a Parquet file"""
-    import pandas as pd
-
-    file_path = _find_parquet_file(filename)
-    if not file_path:
-        raise HTTPException(status_code=404, detail=f"Parquet file not found: {filename}")
-
-    try:
-        df = pd.read_parquet(file_path)
-
-        time_data = df.index.values
-        speed_data = _find_column(df, ['GPS Speed', 'speed', 'Speed'])
-        rpm_data = _find_column(df, ['RPM', 'rpm'])
-
-        if speed_data is None:
-            raise HTTPException(status_code=400, detail="Speed data not found in file")
-
-        if speed_data.max() < 100:
-            speed_data = speed_data * SPEED_MS_TO_MPH
-
-        analyzer = PowerAnalysis()
-        report = analyzer.analyze_from_arrays(time_data, speed_data, rpm_data, filename)
-
-        return report.to_dict()
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Power analysis failed: {str(e)}")
-
-
-@app.get("/api/analyze/report/{filename:path}")
-async def analyze_full_report(filename: str):
-    """Run full session analysis and return combined report"""
-    import pandas as pd
-    import numpy as np
-
-    file_path = _find_parquet_file(filename)
-    if not file_path:
-        raise HTTPException(status_code=404, detail=f"Parquet file not found: {filename}")
-
-    try:
-        df = pd.read_parquet(file_path)
-
-        time_data = df.index.values
-        lat_data = _find_column(df, ['GPS Latitude', 'latitude'])
-        lon_data = _find_column(df, ['GPS Longitude', 'longitude'])
-        rpm_data = _find_column(df, ['RPM', 'rpm'])
-        speed_data = _find_column(df, ['GPS Speed', 'speed', 'Speed'])
-
-        if lat_data is None or lon_data is None:
-            raise HTTPException(status_code=422, detail="GPS data (Latitude/Longitude) not found - required for session report")
-        if speed_data is None:
-            raise HTTPException(status_code=422, detail="Speed data not found - required for session report")
-        if speed_data.max() < 100:
-            speed_data = speed_data * SPEED_MS_TO_MPH
-        if rpm_data is None:
-            rpm_data = np.zeros(len(time_data))
-
-        generator = SessionReportGenerator()
-        report = generator.generate_from_arrays(
-            time_data, lat_data, lon_data, rpm_data, speed_data, filename
-        )
-
-        return _sanitize_for_json(report.to_dict())
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Report generation failed: {str(e)}")
-
-
-@app.get("/api/track-map/delta/{filename:path}")
-async def get_delta_track_map(
-    filename: str,
-    lap_a: int,
-    lap_b: int,
-    segments: int = 10,
-    format: str = "svg"
-):
-    """
-    Generate delta track map showing time gained/lost between two laps.
-
-    Green sections = lap_a faster (gaining time)
-    Red sections = lap_b faster (losing time)
-    """
-    import pandas as pd
-    import numpy as np
-
-    file_path = _find_parquet_file(filename)
-    if not file_path:
-        raise HTTPException(status_code=404, detail=f"Parquet file not found: {filename}")
-
-    try:
-        # Get lap comparison data
-        from src.features.lap_analysis import compare_laps_detailed
-        from src.analysis.lap_analyzer import LapAnalyzer
-
-        comparison = compare_laps_detailed(str(file_path), lap_a, lap_b, segments)
-        if comparison is None:
-            raise HTTPException(status_code=400, detail=f"Could not compare laps {lap_a} and {lap_b}")
-
-        # Load parquet and detect laps to get GPS data for each lap
-        df = pd.read_parquet(file_path)
-
-        time_data = df.index.values
-        lat_col = None
-        lon_col = None
-        speed_col = None
-
-        for col in df.columns:
-            col_lower = col.lower()
-            if 'latitude' in col_lower:
-                lat_col = col
-            elif 'longitude' in col_lower:
-                lon_col = col
-            elif 'speed' in col_lower and speed_col is None:
-                speed_col = col
-
-        if lat_col is None or lon_col is None:
-            raise HTTPException(status_code=400, detail="GPS data not found in file")
-
-        lat_data = df[lat_col].values
-        lon_data = df[lon_col].values
-        if speed_col is None:
-            raise HTTPException(status_code=422, detail="Speed data not found - required for lap comparison")
-        speed_data = df[speed_col].values
-
-        if speed_data.max() < 100:
-            speed_data = speed_data * SPEED_MS_TO_MPH
-
-        # Detect laps
-        session_data = {
-            'time': time_data,
-            'latitude': lat_data,
-            'longitude': lon_data,
-            'rpm': np.zeros(len(time_data)),
-            'speed_mph': speed_data,
-            'speed_ms': speed_data / SPEED_MS_TO_MPH
-        }
-
-        analyzer = LapAnalyzer(session_data)
-        laps = analyzer.detect_laps()
-
-        # Find the two laps
-        lap_a_info = None
-        lap_b_info = None
-        for lap in laps:
-            if lap.lap_number == lap_a:
-                lap_a_info = lap
-            if lap.lap_number == lap_b:
-                lap_b_info = lap
-
-        if lap_a_info is None or lap_b_info is None:
-            raise HTTPException(status_code=400, detail=f"Lap {lap_a} or {lap_b} not found")
-
-        # Get GPS data for each lap
-        lap_a_data = analyzer.get_lap_data(lap_a_info)
-        lap_b_data = analyzer.get_lap_data(lap_b_info)
-
-        ref_lat = np.array(lap_a_data['latitude'])
-        ref_lon = np.array(lap_a_data['longitude'])
-        comp_lat = np.array(lap_b_data['latitude'])
-        comp_lon = np.array(lap_b_data['longitude'])
-
-        # Generate track map
-        track_map = TrackMap()
-
-        if format == 'json':
-            return {
-                "lap_a": lap_a,
-                "lap_b": lap_b,
-                "segments": comparison.segments,
-                "time_delta": comparison.time_delta,
-                "summary": comparison.summary
-            }
-        else:
-            svg = track_map.render_delta_svg(
-                ref_lat, ref_lon,
-                comp_lat, comp_lon,
-                comparison.segments,
-                title=f"Delta: Lap {lap_a} vs Lap {lap_b}",
-                ref_label=f"Lap {lap_a}",
-                comp_label=f"Lap {lap_b}"
-            )
-            return HTMLResponse(content=svg, media_type="image/svg+xml")
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Delta track map generation failed: {str(e)}")
-
-
-@app.get("/api/track-map/{filename:path}")
-async def get_track_map(
-    filename: str,
-    color_by: str = "speed",
-    format: str = "svg",
-    discrete: bool = True,
-    low_threshold: float = 33.0,
-    high_threshold: float = 66.0
-):
-    """Generate track map visualization"""
-    import pandas as pd
-
-    file_path = _find_parquet_file(filename)
-    if not file_path:
-        raise HTTPException(status_code=404, detail=f"Parquet file not found: {filename}")
-
-    try:
-        df = pd.read_parquet(file_path)
-
-        lat_data = _find_column(df, ['GPS Latitude', 'latitude'])
-        lon_data = _find_column(df, ['GPS Longitude', 'longitude'])
-
-        if lat_data is None or lon_data is None:
-            raise HTTPException(status_code=400, detail="GPS data not found in file")
-
-        # Get color data based on selection
-        color_data = None
-        if color_by == 'speed':
-            color_data = _find_column(df, ['GPS Speed', 'speed', 'Speed'])
-            if color_data is not None and color_data.max() < 100:
-                color_data = color_data * SPEED_MS_TO_MPH
-        elif color_by == 'rpm':
-            color_data = _find_column(df, ['RPM', 'rpm'])
-
-        track_map = TrackMap()
-
-        if format == 'html':
-            return HTMLResponse(
-                content=track_map.render_html(
-                    lat_data, lon_data, color_data, color_by, f"Track Map - {filename}"
-                )
-            )
-        elif format == 'json':
-            return track_map.to_dict(lat_data, lon_data, color_data, color_by)
-        else:
-            return HTMLResponse(
-                content=track_map.render_svg(
-                    lat_data, lon_data, color_data, color_by, f"Track Map - {filename}",
-                    discrete_mode=discrete,
-                    low_threshold=low_threshold,
-                    high_threshold=high_threshold
-                ),
-                media_type="image/svg+xml"
-            )
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Track map generation failed: {str(e)}")
-
-
-# ============================================================
-# G-G Diagram Endpoints
-# ============================================================
-
-from src.features.gg_analysis import GGAnalyzer
-from src.visualization.gg_diagram import GGDiagram
-from src.features.corner_analysis import CornerAnalyzer
-from src.config.vehicles import get_active_vehicle
-
-
-@app.get("/gg-diagram")
-async def gg_diagram_page(request: Request):
-    """G-G Diagram page"""
-    return templates.TemplateResponse("gg_diagram.html", {"request": request})
-
-
-@app.get("/api/gg-diagram/{filename:path}")
-async def get_gg_diagram(
-    filename: str,
-    format: str = "json",
-    color_by: str = "speed",
-    lap: str = None
-):
-    """
-    Generate G-G diagram data or visualization.
-
-    Args:
-        filename: Parquet file path
-        format: Output format ('json', 'svg')
-        color_by: Color scheme ('speed', 'throttle', 'lap')
-        lap: Filter to specific lap number (optional)
-    """
-    import pandas as pd
-    import numpy as np
-
-    file_path = _find_parquet_file(filename)
-    if not file_path:
-        raise HTTPException(status_code=404, detail=f"Parquet file not found: {filename}")
-
-    try:
-        # Get vehicle config values for accurate per-quadrant reference
-        vehicle = get_active_vehicle()
-        max_lateral_g = getattr(vehicle, 'max_lateral_g', 1.3)
-        max_braking_g = getattr(vehicle, 'max_braking_g', max_lateral_g * 1.1)
-        power_limited_accel_g = getattr(vehicle, 'power_limited_accel_g', 0.4)
-
-        # Parse lap filter
-        lap_filter = None
-        if lap and lap != 'all':
-            try:
-                lap_filter = int(lap)
-            except ValueError:
-                pass
-
-        # Run analysis using analyze_from_parquet for full feature support
-        # Pass lap_filter so all stats/zones/quadrants are computed for the filtered lap
-        analyzer = GGAnalyzer(
-            max_g_reference=max_lateral_g,
-            max_braking_g=max_braking_g,
-            power_limited_accel_g=power_limited_accel_g
-        )
-        result = analyzer.analyze_from_parquet(file_path, session_id=filename, lap_filter=lap_filter)
-
-        # Get arrays for SVG rendering
-        df = pd.read_parquet(file_path)
-        lat_acc = _find_column(df, ['GPS LatAcc', 'LatAcc'])
-        lon_acc = _find_column(df, ['GPS LonAcc', 'LonAcc'])
-
-        if lat_acc is None or lon_acc is None:
-            raise HTTPException(status_code=400, detail="Acceleration data (GPS LatAcc/LonAcc) not found")
-
-        speed_data = _find_column(df, ['GPS Speed', 'speed', 'Speed'])
-        if speed_data is not None and speed_data.max() < 100:
-            speed_data = speed_data * SPEED_MS_TO_MPH
-
-        throttle_data = _find_column(df, ['PedalPos', 'throttle', 'Throttle'])
-
-        # Filter SVG arrays by lap if specified
-        if lap_filter is not None and result.lap_numbers:
-            # Get lap data for filtering SVG arrays
-            lat_gps = _find_column(df, ['GPS Latitude', 'latitude', 'gps_lat'])
-            lon_gps = _find_column(df, ['GPS Longitude', 'longitude', 'gps_lon'])
-
-            if lat_gps is not None and lon_gps is not None:
-                try:
-                    from src.analysis.lap_analyzer import LapAnalyzer
-                    time_data = df.index.values
-                    session_data = {
-                        'time': time_data,
-                        'latitude': lat_gps,
-                        'longitude': lon_gps,
-                        'rpm': np.zeros(len(time_data)),
-                        'speed_mph': speed_data if speed_data is not None else np.zeros(len(time_data)),
-                        'speed_ms': (speed_data / SPEED_MS_TO_MPH) if speed_data is not None else np.zeros(len(time_data))
-                    }
-                    lap_analyzer = LapAnalyzer(session_data)
-                    laps = lap_analyzer.detect_laps()
-                    if laps:
-                        lap_data_arr = np.zeros(len(time_data))
-                        for l in laps:
-                            lap_data_arr[l.start_index:l.end_index+1] = l.lap_number
-                        lap_mask = lap_data_arr == lap_filter
-                        if np.sum(lap_mask) > 0:
-                            lat_acc = lat_acc[lap_mask]
-                            lon_acc = lon_acc[lap_mask]
-                            if speed_data is not None:
-                                speed_data = speed_data[lap_mask]
-                            if throttle_data is not None:
-                                throttle_data = throttle_data[lap_mask]
-                except Exception as e:
-                    import logging
-                    logging.warning(f"Lap filtering for SVG arrays failed: {e}")
-
-        if format == 'json':
-            return result.to_dict()
-        else:
-            # Generate SVG
-            diagram = GGDiagram()
-
-            # Get color data based on selection
-            color_data = None
-            if color_by == 'speed' and speed_data is not None:
-                color_data = speed_data
-            elif color_by == 'throttle' and throttle_data is not None:
-                color_data = throttle_data
-
-            svg = diagram.render_svg(
-                lat_acc, lon_acc,
-                color_data=color_data,
-                color_scheme=color_by,
-                reference_max_g=result.reference_max_g,
-                data_max_g=result.stats.data_derived_max_g,
-                title=f"G-G Diagram - {Path(filename).stem}" + (f" (Lap {lap_filter})" if lap_filter else "")
-            )
-            return HTMLResponse(content=svg, media_type="image/svg+xml")
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"G-G diagram generation failed: {str(e)}")
-
-
-# ============================================================
-# Corner Analysis Endpoints
-# ============================================================
-
-
-@app.get("/corner-analysis")
-async def corner_analysis_page(request: Request):
-    """Corner analysis page"""
-    return templates.TemplateResponse("corner_analysis.html", {"request": request})
-
-
-@app.get("/api/corner-analysis/{filename:path}")
-async def get_corner_analysis(
-    filename: str,
-    track_name: str = "Unknown Track"
-):
-    """
-    Analyze corners in a session.
-
-    Detects corners and calculates per-corner metrics:
-    - Entry/apex/exit speeds
-    - Time in corner
-    - Throttle pickup point
-    - Lift detection
-    - Trail braking
-    """
-    import pandas as pd
-    import numpy as np
-
-    file_path = _find_parquet_file(filename)
-    if not file_path:
-        raise HTTPException(status_code=404, detail=f"Parquet file not found: {filename}")
-
-    try:
-        df = pd.read_parquet(file_path)
-
-        # Check for required GPS data
-        lat_data = _find_column(df, ['GPS Latitude', 'gps_lat', 'latitude'])
-        lon_data = _find_column(df, ['GPS Longitude', 'gps_lon', 'longitude'])
-
-        if lat_data is None or lon_data is None:
-            raise HTTPException(status_code=400, detail="GPS latitude/longitude data not found")
-
-        # Run corner analysis
-        analyzer = CornerAnalyzer()
-        result = analyzer.analyze_from_parquet(
-            str(file_path),
-            session_id=Path(filename).stem,
-            track_name=track_name
-        )
-
-        return _sanitize_for_json(result.to_dict())
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Corner analysis failed: {str(e)}")
-
-
-@app.get("/api/corner-track-map/{filename:path}")
-async def get_corner_track_map(
-    filename: str,
-    track_name: str = "Unknown Track",
-    color_scheme: str = "speed",
-    selected_corner: Optional[str] = None
-):
-    """
-    Generate track map SVG with corner overlay.
-
-    Shows corner markers (numbered circles) at apex positions,
-    highlighted corner boundaries, and track colored by speed/gear/etc.
-    """
-    import pandas as pd
-    import numpy as np
-    from src.visualization.track_map import TrackMap
-
-    file_path = _find_parquet_file(filename)
-    if not file_path:
-        raise HTTPException(status_code=404, detail=f"Parquet file not found: {filename}")
-
-    try:
-        df = pd.read_parquet(file_path)
-
-        # Get GPS data
-        lat_data = _find_column(df, ['GPS Latitude', 'gps_lat', 'latitude'])
-        lon_data = _find_column(df, ['GPS Longitude', 'gps_lon', 'longitude'])
-
-        if lat_data is None or lon_data is None:
-            raise HTTPException(status_code=400, detail="GPS latitude/longitude data not found")
-
-        # Get color data based on scheme
-        if color_scheme == 'speed':
-            color_data = _find_column(df, ['GPS Speed', 'gps_speed', 'speed'])
-            if color_data is not None and color_data.max() < 100:
-                color_data = color_data * SPEED_MS_TO_MPH  # Convert m/s to mph
-        elif color_scheme == 'rpm':
-            color_data = _find_column(df, ['RPM', 'engine_rpm', 'rpm'])
-        elif color_scheme == 'gear':
-            color_data = _find_column(df, ['Gear', 'gear'])
-        elif color_scheme == 'throttle':
-            color_data = _find_column(df, ['PedalPos', 'throttle', 'Throttle'])
-        else:
-            color_data = None
-
-        # Detect corners
-        analyzer = CornerAnalyzer()
-        result = analyzer.analyze_from_parquet(
-            str(file_path),
-            session_id=Path(filename).stem,
-            track_name=track_name
-        )
-
-        # Convert corner zones to dicts for rendering
-        corners = []
-        for zone in result.corner_zones:
-            corners.append({
-                'name': zone.name,
-                'alias': zone.alias,
-                'apex_lat': zone.apex_lat,
-                'apex_lon': zone.apex_lon,
-                'entry_idx': zone.entry_idx,
-                'apex_idx': zone.apex_idx,
-                'exit_idx': zone.exit_idx,
-                'corner_type': zone.corner_type,
-                'direction': zone.direction
-            })
-
-        # Render track map with corner overlay
-        track_map = TrackMap()
-        svg = track_map.render_corner_overlay_svg(
-            lat_data,
-            lon_data,
-            corners,
-            color_data=color_data,
-            color_scheme=color_scheme,
-            title=f"{track_name} - Corner Map",
-            selected_corner=selected_corner
-        )
-
-        return Response(content=svg, media_type="image/svg+xml")
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Track map generation failed: {str(e)}")
-
-
-# ============================================================
-# Queue Dashboard Endpoints
-# ============================================================
-
-from src.extraction.queue import ExtractionQueue
-from src.extraction.models import JobStatus
-
-# Initialize queue (uses default db path)
-_extraction_queue = None
-
-def get_queue() -> ExtractionQueue:
-    """Get or create the extraction queue singleton"""
-    global _extraction_queue
-    if _extraction_queue is None:
-        db_path = Path(config.DATA_DIR) / "extraction_queue.db"
-        _extraction_queue = ExtractionQueue(str(db_path))
-    return _extraction_queue
-
-
-@app.get("/queue", response_class=HTMLResponse)
-async def queue_dashboard_page(request: Request):
-    """Queue status dashboard page"""
-    return templates.TemplateResponse("queue.html", {
-        "request": request,
-        "title": "Extraction Queue"
-    })
-
-
-@app.get("/api/queue/stats")
-async def get_queue_stats():
-    """Get queue statistics"""
-    queue = get_queue()
-    return queue.get_stats()
-
-
-@app.get("/api/queue/jobs")
-async def list_queue_jobs(
-    status: Optional[str] = None,
-    limit: int = 50,
-    offset: int = 0
-):
-    """List jobs in the queue"""
-    queue = get_queue()
-
-    job_status = None
-    if status and status != "all":
-        try:
-            job_status = JobStatus(status)
-        except ValueError:
-            raise HTTPException(status_code=400, detail=f"Invalid status: {status}")
-
-    jobs = queue.list_jobs(status=job_status, limit=limit, offset=offset)
-    return {
-        "jobs": [job.to_dict() for job in jobs],
-        "total": queue.count(job_status),
-        "status_filter": status
-    }
-
-
-@app.get("/api/queue/jobs/{job_id}")
-async def get_queue_job(job_id: int):
-    """Get a specific job"""
-    queue = get_queue()
-    job = queue.get(job_id)
-    if not job:
-        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
-    return job.to_dict()
-
-
-@app.post("/api/queue/jobs/{job_id}/retry")
-async def retry_queue_job(job_id: int):
-    """Retry a failed job"""
-    queue = get_queue()
-    job = queue.retry(job_id)
-    if not job:
-        raise HTTPException(status_code=400, detail=f"Cannot retry job {job_id} - not found or not eligible")
-    return {"success": True, "job": job.to_dict()}
-
-
-@app.post("/api/queue/retry-all")
-async def retry_all_failed_jobs():
-    """Retry all failed jobs that are eligible"""
-    queue = get_queue()
-    count = queue.retry_all_failed()
-    return {"success": True, "retried_count": count}
-
-
-@app.delete("/api/queue/jobs/{job_id}")
-async def delete_queue_job(job_id: int):
-    """Delete a job from the queue"""
-    queue = get_queue()
-    success = queue.delete(job_id)
-    if not success:
-        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
-    return {"success": True}
-
-
-@app.post("/api/queue/clear-completed")
-async def clear_completed_jobs():
-    """Remove all completed jobs from the queue"""
-    queue = get_queue()
-    count = queue.clear_completed()
-    return {"success": True, "cleared_count": count}
-
-
-def _find_parquet_file(filename: str) -> Optional[Path]:
-    """Find a Parquet file by name in the data directories"""
-    data_dir = Path(config.DATA_DIR)
-
-    # Try direct path
-    file_path = data_dir / filename
-    if file_path.exists():
-        return file_path
-
-    # Try with .parquet extension
-    if not filename.endswith('.parquet'):
-        file_path = data_dir / f"{filename}.parquet"
-        if file_path.exists():
-            return file_path
-
-    # Search recursively
-    for pq in data_dir.rglob(f"*{filename}*"):
-        if pq.suffix == '.parquet':
-            return pq
-
-    return None
-
-
-# Delegate to shared utility (imported at top of file)
-_find_column = _find_column_shared
-
-
-# Error handlers
 @app.exception_handler(404)
 async def not_found_handler(request: Request, exc):
     return templates.TemplateResponse("error.html", {
@@ -1328,361 +422,11 @@ async def not_found_handler(request: Request, exc):
 async def server_error_handler(request: Request, exc):
     return templates.TemplateResponse("error.html", {
         "request": request,
-        "title": "Server Error", 
+        "title": "Server Error",
         "error": "An internal server error occurred"
     }, status_code=500)
 
 
-# ============================================================
-# Vehicle Settings Endpoints
-# ============================================================
-
-from src.config.vehicles import VehicleDatabase, get_vehicle, set_active_vehicle
-
-
-@app.get("/vehicles")
-async def vehicles_page(request: Request):
-    """Vehicle settings page"""
-    return templates.TemplateResponse("vehicles.html", {"request": request})
-
-
-@app.get("/api/vehicles")
-async def get_vehicles():
-    """Get all vehicles and active vehicle ID"""
-    db = VehicleDatabase()
-    vehicles = db.list_vehicles()
-    active_id = db.get_active_vehicle_id()
-
-    return {
-        "active_vehicle": active_id,
-        "vehicles": [v.to_dict() for v in vehicles]
-    }
-
-
-@app.get("/api/vehicles/{vehicle_id}")
-async def get_vehicle_by_id(vehicle_id: str):
-    """Get a specific vehicle by ID"""
-    vehicle = get_vehicle(vehicle_id)
-    if vehicle is None:
-        raise HTTPException(status_code=404, detail=f"Vehicle not found: {vehicle_id}")
-    return vehicle.to_dict()
-
-
-@app.put("/api/vehicles/{vehicle_id}")
-async def update_vehicle(vehicle_id: str, request: Request):
-    """Update a vehicle's parameters"""
-    db = VehicleDatabase()
-
-    # Check vehicle exists
-    vehicle = get_vehicle(vehicle_id)
-    if vehicle is None:
-        raise HTTPException(status_code=404, detail=f"Vehicle not found: {vehicle_id}")
-
-    # Get updated data
-    data = await request.json()
-
-    # Update the vehicle in the database
-    try:
-        db.update_vehicle(vehicle_id, data)
-        return {"status": "ok", "message": f"Vehicle {vehicle_id} updated"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to update vehicle: {str(e)}")
-
-
-@app.put("/api/vehicles/active")
-async def set_active_vehicle_endpoint(request: Request):
-    """Set the active vehicle"""
-    data = await request.json()
-    vehicle_id = data.get("vehicle_id")
-
-    if not vehicle_id:
-        raise HTTPException(status_code=400, detail="vehicle_id is required")
-
-    vehicle = get_vehicle(vehicle_id)
-    if vehicle is None:
-        raise HTTPException(status_code=404, detail=f"Vehicle not found: {vehicle_id}")
-
-    try:
-        set_active_vehicle(vehicle_id)
-        return {"status": "ok", "active_vehicle": vehicle_id}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to set active vehicle: {str(e)}")
-
-
-# ============================================================
-# Session Management (v2 API)
-# ============================================================
-
-from src.session.session_database import SessionDatabase, get_session_database
-from src.session.importer import SessionImporter
-from src.session.models import (
-    ImportStatus,
-    LapClassification,
-    SessionType,
-    Setup,
-)
-
-_session_db = None
-
-
-def get_session_db() -> SessionDatabase:
-    """Get or create the session database singleton"""
-    global _session_db
-    if _session_db is None:
-        db_path = Path(config.DATA_DIR) / "sessions.db"
-        _session_db = SessionDatabase(str(db_path))
-    return _session_db
-
-
-# --- Session HTML Pages ---
-
-@app.get("/sessions", response_class=HTMLResponse)
-async def sessions_page(request: Request):
-    """Session browser page"""
-    return templates.TemplateResponse("sessions.html", {
-        "request": request,
-        "title": "Sessions",
-    })
-
-
-@app.get("/sessions/import", response_class=HTMLResponse)
-async def session_import_page(request: Request):
-    """Session import wizard page"""
-    return templates.TemplateResponse("session_import.html", {
-        "request": request,
-        "title": "Import Session",
-    })
-
-
-@app.get("/sessions/{session_id}", response_class=HTMLResponse)
-async def session_detail_page(request: Request, session_id: int):
-    """Session detail page"""
-    db = get_session_db()
-    session = db.get_session(session_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
-
-    return templates.TemplateResponse("session_detail.html", {
-        "request": request,
-        "title": f"Session: {session.track_name or 'Unknown'} - {session.session_date or 'Unknown'}",
-        "session": session.to_dict(),
-        "session_id": session_id,
-    })
-
-
-# --- Session JSON API ---
-
-@app.get("/api/v2/sessions")
-async def list_sessions_api(
-    track_id: Optional[str] = None,
-    vehicle_id: Optional[str] = None,
-    session_type: Optional[str] = None,
-    import_status: Optional[str] = None,
-    limit: int = 100,
-    offset: int = 0,
-):
-    """List sessions with optional filters"""
-    db = get_session_db()
-
-    s_type = None
-    if session_type:
-        try:
-            s_type = SessionType(session_type)
-        except ValueError:
-            raise HTTPException(status_code=400, detail=f"Invalid session_type: {session_type}")
-
-    i_status = None
-    if import_status:
-        try:
-            i_status = ImportStatus(import_status)
-        except ValueError:
-            raise HTTPException(status_code=400, detail=f"Invalid import_status: {import_status}")
-
-    sessions = db.list_sessions(
-        track_id=track_id,
-        vehicle_id=vehicle_id,
-        session_type=s_type,
-        import_status=i_status,
-        limit=limit,
-        offset=offset,
-    )
-
-    return {
-        "sessions": [s.to_dict() for s in sessions],
-        "total": len(sessions),
-        "stats": db.get_stats(),
-    }
-
-
-@app.post("/api/v2/sessions/import")
-async def import_session_api(request: Request):
-    """Import a Parquet file as a session"""
-    data = await request.json()
-    parquet_path = data.get("parquet_path")
-
-    if not parquet_path:
-        raise HTTPException(status_code=400, detail="parquet_path is required")
-
-    # Resolve relative paths against data dir
-    path = Path(parquet_path)
-    if not path.is_absolute():
-        path = Path(config.DATA_DIR) / parquet_path
-
-    if not path.exists():
-        raise HTTPException(status_code=404, detail=f"File not found: {parquet_path}")
-
-    db = get_session_db()
-    importer = SessionImporter(db)
-
-    try:
-        result = importer.import_session(
-            str(path),
-            vehicle_id=data.get("vehicle_id"),
-            session_type=data.get("session_type"),
-            notes=data.get("notes", ""),
-        )
-        return result.to_dict()
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Import failed: {str(e)}")
-
-
-@app.get("/api/v2/sessions/{session_id}")
-async def get_session_api(session_id: int):
-    """Get session detail"""
-    db = get_session_db()
-    session = db.get_session(session_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
-
-    stints = db.get_stints(session_id)
-    setups = db.get_setups(session_id)
-
-    return {
-        "session": session.to_dict(),
-        "stints": [s.to_dict() for s in stints],
-        "setups": [s.to_dict() for s in setups],
-    }
-
-
-@app.get("/api/v2/sessions/{session_id}/laps")
-async def get_session_laps_api(session_id: int):
-    """Get laps for a session with classifications"""
-    db = get_session_db()
-    session = db.get_session(session_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
-
-    laps = db.get_laps(session_id)
-
-    # Compute gaps from best
-    best_time = session.best_lap_time
-    lap_dicts = []
-    for lap in laps:
-        d = lap.to_dict()
-        if best_time and lap.lap_time > 0:
-            d["gap_to_best"] = round(lap.lap_time - best_time, 3)
-        else:
-            d["gap_to_best"] = None
-        lap_dicts.append(d)
-
-    return {"laps": lap_dicts, "best_lap_time": best_time}
-
-
-@app.put("/api/v2/sessions/{session_id}/laps/{lap_number}/classify")
-async def classify_lap_api(session_id: int, lap_number: int, request: Request):
-    """Override a lap's classification"""
-    db = get_session_db()
-    data = await request.json()
-
-    classification_str = data.get("classification")
-    if not classification_str:
-        raise HTTPException(status_code=400, detail="classification is required")
-
-    try:
-        classification = LapClassification(classification_str)
-    except ValueError:
-        raise HTTPException(status_code=400, detail=f"Invalid classification: {classification_str}")
-
-    # Find the lap by session_id and lap_number
-    laps = db.get_laps(session_id)
-    target_lap = None
-    for lap in laps:
-        if lap.lap_number == lap_number:
-            target_lap = lap
-            break
-
-    if not target_lap:
-        raise HTTPException(status_code=404, detail=f"Lap {lap_number} not found in session {session_id}")
-
-    success = db.update_lap_classification(
-        target_lap.id,
-        classification,
-        confidence=1.0,
-        user_override=True,
-    )
-
-    if not success:
-        raise HTTPException(status_code=500, detail="Failed to update classification")
-
-    return {"status": "ok", "lap_number": lap_number, "classification": classification_str}
-
-
-@app.put("/api/v2/sessions/{session_id}/confirm")
-async def confirm_session_api(session_id: int, request: Request):
-    """Confirm a session (mark as confirmed, optionally update metadata)"""
-    db = get_session_db()
-    session = db.get_session(session_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
-
-    data = await request.json()
-
-    session.import_status = ImportStatus.CONFIRMED
-    if "session_type" in data:
-        try:
-            session.session_type = SessionType(data["session_type"])
-        except ValueError:
-            pass
-    if "notes" in data:
-        session.notes = data["notes"]
-    if "vehicle_id" in data:
-        session.vehicle_id = data["vehicle_id"]
-
-    db.update_session(session)
-    return {"status": "ok", "session": session.to_dict()}
-
-
-@app.get("/api/v2/sessions/{session_id}/setup")
-async def get_session_setup_api(session_id: int, setup_point: str = "pre"):
-    """Get setup data for a session"""
-    db = get_session_db()
-    setup = db.get_setup(session_id, setup_point)
-    if not setup:
-        return {"setup": None}
-    return {"setup": setup.to_dict()}
-
-
-@app.put("/api/v2/sessions/{session_id}/setup")
-async def save_session_setup_api(session_id: int, request: Request):
-    """Save setup data for a session"""
-    db = get_session_db()
-    session = db.get_session(session_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
-
-    data = await request.json()
-
-    setup = Setup(
-        session_id=session_id,
-        setup_point=data.get("setup_point", "pre"),
-        setup_data=data.get("setup_data", {}),
-        notes=data.get("notes", ""),
-    )
-    setup = db.save_setup(setup)
-    return {"status": "ok", "setup": setup.to_dict()}
-
-
-# Health check endpoint
 @app.get("/health")
 async def health_check():
     """Health check for deployment monitoring"""
@@ -1696,12 +440,12 @@ async def health_check():
 
 if __name__ == "__main__":
     import uvicorn
-    
+
     print(f"Starting Telemetry Analyzer on {config.HOST}:{config.PORT}")
     print(f"Debug mode: {config.DEBUG}")
     print(f"Data directory: {config.DATA_DIR}")
     print(f"Open browser to: http://{config.HOST}:{config.PORT}")
-    
+
     uvicorn.run(
         "app:app",
         host=config.HOST,

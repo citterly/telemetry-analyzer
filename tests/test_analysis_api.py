@@ -19,39 +19,39 @@ class TestAnalysisAPIHelpers:
     def test_find_column_exact_match(self):
         """Test finding column with exact match"""
         import pandas as pd
-        from src.main.app import _find_column
+        from src.utils.dataframe_helpers import find_column
 
         df = pd.DataFrame({
             'RPM': [5000, 5500, 6000],
             'GPS Speed': [50, 60, 70]
         })
 
-        result = _find_column(df, ['RPM'])
+        result = find_column(df, ['RPM'])
         assert result is not None
         assert list(result) == [5000, 5500, 6000]
 
     def test_find_column_case_insensitive(self):
         """Test case-insensitive column matching"""
         import pandas as pd
-        from src.main.app import _find_column
+        from src.utils.dataframe_helpers import find_column
 
         df = pd.DataFrame({
             'rpm': [5000, 5500, 6000],
         })
 
-        result = _find_column(df, ['RPM', 'rpm'])
+        result = find_column(df, ['RPM', 'rpm'])
         assert result is not None
 
     def test_find_column_not_found(self):
         """Test column not found returns None"""
         import pandas as pd
-        from src.main.app import _find_column
+        from src.utils.dataframe_helpers import find_column
 
         df = pd.DataFrame({
             'Temperature': [80, 85, 90],
         })
 
-        result = _find_column(df, ['RPM', 'rpm'])
+        result = find_column(df, ['RPM', 'rpm'])
         assert result is None
 
 
@@ -570,11 +570,11 @@ class TestSafetyCriticalFixes:
 
     def test_report_rejects_missing_gps(self, parquet_no_gps):
         """Session report endpoint returns 422 when GPS data is missing"""
-        from src.main.app import app, _find_parquet_file
+        from src.main.app import app
         from fastapi.testclient import TestClient
         from unittest.mock import patch
 
-        with patch('src.main.app._find_parquet_file', return_value=parquet_no_gps):
+        with patch('src.main.routers.analysis.find_parquet_file', return_value=parquet_no_gps):
             client = TestClient(app)
             response = client.get("/api/analyze/report/test.parquet")
             assert response.status_code == 422
@@ -584,7 +584,7 @@ class TestSafetyCriticalFixes:
         """Session report endpoint returns 422 when speed data is missing"""
         from unittest.mock import patch
 
-        with patch('src.main.app._find_parquet_file', return_value=parquet_no_speed):
+        with patch('src.main.routers.analysis.find_parquet_file', return_value=parquet_no_speed):
             from src.main.app import app
             from fastapi.testclient import TestClient
             client = TestClient(app)
@@ -596,7 +596,7 @@ class TestSafetyCriticalFixes:
         """Lap analysis endpoint returns 422 when speed data is missing"""
         from unittest.mock import patch
 
-        with patch('src.main.app._find_parquet_file', return_value=parquet_no_speed):
+        with patch('src.main.routers.analysis.find_parquet_file', return_value=parquet_no_speed):
             from src.main.app import app
             from fastapi.testclient import TestClient
             client = TestClient(app)
@@ -668,6 +668,68 @@ class TestSafetyCriticalFixes:
         assert _safe_decode(None) == ""
         assert _safe_decode(0) == ""
         assert _safe_decode(42) == "chan_42"
+
+
+class TestRouterStructure:
+    """Tests for cleanup-004: app.py split into routers"""
+
+    def test_routers_importable(self):
+        """All router modules are importable"""
+        from src.main.routers import analysis
+        from src.main.routers import parquet
+        from src.main.routers import queue
+        from src.main.routers import sessions
+        from src.main.routers import vehicles
+        from src.main.routers import visualization
+
+        assert hasattr(analysis, 'router')
+        assert hasattr(parquet, 'router')
+        assert hasattr(queue, 'router')
+        assert hasattr(sessions, 'router')
+        assert hasattr(vehicles, 'router')
+        assert hasattr(visualization, 'router')
+
+    def test_app_includes_all_routers(self):
+        """App includes all router endpoints"""
+        from src.main.app import app
+
+        routes = [r.path for r in app.routes if hasattr(r, 'path')]
+        # Analysis routes
+        assert "/api/analyze/shifts/{filename:path}" in routes
+        assert "/api/analyze/laps/{filename:path}" in routes
+        assert "/api/analyze/gears/{filename:path}" in routes
+        assert "/api/analyze/power/{filename:path}" in routes
+        assert "/api/analyze/report/{filename:path}" in routes
+        # Parquet routes
+        assert "/api/parquet/list" in routes
+        assert "/api/parquet/view/{filename:path}" in routes
+        assert "/api/parquet/summary/{filename:path}" in routes
+        # Queue routes
+        assert "/api/queue/stats" in routes
+        assert "/api/queue/jobs" in routes
+        # Sessions routes
+        assert "/api/v2/sessions" in routes
+        assert "/api/v2/sessions/{session_id}" in routes
+        # Vehicle routes
+        assert "/api/vehicles" in routes
+        assert "/api/vehicles/{vehicle_id}" in routes
+        # Visualization routes
+        assert "/api/track-map/{filename:path}" in routes
+        assert "/api/gg-diagram/{filename:path}" in routes
+        assert "/api/corner-analysis/{filename:path}" in routes
+
+    def test_deps_module(self):
+        """Shared deps module provides config and helpers"""
+        from src.main.deps import config, file_manager, find_parquet_file
+        assert config is not None
+        assert file_manager is not None
+        assert callable(find_parquet_file)
+
+    def test_app_line_count_reduced(self):
+        """app.py is significantly smaller after router extraction"""
+        app_path = Path(__file__).parent.parent / "src" / "main" / "app.py"
+        line_count = len(app_path.read_text().splitlines())
+        assert line_count < 600, f"app.py has {line_count} lines, expected < 600 after router split"
 
 
 if __name__ == "__main__":
