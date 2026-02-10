@@ -461,13 +461,13 @@
       "name": "PowerAnalysis trace + checks",
       "category": "safeguard",
       "description": "Reference implementation: add trace recording (inputs, config, intermediates) and 5 sanity checks to PowerAnalysis. Checks: mass_matches_config, max_power_plausible, power_weight_ratio, speed_unit_confidence, sufficient_data. See docs/SAFEGUARD_SYSTEM.md Phase 2.",
-      "status": "planned",
+      "status": "passing",
       "priority": 29,
       "tests": ["test_power_trace_recorded", "test_power_trace_omitted_by_default", "test_power_sanity_checks"],
       "files": [
         "src/features/power_analysis.py"
       ],
-      "notes": ""
+      "notes": "DONE: analyze_from_parquet gains include_trace=True support. Records 6 inputs (speed_column, speed_unit_detected, speed_max_raw, rpm_column, sample_count, dt_mean), 6 config values, 5 intermediates. 5 sanity checks: mass_matches_config, max_power_plausible, power_weight_ratio, speed_unit_confidence, sufficient_data. to_dict() includes _trace when present. 17 new tests. 747 tests passing."
     },
     {
       "id": "safeguard-003",
@@ -553,9 +553,9 @@
     "created_at": "2025-01-29T01:00:00Z",
     "last_updated": "2026-02-10T16:00:00Z",
     "total_features": 41,
-    "passing": 34,
+    "passing": 35,
     "failing": 0,
-    "planned": 7
+    "planned": 6
   },
   "categories": {
     "bugfix": "Bug fixes and corrections",

@@ -77,7 +77,7 @@ class PowerAnalysisReport(BaseAnalysisReport):
 
     def to_dict(self) -> dict:
         """Convert to dictionary"""
-        return {
+        result = {
             "session_id": self.session_id,
             "analysis_timestamp": self.analysis_timestamp,
             "vehicle_mass_kg": self.vehicle_mass_kg,
@@ -123,6 +123,8 @@ class PowerAnalysisReport(BaseAnalysisReport):
             "recommendations": self.recommendations,
             "summary": self.summary
         }
+        result.update(self._trace_dict())
+        return result
 
     def to_json(self, indent: int = 2) -> str:
         """Convert to JSON string"""
@@ -257,7 +259,9 @@ class PowerAnalysis(BaseAnalyzer):
     def analyze_from_parquet(
         self,
         parquet_path: str,
-        session_id: Optional[str] = None
+        session_id: Optional[str] = None,
+        include_trace: bool = False,
+        **kwargs,
     ) -> PowerAnalysisReport:
         """
         Analyze power and acceleration from a Parquet file.
@@ -265,10 +269,13 @@ class PowerAnalysis(BaseAnalyzer):
         Args:
             parquet_path: Path to Parquet file
             session_id: Session identifier (defaults to filename)
+            include_trace: If True, attach CalculationTrace to report.
 
         Returns:
             PowerAnalysisReport with complete analysis
         """
+        trace = self._create_trace("PowerAnalysis") if include_trace else None
+
         df = pd.read_parquet(parquet_path)
 
         if session_id is None:
@@ -277,17 +284,158 @@ class PowerAnalysis(BaseAnalyzer):
 
         # Find required columns
         time_data = df.index.values
+        speed_col_name = None
+        for col_name in ['GPS Speed', 'speed', 'Speed']:
+            if col_name in df.columns:
+                speed_col_name = col_name
+                break
         speed_data = find_column(df, ['GPS Speed', 'speed', 'Speed'])
+        rpm_col_name = None
+        for col_name in ['RPM', 'rpm', 'RPM dup 3']:
+            if col_name in df.columns:
+                rpm_col_name = col_name
+                break
         rpm_data = find_column(df, ['RPM', 'rpm', 'RPM dup 3'])
+
+        # Record trace inputs
+        speed_unit_detected = "mph"
+        speed_max_raw = float(speed_data.max()) if speed_data is not None else 0.0
 
         # Convert speed to mph if needed (likely in m/s or km/h)
         if speed_data is not None and speed_data.max() < 100:
             speed_data = speed_data * SPEED_MS_TO_MPH  # m/s to mph
+            speed_unit_detected = "m/s"
 
         if speed_data is None:
             raise ValueError("Parquet file missing speed column")
 
-        return self.analyze_from_arrays(time_data, speed_data, rpm_data, session_id)
+        if trace:
+            trace.record_input("speed_column", speed_col_name)
+            trace.record_input("speed_unit_detected", speed_unit_detected)
+            trace.record_input("speed_max_raw", speed_max_raw)
+            trace.record_input("rpm_column", rpm_col_name)
+            trace.record_input("sample_count", len(time_data))
+            dt = np.diff(time_data)
+            trace.record_input("dt_mean", float(np.mean(dt)) if len(dt) > 0 else 0.0)
+
+            trace.record_config("vehicle_mass_kg", self.vehicle_mass_kg)
+            trace.record_config("smoothing_window", self.smoothing_window)
+            trace.record_config("smoothing_polyorder", 3)
+            trace.record_config("power_band_min_rpm", ENGINE_SPECS.get('power_band_min', 5500))
+            trace.record_config("power_band_max_rpm", ENGINE_SPECS.get('power_band_max', 7000))
+            trace.record_config("safe_rpm_limit", ENGINE_SPECS.get('safe_rpm_limit', 7000))
+
+        report = self.analyze_from_arrays(time_data, speed_data, rpm_data, session_id)
+
+        if trace:
+            # Record key intermediates
+            trace.record_intermediate("max_raw_power_hp", report.max_power_hp)
+            trace.record_intermediate("max_raw_accel_g", report.max_acceleration_g)
+            trace.record_intermediate("accel_event_count", len(report.acceleration_events))
+            trace.record_intermediate("braking_event_count", len(report.braking_events))
+            if report.rpm_analysis and "pct_in_power_band" in report.rpm_analysis:
+                trace.record_intermediate("pct_in_power_band", report.rpm_analysis["pct_in_power_band"])
+
+            if rpm_data is None:
+                trace.warnings.append("RPM column missing, RPM analysis skipped")
+
+            # Run sanity checks
+            self._run_sanity_checks(trace, report)
+
+            report.trace = trace
+
+        return report
+
+    def _run_sanity_checks(self, trace, report: PowerAnalysisReport) -> None:
+        """Run sanity checks on power analysis results."""
+        # Check 2.1: mass_matches_config
+        try:
+            from ..config.vehicles import get_active_vehicle
+            vehicle = get_active_vehicle()
+            if vehicle:
+                config_mass_kg = vehicle.weight_lbs / 2.205
+                pct_diff = abs(self.vehicle_mass_kg - config_mass_kg) / config_mass_kg
+                if pct_diff < 0.10:
+                    trace.add_check(
+                        "mass_matches_config", "pass",
+                        f"Analyzer mass {self.vehicle_mass_kg:.0f} kg matches vehicle config {config_mass_kg:.0f} kg",
+                        expected=round(config_mass_kg, 1), actual=self.vehicle_mass_kg,
+                    )
+                else:
+                    trace.add_check(
+                        "mass_matches_config", "warn",
+                        f"Analyzer mass {self.vehicle_mass_kg:.0f} kg differs from vehicle config {config_mass_kg:.0f} kg by {pct_diff*100:.0f}%",
+                        expected=round(config_mass_kg, 1), actual=self.vehicle_mass_kg,
+                    )
+        except Exception:
+            trace.add_check(
+                "mass_matches_config", "warn",
+                "Could not load active vehicle to compare mass",
+            )
+
+        # Check 2.2: max_power_plausible
+        if report.max_power_hp < 800:
+            trace.add_check(
+                "max_power_plausible", "pass",
+                f"Max power {report.max_power_hp:.0f} HP is plausible",
+                expected="< 800", actual=round(report.max_power_hp, 1),
+            )
+        else:
+            trace.add_check(
+                "max_power_plausible", "fail",
+                f"Max power {report.max_power_hp:.0f} HP exceeds 800 HP limit for street cars",
+                expected="< 800", actual=round(report.max_power_hp, 1),
+                severity="error",
+            )
+
+        # Check 2.3: power_weight_ratio
+        if self.vehicle_mass_kg > 0:
+            pwr = report.max_power_hp / self.vehicle_mass_kg
+            if pwr < 0.5:
+                trace.add_check(
+                    "power_weight_ratio", "pass",
+                    f"Power/weight ratio {pwr:.3f} HP/kg is reasonable",
+                    expected="< 0.5", actual=round(pwr, 3),
+                )
+            else:
+                trace.add_check(
+                    "power_weight_ratio", "warn",
+                    f"Power/weight ratio {pwr:.3f} HP/kg exceeds supercar territory (0.5 HP/kg)",
+                    expected="< 0.5", actual=round(pwr, 3),
+                )
+
+        # Check 2.4: speed_unit_confidence
+        speed_max_raw = trace.inputs.get("speed_max_raw", 0)
+        if 45 <= speed_max_raw <= 110:
+            trace.add_check(
+                "speed_unit_confidence", "warn",
+                f"Max raw speed {speed_max_raw:.1f} is in ambiguous zone (45-110). Could be m/s or mph.",
+                expected="outside 45-110", actual=round(speed_max_raw, 1),
+            )
+        else:
+            trace.add_check(
+                "speed_unit_confidence", "pass",
+                f"Max raw speed {speed_max_raw:.1f} is unambiguous",
+                expected="outside 45-110", actual=round(speed_max_raw, 1),
+            )
+
+        # Check 2.5: sufficient_data
+        sample_count = trace.inputs.get("sample_count", 0)
+        dt_mean = trace.inputs.get("dt_mean", 0)
+        duration = sample_count * dt_mean if dt_mean > 0 else 0
+        if sample_count > 100 and duration > 10:
+            trace.add_check(
+                "sufficient_data", "pass",
+                f"{sample_count} samples over {duration:.1f}s is sufficient",
+                expected="> 100 samples, > 10s", actual=f"{sample_count} samples, {duration:.1f}s",
+            )
+        else:
+            trace.add_check(
+                "sufficient_data", "fail",
+                f"Insufficient data: {sample_count} samples, {duration:.1f}s (need >100 samples, >10s)",
+                expected="> 100 samples, > 10s", actual=f"{sample_count} samples, {duration:.1f}s",
+                severity="error",
+            )
 
     def _calculate_acceleration(
         self,

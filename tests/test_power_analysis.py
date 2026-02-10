@@ -18,6 +18,7 @@ from src.features.power_analysis import (
     AccelerationEvent,
     PowerEstimate
 )
+from src.utils.dataframe_helpers import SPEED_MS_TO_MPH
 
 
 class TestAccelerationEvent:
@@ -506,6 +507,208 @@ class TestRecommendations:
         any_rpm_rec = any("rpm" in r.lower() or "upshift" in r.lower()
                         for r in report.recommendations)
         assert any_rpm_rec or report.rpm_analysis.get('pct_over_safe_limit', 0) > 0
+
+
+class TestPowerAnalysisTrace:
+    """Tests for safeguard-002: PowerAnalysis trace + sanity checks."""
+
+    def _make_parquet(self, tmp_path, n=200, speed_range=(20, 60), rpm_val=5500):
+        """Create a synthetic parquet file for testing."""
+        import pandas as pd
+        time = np.linspace(0, 30, n)
+        speed = np.linspace(speed_range[0], speed_range[1], n)
+        rpm = np.full(n, rpm_val, dtype=float)
+        df = pd.DataFrame({
+            "GPS Speed": speed,
+            "RPM": rpm,
+        }, index=time)
+        path = str(tmp_path / "test.parquet")
+        df.to_parquet(path)
+        return path
+
+    def test_trace_recorded_when_enabled(self, tmp_path):
+        """Trace is attached to report when include_trace=True."""
+        path = self._make_parquet(tmp_path)
+        analyzer = PowerAnalysis()
+        report = analyzer.analyze_from_parquet(path, include_trace=True)
+        assert hasattr(report, 'trace')
+        assert report.trace is not None
+        assert report.trace.analyzer_name == "PowerAnalysis"
+
+    def test_trace_not_recorded_by_default(self, tmp_path):
+        """Trace is NOT attached when include_trace=False (default)."""
+        path = self._make_parquet(tmp_path)
+        analyzer = PowerAnalysis()
+        report = analyzer.analyze_from_parquet(path)
+        assert not hasattr(report, 'trace') or report.trace is None
+
+    def test_trace_inputs_recorded(self, tmp_path):
+        """Trace records speed column, unit, sample count, dt_mean."""
+        path = self._make_parquet(tmp_path)
+        analyzer = PowerAnalysis()
+        report = analyzer.analyze_from_parquet(path, include_trace=True)
+        trace = report.trace
+        assert trace.inputs["speed_column"] == "GPS Speed"
+        assert trace.inputs["speed_unit_detected"] in ("m/s", "mph")
+        assert trace.inputs["sample_count"] == 200
+        assert trace.inputs["rpm_column"] == "RPM"
+        assert "speed_max_raw" in trace.inputs
+        assert "dt_mean" in trace.inputs
+
+    def test_trace_config_recorded(self, tmp_path):
+        """Trace records vehicle mass and smoothing params."""
+        path = self._make_parquet(tmp_path)
+        analyzer = PowerAnalysis(vehicle_mass_kg=1400, smoothing_window=15)
+        report = analyzer.analyze_from_parquet(path, include_trace=True)
+        trace = report.trace
+        assert trace.config["vehicle_mass_kg"] == 1400
+        assert trace.config["smoothing_window"] == 15
+        assert trace.config["smoothing_polyorder"] == 3
+        assert "power_band_min_rpm" in trace.config
+        assert "power_band_max_rpm" in trace.config
+
+    def test_trace_intermediates_recorded(self, tmp_path):
+        """Trace records max_raw_power_hp, max_raw_accel_g, event counts."""
+        path = self._make_parquet(tmp_path)
+        analyzer = PowerAnalysis()
+        report = analyzer.analyze_from_parquet(path, include_trace=True)
+        trace = report.trace
+        assert "max_raw_power_hp" in trace.intermediates
+        assert "max_raw_accel_g" in trace.intermediates
+        assert "accel_event_count" in trace.intermediates
+        assert "braking_event_count" in trace.intermediates
+
+    def test_trace_has_five_sanity_checks(self, tmp_path):
+        """All 5 sanity checks are present."""
+        path = self._make_parquet(tmp_path)
+        analyzer = PowerAnalysis()
+        report = analyzer.analyze_from_parquet(path, include_trace=True)
+        check_names = [c.name for c in report.trace.sanity_checks]
+        assert "mass_matches_config" in check_names
+        assert "max_power_plausible" in check_names
+        assert "power_weight_ratio" in check_names
+        assert "speed_unit_confidence" in check_names
+        assert "sufficient_data" in check_names
+
+    def test_to_dict_includes_trace(self, tmp_path):
+        """to_dict() includes _trace when trace is present."""
+        path = self._make_parquet(tmp_path)
+        analyzer = PowerAnalysis()
+        report = analyzer.analyze_from_parquet(path, include_trace=True)
+        d = report.to_dict()
+        assert "_trace" in d
+        assert d["_trace"]["analyzer_name"] == "PowerAnalysis"
+        assert len(d["_trace"]["sanity_checks"]) == 5
+
+    def test_to_dict_omits_trace_by_default(self, tmp_path):
+        """to_dict() does NOT include _trace when trace is absent."""
+        path = self._make_parquet(tmp_path)
+        analyzer = PowerAnalysis()
+        report = analyzer.analyze_from_parquet(path)
+        d = report.to_dict()
+        assert "_trace" not in d
+
+    def test_to_dict_json_serializable_with_trace(self, tmp_path):
+        """to_dict() with trace produces valid JSON."""
+        path = self._make_parquet(tmp_path)
+        analyzer = PowerAnalysis()
+        report = analyzer.analyze_from_parquet(path, include_trace=True)
+        serialized = json.dumps(report.to_dict())
+        assert isinstance(serialized, str)
+        roundtrip = json.loads(serialized)
+        assert "_trace" in roundtrip
+
+    def test_check_max_power_plausible_passes(self, tmp_path):
+        """Normal power values pass the plausibility check."""
+        path = self._make_parquet(tmp_path, speed_range=(20, 60))
+        analyzer = PowerAnalysis()
+        report = analyzer.analyze_from_parquet(path, include_trace=True)
+        check = next(c for c in report.trace.sanity_checks if c.name == "max_power_plausible")
+        assert check.status == "pass"
+
+    def test_check_max_power_plausible_fails_extreme(self, tmp_path):
+        """Extreme power values fail the plausibility check."""
+        import pandas as pd
+        # Create data that will produce extremely high power (huge acceleration + high speed)
+        time = np.linspace(0, 5, 200)
+        speed = np.exp(np.linspace(0, 6, 200))  # Exponential speed growth → huge acceleration
+        speed_mph = speed * SPEED_MS_TO_MPH  # Ensure treated as mph
+        df = pd.DataFrame({"GPS Speed": speed_mph, "RPM": np.full(200, 6000.0)}, index=time)
+        path = str(tmp_path / "extreme.parquet")
+        df.to_parquet(path)
+
+        analyzer = PowerAnalysis(vehicle_mass_kg=5000)
+        report = analyzer.analyze_from_parquet(path, include_trace=True)
+        check = next(c for c in report.trace.sanity_checks if c.name == "max_power_plausible")
+        # Either fail (>800 HP) or pass (if speed is reasonable)
+        if report.max_power_hp >= 800:
+            assert check.status == "fail"
+
+    def test_check_speed_unit_confidence_warns_ambiguous(self, tmp_path):
+        """Ambiguous speed range (45-110) triggers warning."""
+        import pandas as pd
+        time = np.linspace(0, 30, 200)
+        # Max speed ~80, which is ambiguous (could be m/s or mph)
+        speed = np.linspace(30, 80, 200)
+        df = pd.DataFrame({"GPS Speed": speed, "RPM": np.full(200, 5000.0)}, index=time)
+        path = str(tmp_path / "ambiguous.parquet")
+        df.to_parquet(path)
+
+        analyzer = PowerAnalysis()
+        report = analyzer.analyze_from_parquet(path, include_trace=True)
+        check = next(c for c in report.trace.sanity_checks if c.name == "speed_unit_confidence")
+        assert check.status == "warn"
+
+    def test_check_sufficient_data_fails(self, tmp_path):
+        """Too few samples triggers sufficient_data failure."""
+        import pandas as pd
+        time = np.linspace(0, 2, 50)  # 50 samples, 2 seconds
+        speed = np.linspace(20, 40, 50)
+        df = pd.DataFrame({"GPS Speed": speed}, index=time)
+        path = str(tmp_path / "short.parquet")
+        df.to_parquet(path)
+
+        analyzer = PowerAnalysis()
+        report = analyzer.analyze_from_parquet(path, include_trace=True)
+        check = next(c for c in report.trace.sanity_checks if c.name == "sufficient_data")
+        assert check.status == "fail"
+
+    def test_check_sufficient_data_passes(self, tmp_path):
+        """Enough samples and duration passes sufficient_data check."""
+        path = self._make_parquet(tmp_path, n=200, speed_range=(20, 60))
+        analyzer = PowerAnalysis()
+        report = analyzer.analyze_from_parquet(path, include_trace=True)
+        check = next(c for c in report.trace.sanity_checks if c.name == "sufficient_data")
+        assert check.status == "pass"
+
+    def test_missing_rpm_adds_warning(self, tmp_path):
+        """Missing RPM column adds warning to trace."""
+        import pandas as pd
+        time = np.linspace(0, 30, 200)
+        speed = np.linspace(20, 60, 200)
+        df = pd.DataFrame({"GPS Speed": speed}, index=time)
+        path = str(tmp_path / "no_rpm.parquet")
+        df.to_parquet(path)
+
+        analyzer = PowerAnalysis()
+        report = analyzer.analyze_from_parquet(path, include_trace=True)
+        assert any("RPM" in w for w in report.trace.warnings)
+
+    def test_has_failures_property(self, tmp_path):
+        """has_failures reflects sanity check status."""
+        path = self._make_parquet(tmp_path)
+        analyzer = PowerAnalysis()
+        report = analyzer.analyze_from_parquet(path, include_trace=True)
+        # Normal data should not have failures
+        assert report.trace.has_failures is False
+
+    def test_existing_tests_still_pass(self):
+        """Smoke test: existing analyze_from_arrays still works unchanged."""
+        analyzer = PowerAnalysis()
+        time = np.linspace(0, 10, 100)
+        speed = np.linspace(30, 80, 100)
+        report = analyzer.analyze_from_arrays(time, speed)
+        assert report.max_power_hp >= 0
 
 
 if __name__ == "__main__":

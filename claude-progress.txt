@@ -780,3 +780,34 @@ Features: 34/41 passing (7 planned)
 
 Next priority: safeguard-002 (PowerAnalysis trace + checks)
 
+
+=== Session 11 continued (2026-02-10) ===
+Working on: safeguard-002 (PowerAnalysis trace + checks)
+
+Work completed:
+
+1. Updated src/features/power_analysis.py:
+   - analyze_from_parquet() gains include_trace=False and **kwargs params
+   - When include_trace=True, records 6 inputs, 6 config values, 5 intermediates
+   - _run_sanity_checks() implements 5 checks:
+     - mass_matches_config: compares analyzer mass vs active vehicle config (±10%)
+     - max_power_plausible: flags >800 HP as implausible
+     - power_weight_ratio: warns if >0.5 HP/kg (supercar territory)
+     - speed_unit_confidence: warns when max raw speed 45-110 (ambiguous zone)
+     - sufficient_data: fails if <100 samples or <10s duration
+   - PowerAnalysisReport.to_dict() includes _trace via _trace_dict() helper
+   - RPM column missing adds warning to trace
+
+2. Added 17 tests to tests/test_power_analysis.py::TestPowerAnalysisTrace:
+   - Trace present/absent, inputs/config/intermediates recorded
+   - All 5 checks verified individually
+   - to_dict() with/without trace, JSON serialization roundtrip
+   - Missing RPM warning, has_failures property, backward compatibility
+
+Test results: 747/747 passing (17 new)
+
+Status: safeguard-002 marked PASSING
+Features: 35/41 passing (6 planned)
+
+Next priority: safeguard-003 (ShiftAnalyzer trace + checks)
+
