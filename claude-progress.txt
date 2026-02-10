@@ -703,6 +703,80 @@ Test results: 703/703 passing (5 new)
 Status: cleanup-005 marked PASSING
 Features: 33/33 (all features passing!)
 
-=== ALL FEATURES COMPLETE ===
+=== ALL CLEANUP FEATURES COMPLETE ===
 All 33 features implemented, tested, and passing. 5-phase cleanup audit complete.
+
+
+=== Session 10 (2026-02-10) ===
+Working on: Safeguard system design — calculation traceability and sanity checks
+
+Work completed:
+
+1. Created docs/SAFEGUARD_SYSTEM.md — full specification:
+   - Motivation: why calculations need traceability
+   - Architecture: CalculationTrace, SanityCheck dataclasses, opt-in via include_trace=True
+   - 8 phases with exact files, classes, methods, and sanity checks
+   - 26 total sanity checks across 7 analyzers + 3 cross-validation checks
+   - Test strategy with synthetic data patterns for edge cases
+
+2. Added 8 new features to features.json (safeguard-001 through safeguard-008):
+   - safeguard-001: Trace infrastructure (calculation_trace.py, base_analyzer.py updates)
+   - safeguard-002: PowerAnalysis trace + 5 sanity checks (reference implementation)
+   - safeguard-003: ShiftAnalyzer trace + 4 sanity checks
+   - safeguard-004: GGAnalyzer trace + 4 sanity checks
+   - safeguard-005: LapAnalysis trace + 4 sanity checks
+   - safeguard-006: GearAnalysis + CornerAnalyzer trace + 6 sanity checks
+   - safeguard-007: SessionReport aggregation + API endpoints (trace=true param)
+   - safeguard-008: Memory update (save safeguard principle)
+
+3. Updated features.json metadata:
+   - Added "safeguard" category
+   - total_features: 33 → 41
+   - planned: 0 → 8
+
+Design decisions:
+- Opt-in via include_trace=True (zero overhead by default)
+- Trace attached to report objects, included in to_dict() when present
+- API exposes via ?trace=true query parameter
+- SanityCheck has 3 statuses: pass/warn/fail
+- Cross-validation in SessionReport catches inconsistencies between sub-analyzers
+- Each phase is self-contained and testable independently
+
+Status: Design artifacts complete. Ready for implementation.
+Features: 33/41 passing (8 planned)
+
+
+=== Session 11 (2026-02-10) ===
+Working on: safeguard-001 (Trace infrastructure)
+
+Work completed:
+
+1. Created src/utils/calculation_trace.py:
+   - SanityCheck dataclass: name, status, message, expected, actual, severity
+   - CalculationTrace dataclass: analyzer_name, timestamp, inputs, config,
+     intermediates, sanity_checks, warnings
+   - Convenience methods: add_check(), record_input(), record_config(),
+     record_intermediate()
+   - Properties: has_failures, has_warnings
+   - JSON serialization: to_dict() on both classes
+
+2. Updated src/features/base_analyzer.py:
+   - BaseAnalysisReport: added _trace_dict() helper using getattr(self, 'trace', None)
+     for safe integration with @dataclass subclasses
+   - BaseAnalyzer.analyze_from_parquet(): added include_trace=False parameter
+   - BaseAnalyzer._create_trace(): factory method for creating CalculationTrace
+
+3. Created tests/test_calculation_trace.py with 27 tests:
+   - TestSanityCheck: 5 tests (creation, serialization)
+   - TestCalculationTrace: 12 tests (recording, properties, serialization)
+   - TestBaseAnalysisReportTrace: 3 tests (with/without trace, JSON roundtrip)
+   - TestBaseAnalyzerCreateTrace: 3 tests (factory, timestamp, signature)
+   - TestBackwardCompatibility: 4 tests (all analyzers/reports still work)
+
+Test results: 730/730 passing (27 new, 4 pre-existing DLL failures excluded)
+
+Status: safeguard-001 marked PASSING
+Features: 34/41 passing (7 planned)
+
+Next priority: safeguard-002 (PowerAnalysis trace + checks)
 

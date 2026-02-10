@@ -440,15 +440,122 @@
         "src/features/session_report.py"
       ],
       "notes": "DONE: Created BaseAnalyzer ABC with analyze_from_parquet() contract and BaseAnalysisReport base class. All 7 analyzers (ShiftAnalyzer, LapAnalysis, GearAnalysis, PowerAnalysis, GGAnalyzer, CornerAnalyzer, SessionReportGenerator) now inherit BaseAnalyzer. All 7 report classes inherit BaseAnalysisReport. SessionReportGenerator gained analyze_from_parquet alias. SessionService facade deferred (larger refactor). 5 new tests. 703 tests passing."
+    },
+    {
+      "id": "safeguard-001",
+      "name": "Trace infrastructure",
+      "category": "safeguard",
+      "description": "Create CalculationTrace and SanityCheck dataclasses in src/utils/calculation_trace.py. Update BaseAnalyzer with include_trace parameter and _create_trace() factory. Update BaseAnalysisReport with optional trace field and _trace_dict() helper. See docs/SAFEGUARD_SYSTEM.md Phase 1.",
+      "status": "passing",
+      "priority": 28,
+      "tests": ["test_sanity_check_creation", "test_calculation_trace_recording", "test_trace_serialization", "test_base_report_trace_field"],
+      "files": [
+        "src/utils/calculation_trace.py",
+        "src/features/base_analyzer.py",
+        "tests/test_calculation_trace.py"
+      ],
+      "notes": "DONE: Created SanityCheck and CalculationTrace dataclasses with to_dict(), add_check(), record_input/config/intermediate(), has_failures/has_warnings properties. Updated BaseAnalysisReport with _trace_dict() helper (uses getattr for dataclass safety). Updated BaseAnalyzer with include_trace=False parameter and _create_trace() factory. 27 tests passing."
+    },
+    {
+      "id": "safeguard-002",
+      "name": "PowerAnalysis trace + checks",
+      "category": "safeguard",
+      "description": "Reference implementation: add trace recording (inputs, config, intermediates) and 5 sanity checks to PowerAnalysis. Checks: mass_matches_config, max_power_plausible, power_weight_ratio, speed_unit_confidence, sufficient_data. See docs/SAFEGUARD_SYSTEM.md Phase 2.",
+      "status": "planned",
+      "priority": 29,
+      "tests": ["test_power_trace_recorded", "test_power_trace_omitted_by_default", "test_power_sanity_checks"],
+      "files": [
+        "src/features/power_analysis.py"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "safeguard-003",
+      "name": "ShiftAnalyzer trace + checks",
+      "category": "safeguard",
+      "description": "Add trace recording and 4 sanity checks to ShiftAnalyzer. Checks: gear_count_matches_config, shift_rpm_below_redline, shift_confidence, sufficient_shifts. See docs/SAFEGUARD_SYSTEM.md Phase 3.",
+      "status": "planned",
+      "priority": 30,
+      "tests": ["test_shift_trace_recorded", "test_shift_sanity_checks"],
+      "files": [
+        "src/features/shift_analysis.py"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "safeguard-004",
+      "name": "GGAnalyzer trace + checks",
+      "category": "safeguard",
+      "description": "Add trace recording and 4 sanity checks to GGAnalyzer. Checks: config_matches_vehicle, data_quality, g_force_plausible, utilization_plausible. See docs/SAFEGUARD_SYSTEM.md Phase 4.",
+      "status": "planned",
+      "priority": 31,
+      "tests": ["test_gg_trace_recorded", "test_gg_sanity_checks"],
+      "files": [
+        "src/features/gg_analysis.py"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "safeguard-005",
+      "name": "LapAnalysis trace + checks",
+      "category": "safeguard",
+      "description": "Add trace recording and 4 sanity checks to LapAnalysis. Checks: speed_unit_consistent, lap_distance_plausible, lap_time_plausible, gps_coordinates_valid. See docs/SAFEGUARD_SYSTEM.md Phase 5.",
+      "status": "planned",
+      "priority": 32,
+      "tests": ["test_lap_trace_recorded", "test_lap_sanity_checks"],
+      "files": [
+        "src/features/lap_analysis.py"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "safeguard-006",
+      "name": "GearAnalysis + CornerAnalyzer trace + checks",
+      "category": "safeguard",
+      "description": "Add trace recording and sanity checks to both remaining analyzers. GearAnalysis: 3 checks (gear_count_matches_config, rpm_data_sufficient, gear_usage_balanced). CornerAnalyzer: 3 checks (gps_quality, corner_count_plausible, corner_speeds_plausible). See docs/SAFEGUARD_SYSTEM.md Phase 6.",
+      "status": "planned",
+      "priority": 33,
+      "tests": ["test_gear_trace_recorded", "test_gear_sanity_checks", "test_corner_trace_recorded", "test_corner_sanity_checks"],
+      "files": [
+        "src/features/gear_analysis.py",
+        "src/features/corner_analysis.py"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "safeguard-007",
+      "name": "SessionReport aggregation + API endpoints",
+      "category": "safeguard",
+      "description": "Aggregate traces from sub-analyzers in SessionReportGenerator with 3 cross-validation checks (speed_unit_consensus, sample_count_consistent, config_consistent). Add trace=true query parameter to all 7 analysis API endpoints. See docs/SAFEGUARD_SYSTEM.md Phase 7.",
+      "status": "planned",
+      "priority": 34,
+      "tests": ["test_report_trace_aggregation", "test_cross_validation_checks", "test_api_trace_parameter"],
+      "files": [
+        "src/features/session_report.py",
+        "src/main/routers/analysis.py",
+        "src/main/routers/visualization.py"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "safeguard-008",
+      "name": "Memory update",
+      "category": "safeguard",
+      "description": "Save safeguard principle to auto-memory as permanent project premise. All calculations must be traceable via include_trace=True. New analyzers must implement trace recording and sanity checks.",
+      "status": "planned",
+      "priority": 35,
+      "tests": [],
+      "files": [],
+      "notes": ""
     }
   ],
   "metadata": {
     "created_at": "2025-01-29T01:00:00Z",
-    "last_updated": "2026-02-10T14:00:00Z",
-    "total_features": 33,
-    "passing": 33,
+    "last_updated": "2026-02-10T16:00:00Z",
+    "total_features": 41,
+    "passing": 34,
     "failing": 0,
-    "planned": 0
+    "planned": 7
   },
   "categories": {
     "bugfix": "Bug fixes and corrections",
@@ -457,6 +564,7 @@
     "ui": "Web interface and visualization",
     "infra": "Infrastructure and configuration",
     "testing": "Test coverage and quality",
-    "cleanup": "Code quality improvements from docs/CLEANUP_AUDIT.md"
+    "cleanup": "Code quality improvements from docs/CLEANUP_AUDIT.md",
+    "safeguard": "Calculation traceability and sanity checks from docs/SAFEGUARD_SYSTEM.md"
   }
 }
