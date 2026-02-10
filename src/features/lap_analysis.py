@@ -10,22 +10,12 @@ import pandas as pd
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional, Tuple
 from datetime import datetime, timezone
-from enum import Enum
 import json
 
 from ..analysis.lap_analyzer import LapAnalyzer, LapInfo, analyze_session_laps
 from ..config.vehicle_config import TRACK_CONFIG, PROCESSING_CONFIG
+from ..session.models import LapClassification
 from ..utils.dataframe_helpers import find_column, SPEED_MS_TO_MPH, safe_float as _safe_float
-
-
-class LapClassification(str, Enum):
-    """Classification of lap types based on timing patterns"""
-    HOT_LAP = "hot_lap"
-    RACE_PACE = "race_pace"
-    WARM_UP = "warm_up"
-    COOL_DOWN = "cool_down"
-    OUT_LAP = "out_lap"
-    INCOMPLETE = "incomplete"
 
 
 @dataclass

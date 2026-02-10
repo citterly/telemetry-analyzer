@@ -391,7 +391,7 @@ if __name__ == "__main__":
     # First, show theoretical calculations
     debug_gear_calculations(CURRENT_SETUP['transmission_ratios'], CURRENT_SETUP['final_drive'])
     
-    from ..extract.data_loader import load_session_data
+    from ..extraction.data_loader import load_session_data
     from .lap_analyzer import analyze_session_laps
     
     # Load session and get fastest lap

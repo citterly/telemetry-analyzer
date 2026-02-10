@@ -498,6 +498,38 @@ class TestSharedUtilities:
         assert isinstance(KNOWN_COLUMNS['speed'], list)
 
 
+class TestEnumConsolidation:
+    """Tests for cleanup-003: consolidated enums"""
+
+    def test_single_lap_classification_source(self):
+        """LapClassification should have all members from both old definitions"""
+        from src.session.models import LapClassification
+
+        # From original models.py
+        assert LapClassification.OUT_LAP.value == "out_lap"
+        assert LapClassification.IN_LAP.value == "in_lap"
+        assert LapClassification.WARM_UP.value == "warm_up"
+        assert LapClassification.COOL_DOWN.value == "cool_down"
+        assert LapClassification.HOT_LAP.value == "hot_lap"
+        assert LapClassification.NORMAL.value == "normal"
+        # From original lap_analysis.py
+        assert LapClassification.RACE_PACE.value == "race_pace"
+        assert LapClassification.INCOMPLETE.value == "incomplete"
+
+    def test_lap_analysis_uses_models_enum(self):
+        """lap_analysis.py should import LapClassification from session.models"""
+        from src.features.lap_analysis import LapClassification
+        from src.session.models import LapClassification as ModelsLapClassification
+
+        # Should be the exact same class
+        assert LapClassification is ModelsLapClassification
+
+    def test_extraction_directory_merged(self):
+        """data_loader should be importable from src.extraction"""
+        from src.extraction.data_loader import XRKDataLoader
+        assert XRKDataLoader is not None
+
+
 class TestSafetyCriticalFixes:
     """Tests for cleanup-001: safety-critical fixes"""
 

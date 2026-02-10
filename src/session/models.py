@@ -36,6 +36,8 @@ class LapClassification(str, Enum):
     COOL_DOWN = "cool_down"
     HOT_LAP = "hot_lap"
     NORMAL = "normal"
+    RACE_PACE = "race_pace"
+    INCOMPLETE = "incomplete"
 
 
 @dataclass

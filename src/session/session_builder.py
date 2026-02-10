@@ -17,7 +17,7 @@ import unicodedata
 
 from ctypes import c_char_p, cast
 
-from src.extract.data_loader import XRKDataLoader
+from src.extraction.data_loader import XRKDataLoader
 from src.config.config import EXPORTS_PATH
 from src.io.file_manager import FileManager
 from src.utils import units_helper

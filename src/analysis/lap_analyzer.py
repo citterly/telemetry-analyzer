@@ -316,7 +316,7 @@ if __name__ == "__main__":
     print("Testing Lap Analyzer")
     print("=" * 50)
     
-    from ..extract.data_loader import load_session_data
+    from ..extraction.data_loader import load_session_data
     
     # Load session data
     session_data = load_session_data()

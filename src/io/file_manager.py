@@ -13,7 +13,7 @@ from dataclasses import dataclass, asdict
 import hashlib
 
 # Clean imports – DLL check removed (belongs in data_loader)
-from src.extract.data_loader import load_session_data, get_data_summary
+from src.extraction.data_loader import load_session_data, get_data_summary
 from src.analysis.lap_analyzer import analyze_session_laps
 
 @dataclass
