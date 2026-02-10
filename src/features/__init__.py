@@ -3,6 +3,7 @@ Features module for telemetry analysis
 Contains high-level analysis features built on core modules
 """
 
+from .base_analyzer import BaseAnalyzer, BaseAnalysisReport
 from .shift_analysis import ShiftAnalyzer, ShiftReport
 from .transmission_comparison import TransmissionComparison, TransmissionComparisonReport
 from .lap_analysis import LapAnalysis, LapAnalysisReport
@@ -11,6 +12,8 @@ from .power_analysis import PowerAnalysis, PowerAnalysisReport
 from .session_report import SessionReportGenerator, SessionReport
 
 __all__ = [
+    'BaseAnalyzer',
+    'BaseAnalysisReport',
     'ShiftAnalyzer',
     'ShiftReport',
     'TransmissionComparison',
@@ -22,5 +25,5 @@ __all__ = [
     'PowerAnalysis',
     'PowerAnalysisReport',
     'SessionReportGenerator',
-    'SessionReport'
+    'SessionReport',
 ]

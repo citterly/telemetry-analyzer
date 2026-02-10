@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 import json
 
 from ..analysis.gear_calculator import GearCalculator, GearInfo
+from .base_analyzer import BaseAnalyzer, BaseAnalysisReport
 from ..config.vehicle_config import CURRENT_SETUP, TRANSMISSION_SCENARIOS
 from ..utils.dataframe_helpers import SPEED_MS_TO_MPH
 
@@ -46,7 +47,7 @@ class GearShiftStats:
 
 
 @dataclass
-class ShiftReport:
+class ShiftReport(BaseAnalysisReport):
     """Complete shift analysis report"""
     session_id: str
     analysis_timestamp: str
@@ -107,7 +108,7 @@ class ShiftReport:
         return json.dumps(self.to_dict(), indent=indent)
 
 
-class ShiftAnalyzer:
+class ShiftAnalyzer(BaseAnalyzer):
     """
     Analyzes gear shift patterns in telemetry data.
 

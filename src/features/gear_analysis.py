@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 import json
 
 from ..analysis.gear_calculator import GearCalculator, GearInfo, analyze_lap_gearing
+from .base_analyzer import BaseAnalyzer, BaseAnalysisReport
 from ..config.vehicle_config import (
     CURRENT_SETUP,
     TRANSMISSION_SCENARIOS,
@@ -51,7 +52,7 @@ class TrackSectionStats:
 
 
 @dataclass
-class GearAnalysisReport:
+class GearAnalysisReport(BaseAnalysisReport):
     """Complete gear usage analysis report"""
     session_id: str
     track_name: str
@@ -114,7 +115,7 @@ class GearAnalysisReport:
         return json.dumps(self.to_dict(), indent=indent)
 
 
-class GearAnalysis:
+class GearAnalysis(BaseAnalyzer):
     """
     Analyzes gear usage from telemetry sessions.
 

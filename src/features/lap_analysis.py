@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 import json
 
 from ..analysis.lap_analyzer import LapAnalyzer, LapInfo, analyze_session_laps
+from .base_analyzer import BaseAnalyzer, BaseAnalysisReport
 from ..config.vehicle_config import TRACK_CONFIG, PROCESSING_CONFIG
 from ..session.models import LapClassification
 from ..utils.dataframe_helpers import find_column, SPEED_MS_TO_MPH, safe_float as _safe_float
@@ -59,7 +60,7 @@ class LapRecommendation:
 
 
 @dataclass
-class LapAnalysisReport:
+class LapAnalysisReport(BaseAnalysisReport):
     """Complete lap analysis report"""
     session_id: str
     track_name: str
@@ -124,7 +125,7 @@ class LapAnalysisReport:
         return json.dumps(self.to_dict(), indent=indent)
 
 
-class LapAnalysis:
+class LapAnalysis(BaseAnalyzer):
     """
     Analyzes lap data from telemetry sessions.
 

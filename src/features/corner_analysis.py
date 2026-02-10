@@ -15,6 +15,7 @@ import json
 
 from .corner_detection import CornerDetector, CornerZone, CornerDetectionResult
 from ..utils.dataframe_helpers import find_column, SPEED_MS_TO_MPH
+from .base_analyzer import BaseAnalyzer, BaseAnalysisReport
 
 
 @dataclass
@@ -188,7 +189,7 @@ class CornerComparison:
 
 
 @dataclass
-class CornerAnalysisResult:
+class CornerAnalysisResult(BaseAnalysisReport):
     """Complete corner analysis for a session."""
     session_id: str
     track_name: str
@@ -215,7 +216,7 @@ class CornerAnalysisResult:
         return json.dumps(self.to_dict(), indent=indent)
 
 
-class CornerAnalyzer:
+class CornerAnalyzer(BaseAnalyzer):
     """
     Analyzes corner performance from telemetry data.
 

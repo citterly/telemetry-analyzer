@@ -19,6 +19,7 @@ from .gear_analysis import GearAnalysis, GearAnalysisReport
 from .power_analysis import PowerAnalysis, PowerAnalysisReport
 from ..config.vehicle_config import TRACK_CONFIG, CURRENT_SETUP
 from ..utils.dataframe_helpers import find_column, SPEED_MS_TO_MPH
+from .base_analyzer import BaseAnalyzer, BaseAnalysisReport
 
 
 @dataclass
@@ -49,7 +50,7 @@ class SessionSummary:
 
 
 @dataclass
-class SessionReport:
+class SessionReport(BaseAnalysisReport):
     """Complete session analysis report"""
     metadata: SessionMetadata
     summary: SessionSummary
@@ -103,7 +104,7 @@ class SessionReport:
         return SessionReportGenerator._generate_html(self)
 
 
-class SessionReportGenerator:
+class SessionReportGenerator(BaseAnalyzer):
     """
     Generates comprehensive session analysis reports.
 
@@ -253,6 +254,15 @@ class SessionReportGenerator:
         return self.generate_from_arrays(
             time_data, lat_data, lon_data, rpm_data, speed_data, session_id
         )
+
+    def analyze_from_parquet(
+        self,
+        parquet_path: str,
+        session_id: Optional[str] = None,
+        **kwargs,
+    ) -> SessionReport:
+        """BaseAnalyzer interface - delegates to generate_from_parquet."""
+        return self.generate_from_parquet(parquet_path, session_id)
 
     def _run_lap_analysis(
         self,

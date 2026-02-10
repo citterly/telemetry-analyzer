@@ -12,6 +12,7 @@ from typing import List, Dict, Optional, Tuple
 from datetime import datetime, timezone
 import json
 from scipy import signal
+from .base_analyzer import BaseAnalyzer, BaseAnalysisReport
 
 from ..config.vehicle_config import ENGINE_SPECS
 from ..utils.dataframe_helpers import find_column, SPEED_MS_TO_MPH
@@ -45,7 +46,7 @@ class PowerEstimate:
 
 
 @dataclass
-class PowerAnalysisReport:
+class PowerAnalysisReport(BaseAnalysisReport):
     """Complete power and acceleration analysis report"""
     session_id: str
     analysis_timestamp: str
@@ -128,7 +129,7 @@ class PowerAnalysisReport:
         return json.dumps(self.to_dict(), indent=indent)
 
 
-class PowerAnalysis:
+class PowerAnalysis(BaseAnalyzer):
     """
     Analyzes acceleration, power output, and braking from telemetry data.
 

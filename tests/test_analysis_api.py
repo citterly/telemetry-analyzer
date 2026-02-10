@@ -732,5 +732,70 @@ class TestRouterStructure:
         assert line_count < 600, f"app.py has {line_count} lines, expected < 600 after router split"
 
 
+class TestCommonAnalyzerInterface:
+    """Tests for cleanup-005: common analyzer interface"""
+
+    def test_base_classes_importable(self):
+        """BaseAnalyzer and BaseAnalysisReport are importable from features"""
+        from src.features import BaseAnalyzer, BaseAnalysisReport
+        assert BaseAnalyzer is not None
+        assert BaseAnalysisReport is not None
+
+    def test_all_analyzers_inherit_base(self):
+        """All 6 analyzers + SessionReportGenerator inherit BaseAnalyzer"""
+        from src.features.base_analyzer import BaseAnalyzer
+        from src.features.shift_analysis import ShiftAnalyzer
+        from src.features.lap_analysis import LapAnalysis
+        from src.features.gear_analysis import GearAnalysis
+        from src.features.power_analysis import PowerAnalysis
+        from src.features.gg_analysis import GGAnalyzer
+        from src.features.corner_analysis import CornerAnalyzer
+        from src.features.session_report import SessionReportGenerator
+
+        for cls in [ShiftAnalyzer, LapAnalysis, GearAnalysis,
+                    PowerAnalysis, GGAnalyzer, CornerAnalyzer,
+                    SessionReportGenerator]:
+            assert issubclass(cls, BaseAnalyzer), f"{cls.__name__} should inherit BaseAnalyzer"
+
+    def test_all_reports_inherit_base(self):
+        """All report/result classes inherit BaseAnalysisReport"""
+        from src.features.base_analyzer import BaseAnalysisReport
+        from src.features.shift_analysis import ShiftReport
+        from src.features.lap_analysis import LapAnalysisReport
+        from src.features.gear_analysis import GearAnalysisReport
+        from src.features.power_analysis import PowerAnalysisReport
+        from src.features.gg_analysis import GGAnalysisResult
+        from src.features.corner_analysis import CornerAnalysisResult
+        from src.features.session_report import SessionReport
+
+        for cls in [ShiftReport, LapAnalysisReport, GearAnalysisReport,
+                    PowerAnalysisReport, GGAnalysisResult, CornerAnalysisResult,
+                    SessionReport]:
+            assert issubclass(cls, BaseAnalysisReport), f"{cls.__name__} should inherit BaseAnalysisReport"
+
+    def test_all_analyzers_have_analyze_from_parquet(self):
+        """All analyzers have analyze_from_parquet method"""
+        from src.features.shift_analysis import ShiftAnalyzer
+        from src.features.lap_analysis import LapAnalysis
+        from src.features.gear_analysis import GearAnalysis
+        from src.features.power_analysis import PowerAnalysis
+        from src.features.gg_analysis import GGAnalyzer
+        from src.features.corner_analysis import CornerAnalyzer
+        from src.features.session_report import SessionReportGenerator
+
+        for cls in [ShiftAnalyzer, LapAnalysis, GearAnalysis,
+                    PowerAnalysis, GGAnalyzer, CornerAnalyzer,
+                    SessionReportGenerator]:
+            assert hasattr(cls, 'analyze_from_parquet'), \
+                f"{cls.__name__} missing analyze_from_parquet"
+
+    def test_session_report_generator_has_both_methods(self):
+        """SessionReportGenerator has both generate_from_parquet and analyze_from_parquet"""
+        from src.features.session_report import SessionReportGenerator
+        gen = SessionReportGenerator()
+        assert hasattr(gen, 'generate_from_parquet')
+        assert hasattr(gen, 'analyze_from_parquet')
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 import json
 
 from ..utils.dataframe_helpers import find_column, SPEED_MS_TO_MPH
+from .base_analyzer import BaseAnalyzer, BaseAnalysisReport
 
 
 @dataclass
@@ -95,7 +96,7 @@ class LowUtilizationZone:
 
 
 @dataclass
-class GGAnalysisResult:
+class GGAnalysisResult(BaseAnalysisReport):
     """Complete G-G analysis result"""
     session_id: str
     analysis_timestamp: str
@@ -183,7 +184,7 @@ class GGAnalysisResult:
         return json.dumps(self.to_dict(), indent=indent)
 
 
-class GGAnalyzer:
+class GGAnalyzer(BaseAnalyzer):
     """
     Analyzes G-G (friction circle) data from telemetry.
 
