@@ -23,26 +23,46 @@
       },
       "current_setup": {
         "name": "Current Setup",
-        "transmission_ratios": [2.20, 1.64, 1.28, 1.00],
+        "transmission_ratios": [
+          2.2,
+          1.64,
+          1.28,
+          1.0
+        ],
         "final_drive": 3.55,
         "weight_lbs": 3450
       },
       "alternative_setups": [
         {
           "name": "New Trans + Current Final",
-          "transmission_ratios": [2.88, 1.91, 1.33, 1.00],
+          "transmission_ratios": [
+            2.88,
+            1.91,
+            1.33,
+            1.0
+          ],
           "final_drive": 3.55,
           "weight_lbs": 3400
         },
         {
           "name": "New Trans + Shorter Final",
-          "transmission_ratios": [2.88, 1.91, 1.33, 1.00],
+          "transmission_ratios": [
+            2.88,
+            1.91,
+            1.33,
+            1.0
+          ],
           "final_drive": 3.73,
           "weight_lbs": 3400
         },
         {
           "name": "New Trans + Taller Final",
-          "transmission_ratios": [2.88, 1.91, 1.33, 1.00],
+          "transmission_ratios": [
+            2.88,
+            1.91,
+            1.33,
+            1.0
+          ],
           "final_drive": 3.31,
           "weight_lbs": 3400
         }
@@ -71,15 +91,29 @@
       },
       "current_setup": {
         "name": "Stock 6-Speed",
-        "transmission_ratios": [3.82, 2.26, 1.64, 1.18, 1.00, 0.79],
+        "transmission_ratios": [
+          3.82,
+          2.26,
+          1.64,
+          1.18,
+          1.0,
+          0.79
+        ],
         "final_drive": 3.91,
         "weight_lbs": 2550
       },
       "alternative_setups": [
         {
           "name": "Short Final Drive",
-          "transmission_ratios": [3.82, 2.26, 1.64, 1.18, 1.00, 0.79],
-          "final_drive": 4.10,
+          "transmission_ratios": [
+            3.82,
+            2.26,
+            1.64,
+            1.18,
+            1.0,
+            0.79
+          ],
+          "final_drive": 4.1,
           "weight_lbs": 2550
         }
       ],
@@ -107,14 +141,28 @@
       },
       "current_setup": {
         "name": "Stock GT3",
-        "transmission_ratios": [3.82, 2.15, 1.56, 1.21, 0.97, 0.82],
+        "transmission_ratios": [
+          3.82,
+          2.15,
+          1.56,
+          1.21,
+          0.97,
+          0.82
+        ],
         "final_drive": 3.44,
         "weight_lbs": 3075
       },
       "alternative_setups": [
         {
           "name": "Cup Gearing",
-          "transmission_ratios": [3.36, 2.00, 1.52, 1.24, 1.03, 0.86],
+          "transmission_ratios": [
+            3.36,
+            2.0,
+            1.52,
+            1.24,
+            1.03,
+            0.86
+          ],
           "final_drive": 3.89,
           "weight_lbs": 3075
         }
@@ -128,7 +176,7 @@
       "model": "S2000 AP1",
       "year": 2002,
       "tire_size": "245/40/17",
-      "tire_circumference_meters": 1.940,
+      "tire_circumference_meters": 1.94,
       "weight_lbs": 2850,
       "max_lateral_g": 1.2,
       "max_braking_g": 1.3,
@@ -143,15 +191,29 @@
       },
       "current_setup": {
         "name": "Stock 6-Speed",
-        "transmission_ratios": [3.13, 2.05, 1.48, 1.16, 0.97, 0.81],
-        "final_drive": 4.10,
+        "transmission_ratios": [
+          3.13,
+          2.05,
+          1.48,
+          1.16,
+          0.97,
+          0.81
+        ],
+        "final_drive": 4.1,
         "weight_lbs": 2850
       },
       "alternative_setups": [
         {
           "name": "OS Giken Close Ratio",
-          "transmission_ratios": [3.07, 2.10, 1.63, 1.30, 1.09, 0.92],
-          "final_drive": 4.10,
+          "transmission_ratios": [
+            3.07,
+            2.1,
+            1.63,
+            1.3,
+            1.09,
+            0.92
+          ],
+          "final_drive": 4.1,
           "weight_lbs": 2850
         }
       ],
@@ -164,7 +226,7 @@
       "model": "E30 325is",
       "year": 1989,
       "tire_size": "225/50/15",
-      "tire_circumference_meters": 1.910,
+      "tire_circumference_meters": 1.91,
       "weight_lbs": 2700,
       "max_lateral_g": 1.1,
       "max_braking_g": 1.2,
@@ -179,7 +241,12 @@
       },
       "current_setup": {
         "name": "Spec E30 Legal",
-        "transmission_ratios": [3.83, 2.20, 1.40, 1.00],
+        "transmission_ratios": [
+          3.83,
+          2.2,
+          1.4,
+          1.0
+        ],
         "final_drive": 3.73,
         "weight_lbs": 2700
       },

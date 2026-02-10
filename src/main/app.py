@@ -12,29 +12,15 @@ import json
 from pathlib import Path
 from typing import List, Optional
 import traceback
-import math
 
 from src.config.config import get_config
 from src.io.file_manager import FileManager
-
-
-def _sanitize_for_json(obj):
-    """Recursively replace NaN/Inf with None and numpy types with native Python types."""
-    import numpy as np
-    if isinstance(obj, dict):
-        return {k: _sanitize_for_json(v) for k, v in obj.items()}
-    elif isinstance(obj, list):
-        return [_sanitize_for_json(v) for v in obj]
-    elif isinstance(obj, float) and (math.isnan(obj) or math.isinf(obj)):
-        return None
-    elif isinstance(obj, (np.integer,)):
-        return int(obj)
-    elif isinstance(obj, (np.floating,)):
-        v = float(obj)
-        return None if math.isnan(v) or math.isinf(v) else v
-    elif isinstance(obj, np.ndarray):
-        return _sanitize_for_json(obj.tolist())
-    return obj
+from src.utils.dataframe_helpers import (
+    find_column as _find_column_shared,
+    sanitize_for_json as _sanitize_for_json,
+    SPEED_MS_TO_MPH,
+    ensure_speed_mph,
+)
 
 
 # Initialize configuration
@@ -537,7 +523,7 @@ async def analyze_shifts(filename: str):
 
         # Convert speed if needed
         if speed_data.max() < 100:
-            speed_data = speed_data * 2.237
+            speed_data = speed_data * SPEED_MS_TO_MPH
 
         analyzer = ShiftAnalyzer()
         report = analyzer.analyze_session(rpm_data, speed_data, time_data, filename)
@@ -594,7 +580,7 @@ async def analyze_laps(filename: str):
         if speed_data is None:
             raise HTTPException(status_code=422, detail="Speed data not found in file - required for lap analysis")
         if speed_data.max() < 100:
-            speed_data = speed_data * 2.237
+            speed_data = speed_data * SPEED_MS_TO_MPH
         if rpm_data is None:
             rpm_data = np.zeros(len(time_data))
 
@@ -636,7 +622,7 @@ async def analyze_gears(filename: str):
             raise HTTPException(status_code=400, detail="Speed data not found in file")
 
         if speed_data.max() < 100:
-            speed_data = speed_data * 2.237
+            speed_data = speed_data * SPEED_MS_TO_MPH
 
         analyzer = GearAnalysis()
         report = analyzer.analyze_from_arrays(
@@ -671,7 +657,7 @@ async def analyze_power(filename: str):
             raise HTTPException(status_code=400, detail="Speed data not found in file")
 
         if speed_data.max() < 100:
-            speed_data = speed_data * 2.237
+            speed_data = speed_data * SPEED_MS_TO_MPH
 
         analyzer = PowerAnalysis()
         report = analyzer.analyze_from_arrays(time_data, speed_data, rpm_data, filename)
@@ -708,7 +694,7 @@ async def analyze_full_report(filename: str):
         if speed_data is None:
             raise HTTPException(status_code=422, detail="Speed data not found - required for session report")
         if speed_data.max() < 100:
-            speed_data = speed_data * 2.237
+            speed_data = speed_data * SPEED_MS_TO_MPH
         if rpm_data is None:
             rpm_data = np.zeros(len(time_data))
 
@@ -782,7 +768,7 @@ async def get_delta_track_map(
         speed_data = df[speed_col].values
 
         if speed_data.max() < 100:
-            speed_data = speed_data * 2.237
+            speed_data = speed_data * SPEED_MS_TO_MPH
 
         # Detect laps
         session_data = {
@@ -791,7 +777,7 @@ async def get_delta_track_map(
             'longitude': lon_data,
             'rpm': np.zeros(len(time_data)),
             'speed_mph': speed_data,
-            'speed_ms': speed_data / 2.237
+            'speed_ms': speed_data / SPEED_MS_TO_MPH
         }
 
         analyzer = LapAnalyzer(session_data)
@@ -876,7 +862,7 @@ async def get_track_map(
         if color_by == 'speed':
             color_data = _find_column(df, ['GPS Speed', 'speed', 'Speed'])
             if color_data is not None and color_data.max() < 100:
-                color_data = color_data * 2.237
+                color_data = color_data * SPEED_MS_TO_MPH
         elif color_by == 'rpm':
             color_data = _find_column(df, ['RPM', 'rpm'])
 
@@ -980,7 +966,7 @@ async def get_gg_diagram(
 
         speed_data = _find_column(df, ['GPS Speed', 'speed', 'Speed'])
         if speed_data is not None and speed_data.max() < 100:
-            speed_data = speed_data * 2.237
+            speed_data = speed_data * SPEED_MS_TO_MPH
 
         throttle_data = _find_column(df, ['PedalPos', 'throttle', 'Throttle'])
 
@@ -1000,7 +986,7 @@ async def get_gg_diagram(
                         'longitude': lon_gps,
                         'rpm': np.zeros(len(time_data)),
                         'speed_mph': speed_data if speed_data is not None else np.zeros(len(time_data)),
-                        'speed_ms': (speed_data / 2.237) if speed_data is not None else np.zeros(len(time_data))
+                        'speed_ms': (speed_data / SPEED_MS_TO_MPH) if speed_data is not None else np.zeros(len(time_data))
                     }
                     lap_analyzer = LapAnalyzer(session_data)
                     laps = lap_analyzer.detect_laps()
@@ -1143,7 +1129,7 @@ async def get_corner_track_map(
         if color_scheme == 'speed':
             color_data = _find_column(df, ['GPS Speed', 'gps_speed', 'speed'])
             if color_data is not None and color_data.max() < 100:
-                color_data = color_data * 2.237  # Convert m/s to mph
+                color_data = color_data * SPEED_MS_TO_MPH  # Convert m/s to mph
         elif color_scheme == 'rpm':
             color_data = _find_column(df, ['RPM', 'engine_rpm', 'rpm'])
         elif color_scheme == 'gear':
@@ -1324,59 +1310,8 @@ def _find_parquet_file(filename: str) -> Optional[Path]:
     return None
 
 
-def _find_column(df, candidates: List[str]):
-    """Find a column by trying multiple names, preferring columns with actual data"""
-    import numpy as np
-
-    def has_data(col_data):
-        """Check if column has meaningful non-zero data"""
-        if col_data is None or len(col_data) == 0:
-            return False
-        non_null = np.sum(~np.isnan(col_data) if np.issubdtype(col_data.dtype, np.floating) else np.ones(len(col_data), dtype=bool))
-        non_zero = np.sum(col_data != 0)
-        return non_null > 0 and non_zero > len(col_data) * 0.1  # At least 10% non-zero
-
-    # First try exact matches
-    for col in candidates:
-        if col in df.columns:
-            data = df[col].values
-            if has_data(data):
-                return data
-
-    # Then try case-insensitive exact matches
-    for col in candidates:
-        for actual_col in df.columns:
-            if actual_col.lower() == col.lower():
-                data = df[actual_col].values
-                if has_data(data):
-                    return data
-
-    # Then try partial/contains matches, collecting all candidates
-    matching_cols = []
-    for col in candidates:
-        for actual_col in df.columns:
-            if col.lower() in actual_col.lower():
-                matching_cols.append(actual_col)
-
-    # Return the matching column with the most non-zero data
-    best_col = None
-    best_score = 0
-    for col in matching_cols:
-        data = df[col].values
-        non_zero = np.sum(data != 0)
-        if non_zero > best_score:
-            best_score = non_zero
-            best_col = col
-
-    if best_col is not None:
-        return df[best_col].values
-
-    # Fallback: return first exact match even if no data
-    for col in candidates:
-        if col in df.columns:
-            return df[col].values
-
-    return None
+# Delegate to shared utility (imported at top of file)
+_find_column = _find_column_shared
 
 
 # Error handlers

@@ -14,6 +14,8 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 import pandas as pd
 
+from ..utils.dataframe_helpers import find_column_name
+
 logger = logging.getLogger(__name__)
 
 # Logical channel name -> list of candidate column names (priority order)
@@ -166,38 +168,11 @@ class ParquetValidator:
         columns_lower = {c.lower(): c for c in df.columns}
 
         for logical, candidates in CHANNEL_CANDIDATES.items():
-            matched = self._find_column(df, candidates, columns_lower)
+            matched = find_column_name(df, candidates)
             if matched:
                 channel_map[logical] = matched
 
         return channel_map
-
-    def _find_column(
-        self,
-        df: pd.DataFrame,
-        candidates: List[str],
-        columns_lower: Dict[str, str],
-    ) -> Optional[str]:
-        """Find a column by trying multiple candidate names."""
-        # Exact match
-        for name in candidates:
-            if name in df.columns:
-                return name
-
-        # Case-insensitive exact match
-        for name in candidates:
-            actual = columns_lower.get(name.lower())
-            if actual:
-                return actual
-
-        # Partial/contains match
-        for name in candidates:
-            name_lower = name.lower()
-            for col_lower, col_actual in columns_lower.items():
-                if name_lower in col_lower:
-                    return col_actual
-
-        return None
 
     def _detect_speed_unit(
         self, df: pd.DataFrame, speed_col: str, stored_units: Dict[str, str]

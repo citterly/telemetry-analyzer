@@ -13,6 +13,8 @@ from pathlib import Path
 import json
 import math
 
+from ..utils.dataframe_helpers import find_column, SPEED_MS_TO_MPH
+
 
 def classify_corner(
     apex_speed_mph: float,
@@ -564,12 +566,12 @@ class CornerDetector:
         df = pd.read_parquet(parquet_path)
 
         time_data = df.index.values
-        lat_data = self._find_column(df, ['GPS Latitude', 'gps_lat', 'latitude'])
-        lon_data = self._find_column(df, ['GPS Longitude', 'gps_lon', 'longitude'])
-        speed_data = self._find_column(df, ['GPS Speed', 'gps_speed', 'speed'])
-        radius_data = self._find_column(df, ['GPS Radius', 'radius'])
-        lat_acc_data = self._find_column(df, ['GPS LatAcc', 'lat_acc', 'lateral_acc'])
-        lon_acc_data = self._find_column(df, ['GPS LonAcc', 'lon_acc', 'longitudinal_acc'])
+        lat_data = find_column(df, ['GPS Latitude', 'gps_lat', 'latitude'])
+        lon_data = find_column(df, ['GPS Longitude', 'gps_lon', 'longitude'])
+        speed_data = find_column(df, ['GPS Speed', 'gps_speed', 'speed'])
+        radius_data = find_column(df, ['GPS Radius', 'radius'])
+        lat_acc_data = find_column(df, ['GPS LatAcc', 'lat_acc', 'lateral_acc'])
+        lon_acc_data = find_column(df, ['GPS LonAcc', 'lon_acc', 'longitudinal_acc'])
 
         if lat_data is None or lon_data is None:
             raise ValueError("Parquet file missing GPS latitude/longitude columns")
@@ -577,23 +579,13 @@ class CornerDetector:
         if speed_data is None:
             speed_data = np.zeros(len(time_data))
         elif speed_data.max() < 100:
-            speed_data = speed_data * 2.237  # Convert m/s to mph
+            speed_data = speed_data * SPEED_MS_TO_MPH  # Convert m/s to mph
 
         return self.detect_from_arrays(
             time_data, lat_data, lon_data, speed_data,
             radius_data, lat_acc_data, lon_acc_data,
             lap_number
         )
-
-    def _find_column(self, df: pd.DataFrame, candidates: List[str]) -> Optional[np.ndarray]:
-        """Find a column by trying multiple names."""
-        for col in candidates:
-            if col in df.columns:
-                return df[col].values
-            for actual_col in df.columns:
-                if actual_col.lower() == col.lower():
-                    return df[actual_col].values
-        return None
 
     def _compute_radius(
         self,
@@ -964,7 +956,7 @@ def detect_corners(
     try:
         speed = df['GPS Speed'].values if 'GPS Speed' in df.columns else df['gps_speed'].values
         if speed.max() < 100:  # Likely in m/s, convert to mph
-            speed = speed * 2.237
+            speed = speed * SPEED_MS_TO_MPH
     except (KeyError, AttributeError):
         speed = None
 

@@ -570,3 +570,39 @@ Test results: 681/681 passing (7 new)
 Status: cleanup-001 marked PASSING
 Features: 29/33 (4 planned cleanup features remaining)
 
+
+=== Session 9 continued (2026-02-10) ===
+Working on: cleanup-002 (Extract shared utilities)
+
+Work completed:
+
+1. Created src/utils/dataframe_helpers.py with shared utilities:
+   - find_column(df, candidates) → column values array or None
+   - find_column_name(df, candidates) → column name string or None
+   - SPEED_MS_TO_MPH = 2.237 constant
+   - ensure_speed_mph(speed_data) → detect m/s and convert
+   - sanitize_for_json(obj) → recursive NaN/Inf/numpy cleanup
+   - safe_float(value, default) → single-value NaN guard
+   - KNOWN_COLUMNS dict for standard channel mappings
+
+2. Replaced _find_column in 8 files:
+   - Removed method definitions from: gg_analysis.py, lap_analysis.py,
+     gear_analysis.py, power_analysis.py, corner_analysis.py,
+     corner_detection.py, session_report.py
+   - app.py: removed 55-line definition, delegates to shared import
+   - validator.py: switched to find_column_name()
+
+3. Replaced 40+ bare 2.237 literals with SPEED_MS_TO_MPH in 13 files
+
+4. Removed duplicate imports in data_loader.py (lines 16-24)
+
+5. Deleted dead code: acceleration_analyzer.py (192 lines)
+
+6. Unified _safe_float and _sanitize_for_json into shared module
+
+10 new tests in TestSharedUtilities
+Test results: 691/691 passing (10 new)
+
+Status: cleanup-002 marked PASSING
+Features: 30/33 (3 planned cleanup features remaining)
+

@@ -13,6 +13,8 @@ from typing import List, Dict, Optional, Tuple
 from datetime import datetime, timezone
 import json
 
+from ..utils.dataframe_helpers import find_column, SPEED_MS_TO_MPH
+
 
 @dataclass
 class GGPoint:
@@ -446,22 +448,22 @@ class GGAnalyzer:
         time_data = df.index.values
 
         # Find required columns
-        lat_acc = self._find_column(df, ['GPS LatAcc', 'LatAcc', 'lateral_acc'])
-        lon_acc = self._find_column(df, ['GPS LonAcc', 'LonAcc', 'longitudinal_acc'])
+        lat_acc = find_column(df, ['GPS LatAcc', 'LatAcc', 'lateral_acc'])
+        lon_acc = find_column(df, ['GPS LonAcc', 'LonAcc', 'longitudinal_acc'])
 
         if lat_acc is None or lon_acc is None:
             raise ValueError("Parquet file missing GPS LatAcc/LonAcc columns")
 
         # Find optional columns
-        speed_data = self._find_column(df, ['GPS Speed', 'speed', 'Speed'])
+        speed_data = find_column(df, ['GPS Speed', 'speed', 'Speed'])
         if speed_data is not None and speed_data.max() < 100:
-            speed_data = speed_data * 2.237  # Convert m/s to mph
+            speed_data = speed_data * SPEED_MS_TO_MPH  # Convert m/s to mph
 
-        throttle_data = self._find_column(df, ['PedalPos', 'throttle', 'Throttle'])
+        throttle_data = find_column(df, ['PedalPos', 'throttle', 'Throttle'])
 
         # GPS coordinates for track map
-        lat_gps = self._find_column(df, ['GPS Latitude', 'latitude', 'gps_lat'])
-        lon_gps = self._find_column(df, ['GPS Longitude', 'longitude', 'gps_lon'])
+        lat_gps = find_column(df, ['GPS Latitude', 'latitude', 'gps_lat'])
+        lon_gps = find_column(df, ['GPS Longitude', 'longitude', 'gps_lon'])
 
         # Try to detect laps if not already in data
         lap_data = None
@@ -475,7 +477,7 @@ class GGAnalyzer:
                     'longitude': lon_gps,
                     'rpm': np.zeros(len(time_data)),
                     'speed_mph': speed_data if speed_data is not None else np.zeros(len(time_data)),
-                    'speed_ms': (speed_data / 2.237) if speed_data is not None else np.zeros(len(time_data))
+                    'speed_ms': (speed_data / SPEED_MS_TO_MPH) if speed_data is not None else np.zeros(len(time_data))
                 }
                 analyzer = LapAnalyzer(session_data)
                 laps = analyzer.detect_laps()
@@ -521,16 +523,6 @@ class GGAnalyzer:
             result.lap_numbers = all_lap_numbers
 
         return result
-
-    def _find_column(self, df: pd.DataFrame, candidates: List[str]) -> Optional[np.ndarray]:
-        """Find a column by trying multiple names"""
-        for col in candidates:
-            if col in df.columns:
-                return df[col].values
-            for actual_col in df.columns:
-                if actual_col.lower() == col.lower():
-                    return df[actual_col].values
-        return None
 
     def _calculate_quadrants(
         self,

@@ -14,6 +14,7 @@ from ..config.vehicle_config import (
     theoretical_rpm_at_speed,
     theoretical_speed_at_rpm
 )
+from ..utils.dataframe_helpers import SPEED_MS_TO_MPH
 
 @dataclass
 class GearInfo:
@@ -37,7 +38,7 @@ class GearCalculator:
         """Calculate most likely gear at a single RPM/speed point"""
         
         # Convert speed to m/s
-        speed_ms = speed_mph / 2.237
+        speed_ms = speed_mph / SPEED_MS_TO_MPH
         
         # Skip calculation for very low speeds or RPM
         if speed_ms < 2.0 or rpm < 1000:
@@ -213,7 +214,7 @@ class GearCalculator:
             top_speed_ms = theoretical_speed_at_rpm(
                 max_rpm, ratio, scenario['final_drive'], self.tire_circumference
             )
-            top_speed_mph = top_speed_ms * 2.237
+            top_speed_mph = top_speed_ms * SPEED_MS_TO_MPH
             
             performance['gear_top_speeds_mph'].append(top_speed_mph)
             performance['gear_top_speeds_ms'].append(top_speed_ms)
@@ -247,7 +248,7 @@ def analyze_lap_gearing(lap_data: Dict, scenario_name: str = 'Current Setup') ->
     if 'speed_mph' in lap_data:
         speed_array = lap_data['speed_mph']
     elif 'speed_ms' in lap_data:
-        speed_array = np.array(lap_data['speed_ms']) * 2.237
+        speed_array = np.array(lap_data['speed_ms']) * SPEED_MS_TO_MPH
     else:
         raise ValueError("No speed data available in lap data")
     
@@ -367,7 +368,7 @@ def debug_gear_calculations(transmission_ratios: List[float], final_drive: float
         
         for rpm in rpm_range:
             speed_ms = theoretical_speed_at_rpm(rpm, ratio, final_drive, tire_circ)
-            speed_mph = speed_ms * 2.237
+            speed_mph = speed_ms * SPEED_MS_TO_MPH
             speeds_mph.append(speed_mph)
         
         print(f"Gear {gear_num} (ratio {ratio:.2f}):")

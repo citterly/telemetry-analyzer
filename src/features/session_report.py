@@ -18,6 +18,7 @@ from .shift_analysis import ShiftAnalyzer, ShiftReport
 from .gear_analysis import GearAnalysis, GearAnalysisReport
 from .power_analysis import PowerAnalysis, PowerAnalysisReport
 from ..config.vehicle_config import TRACK_CONFIG, CURRENT_SETUP
+from ..utils.dataframe_helpers import find_column, SPEED_MS_TO_MPH
 
 
 @dataclass
@@ -230,14 +231,14 @@ class SessionReportGenerator:
 
         # Find required columns
         time_data = df.index.values
-        lat_data = self._find_column(df, ['GPS Latitude', 'latitude', 'Latitude'])
-        lon_data = self._find_column(df, ['GPS Longitude', 'longitude', 'Longitude'])
-        rpm_data = self._find_column(df, ['RPM', 'rpm', 'RPM dup 3'])
-        speed_data = self._find_column(df, ['GPS Speed', 'speed', 'Speed'])
+        lat_data = find_column(df, ['GPS Latitude', 'latitude', 'Latitude'])
+        lon_data = find_column(df, ['GPS Longitude', 'longitude', 'Longitude'])
+        rpm_data = find_column(df, ['RPM', 'rpm', 'RPM dup 3'])
+        speed_data = find_column(df, ['GPS Speed', 'speed', 'Speed'])
 
         # Convert speed to mph if needed
         if speed_data is not None and speed_data.max() < 100:
-            speed_data = speed_data * 2.237
+            speed_data = speed_data * SPEED_MS_TO_MPH
 
         # Use zeros for missing GPS data
         if lat_data is None:
@@ -252,16 +253,6 @@ class SessionReportGenerator:
         return self.generate_from_arrays(
             time_data, lat_data, lon_data, rpm_data, speed_data, session_id
         )
-
-    def _find_column(self, df: pd.DataFrame, candidates: List[str]) -> Optional[np.ndarray]:
-        """Find a column by trying multiple names"""
-        for col in candidates:
-            if col in df.columns:
-                return df[col].values
-            for actual_col in df.columns:
-                if actual_col.lower() == col.lower():
-                    return df[actual_col].values
-        return None
 
     def _run_lap_analysis(
         self,

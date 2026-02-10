@@ -14,6 +14,7 @@ import json
 from scipy import signal
 
 from ..config.vehicle_config import ENGINE_SPECS
+from ..utils.dataframe_helpers import find_column, SPEED_MS_TO_MPH
 
 
 @dataclass
@@ -175,7 +176,7 @@ class PowerAnalysis:
             PowerAnalysisReport with complete analysis
         """
         # Convert speed to m/s for calculations
-        speed_ms = speed_data / 2.237
+        speed_ms = speed_data / SPEED_MS_TO_MPH
 
         # Calculate acceleration
         accel_ms2, accel_g = self._calculate_acceleration(time_data, speed_ms)
@@ -275,27 +276,17 @@ class PowerAnalysis:
 
         # Find required columns
         time_data = df.index.values
-        speed_data = self._find_column(df, ['GPS Speed', 'speed', 'Speed'])
-        rpm_data = self._find_column(df, ['RPM', 'rpm', 'RPM dup 3'])
+        speed_data = find_column(df, ['GPS Speed', 'speed', 'Speed'])
+        rpm_data = find_column(df, ['RPM', 'rpm', 'RPM dup 3'])
 
         # Convert speed to mph if needed (likely in m/s or km/h)
         if speed_data is not None and speed_data.max() < 100:
-            speed_data = speed_data * 2.237  # m/s to mph
+            speed_data = speed_data * SPEED_MS_TO_MPH  # m/s to mph
 
         if speed_data is None:
             raise ValueError("Parquet file missing speed column")
 
         return self.analyze_from_arrays(time_data, speed_data, rpm_data, session_id)
-
-    def _find_column(self, df: pd.DataFrame, candidates: List[str]) -> Optional[np.ndarray]:
-        """Find a column by trying multiple names"""
-        for col in candidates:
-            if col in df.columns:
-                return df[col].values
-            for actual_col in df.columns:
-                if actual_col.lower() == col.lower():
-                    return df[actual_col].values
-        return None
 
     def _calculate_acceleration(
         self,

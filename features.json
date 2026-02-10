@@ -358,7 +358,7 @@
       "name": "Extract shared utilities",
       "category": "cleanup",
       "description": "Consolidate duplicated code into shared modules. See docs/CLEANUP_AUDIT.md Phase 2. (1) Create src/utils/dataframe_helpers.py with find_column() and replace 9 duplicates. (2) Add SPEED_MS_TO_MPH constant and ensure_speed_mph() helper, replace 9 bare 2.237 literals. (3) Create shared sanitize_for_json() in utils, unify with _safe_float(). (4) Add KNOWN_COLUMNS dict for standard column name mappings. (5) Remove duplicate imports in data_loader.py:16-24. (6) Delete dead code: acceleration_analyzer.py.",
-      "status": "planned",
+      "status": "passing",
       "priority": 24,
       "tests": ["pytest tests/", "test_find_column_shared", "test_speed_conversion_constant"],
       "files": [
@@ -375,7 +375,7 @@
         "src/extract/data_loader.py",
         "src/analysis/acceleration_analyzer.py"
       ],
-      "notes": "Ref: docs/CLEANUP_AUDIT.md Phase 2. _find_column() is in 9 files, 2.237 in 9+ places. All existing tests must still pass."
+      "notes": "DONE: (1) Created src/utils/dataframe_helpers.py with find_column(), find_column_name(), SPEED_MS_TO_MPH, ensure_speed_mph(), sanitize_for_json(), safe_float(), KNOWN_COLUMNS. (2) Replaced _find_column in 8 files (7 feature modules + app.py). (3) Replaced 40+ bare 2.237 literals with SPEED_MS_TO_MPH across 13 files. (4) Removed duplicate imports in data_loader.py. (5) Deleted dead code acceleration_analyzer.py. (6) validator.py uses find_column_name(). 10 new tests. 691 tests passing."
     },
     {
       "id": "cleanup-003",
@@ -445,9 +445,9 @@
     "created_at": "2025-01-29T01:00:00Z",
     "last_updated": "2026-02-10T14:00:00Z",
     "total_features": 33,
-    "passing": 29,
+    "passing": 30,
     "failing": 0,
-    "planned": 4
+    "planned": 3
   },
   "categories": {
     "bugfix": "Bug fixes and corrections",

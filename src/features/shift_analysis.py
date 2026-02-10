@@ -14,6 +14,7 @@ import json
 
 from ..analysis.gear_calculator import GearCalculator, GearInfo
 from ..config.vehicle_config import CURRENT_SETUP, TRANSMISSION_SCENARIOS
+from ..utils.dataframe_helpers import SPEED_MS_TO_MPH
 
 
 @dataclass
@@ -263,7 +264,7 @@ class ShiftAnalyzer:
 
         # Convert speed to mph if needed (GPS Speed is often in m/s)
         if speed_data.max() < 100:  # Likely in m/s
-            speed_data = speed_data * 2.237
+            speed_data = speed_data * SPEED_MS_TO_MPH
 
         return self.analyze_session(rpm_data, speed_data, time_data, session_id)
 

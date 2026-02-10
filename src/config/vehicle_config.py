@@ -195,7 +195,8 @@ if __name__ == "__main__":
     speed = theoretical_speed_at_rpm(test_rpm, test_gear, test_final)
     rpm_back = theoretical_rpm_at_speed(speed, test_gear, test_final)
     
-    print(f"  {test_rpm} RPM in gear {test_gear} = {speed:.1f} m/s ({speed * 2.237:.1f} mph)")
+    from src.utils.dataframe_helpers import SPEED_MS_TO_MPH
+    print(f"  {test_rpm} RPM in gear {test_gear} = {speed:.1f} m/s ({speed * SPEED_MS_TO_MPH:.1f} mph)")
     print(f"  Round trip check: {rpm_back:.0f} RPM")
     
     print(f"\nFile paths:")

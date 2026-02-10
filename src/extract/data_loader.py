@@ -12,16 +12,7 @@ from pathlib import Path
 
 from src.config.config import DLL_PATH, DEPENDENCY_PATH, SAMPLE_FILES_PATH
 from src.config.vehicle_config import DEFAULT_SESSION
-
-import ctypes
-from ctypes import c_char_p, c_int, c_double, POINTER
-import numpy as np
-import os
-from pathlib import Path
-from typing import Dict, Optional
-
-from src.config.config import DLL_PATH, DEPENDENCY_PATH, SAMPLE_FILES_PATH
-from src.config.vehicle_config import DEFAULT_SESSION
+from src.utils.dataframe_helpers import SPEED_MS_TO_MPH
 
 
 class XRKDataLoader:
@@ -292,7 +283,7 @@ def load_session_data(filename: str = DEFAULT_SESSION) -> Optional[Dict]:
         # Add GPS speed if available
         if 'GPS Speed' in gps_data:
             session_data['speed_ms'] = gps_data['GPS Speed']['values']
-            session_data['speed_mph'] = gps_data['GPS Speed']['values'] * 2.237
+            session_data['speed_mph'] = gps_data['GPS Speed']['values'] * SPEED_MS_TO_MPH
         
         print(f"Synchronized dataset: {session_data['sample_count']} points, {session_data['session_duration']:.1f} second session")
         print(f"RPM range: {session_data['rpm'].min():.0f} - {session_data['rpm'].max():.0f}")

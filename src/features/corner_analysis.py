@@ -14,6 +14,7 @@ from pathlib import Path
 import json
 
 from .corner_detection import CornerDetector, CornerZone, CornerDetectionResult
+from ..utils.dataframe_helpers import find_column, SPEED_MS_TO_MPH
 
 
 @dataclass
@@ -259,13 +260,13 @@ class CornerAnalyzer:
 
         # Extract data arrays
         time_data = df.index.values
-        lat_data = self._find_column(df, ['GPS Latitude', 'gps_lat', 'latitude'])
-        lon_data = self._find_column(df, ['GPS Longitude', 'gps_lon', 'longitude'])
-        speed_data = self._find_column(df, ['GPS Speed', 'gps_speed', 'speed'])
-        radius_data = self._find_column(df, ['GPS Radius', 'radius'])
-        lat_acc_data = self._find_column(df, ['GPS LatAcc', 'lat_acc'])
-        lon_acc_data = self._find_column(df, ['GPS LonAcc', 'lon_acc'])
-        throttle_data = self._find_column(df, ['PedalPos', 'throttle', 'Throttle'])
+        lat_data = find_column(df, ['GPS Latitude', 'gps_lat', 'latitude'])
+        lon_data = find_column(df, ['GPS Longitude', 'gps_lon', 'longitude'])
+        speed_data = find_column(df, ['GPS Speed', 'gps_speed', 'speed'])
+        radius_data = find_column(df, ['GPS Radius', 'radius'])
+        lat_acc_data = find_column(df, ['GPS LatAcc', 'lat_acc'])
+        lon_acc_data = find_column(df, ['GPS LonAcc', 'lon_acc'])
+        throttle_data = find_column(df, ['PedalPos', 'throttle', 'Throttle'])
 
         if lat_data is None or lon_data is None:
             raise ValueError("Missing GPS latitude/longitude columns")
@@ -273,7 +274,7 @@ class CornerAnalyzer:
         if speed_data is None:
             speed_data = np.zeros(len(time_data))
         elif speed_data.max() < 100:
-            speed_data = speed_data * 2.237
+            speed_data = speed_data * SPEED_MS_TO_MPH
 
         if throttle_data is None:
             throttle_data = np.zeros(len(time_data))
@@ -631,16 +632,6 @@ class CornerAnalyzer:
 
         # Convert meters to feet (1 meter = 3.28084 feet)
         return total_distance_meters * 3.28084
-
-    def _find_column(self, df: pd.DataFrame, candidates: List[str]) -> Optional[np.ndarray]:
-        """Find a column by trying multiple names."""
-        for col in candidates:
-            if col in df.columns:
-                return df[col].values
-            for actual_col in df.columns:
-                if actual_col.lower() == col.lower():
-                    return df[actual_col].values
-        return None
 
     def _generate_recommendations(self, lap: LapCornerAnalysis) -> List[str]:
         """Generate recommendations based on corner analysis."""

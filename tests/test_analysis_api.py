@@ -396,6 +396,108 @@ class TestAPIErrorHandling:
         assert report.session_id == "test"
 
 
+class TestSharedUtilities:
+    """Tests for cleanup-002: shared dataframe_helpers module"""
+
+    def test_find_column_shared_exact(self):
+        """Shared find_column works with exact match"""
+        import pandas as pd
+        from src.utils.dataframe_helpers import find_column
+
+        df = pd.DataFrame({'RPM': [5000, 5500, 6000], 'GPS Speed': [50, 60, 70]})
+        result = find_column(df, ['RPM'])
+        assert result is not None
+        assert list(result) == [5000, 5500, 6000]
+
+    def test_find_column_shared_case_insensitive(self):
+        """Shared find_column handles case-insensitive matching"""
+        import pandas as pd
+        from src.utils.dataframe_helpers import find_column
+
+        df = pd.DataFrame({'rpm': [5000], 'gps speed': [60]})
+        assert find_column(df, ['RPM', 'rpm']) is not None
+        assert find_column(df, ['GPS Speed']) is not None
+
+    def test_find_column_shared_not_found(self):
+        """Shared find_column returns None when column doesn't exist"""
+        import pandas as pd
+        from src.utils.dataframe_helpers import find_column
+
+        df = pd.DataFrame({'Temperature': [80]})
+        assert find_column(df, ['RPM', 'rpm']) is None
+
+    def test_find_column_name_returns_string(self):
+        """find_column_name returns column name, not values"""
+        import pandas as pd
+        from src.utils.dataframe_helpers import find_column_name
+
+        df = pd.DataFrame({'GPS Speed': [50], 'RPM': [5000]})
+        name = find_column_name(df, ['GPS Speed', 'speed'])
+        assert name == 'GPS Speed'
+        assert isinstance(name, str)
+
+    def test_speed_constant(self):
+        """SPEED_MS_TO_MPH constant matches expected value"""
+        from src.utils.dataframe_helpers import SPEED_MS_TO_MPH
+        assert SPEED_MS_TO_MPH == 2.237
+
+    def test_ensure_speed_mph_converts(self):
+        """ensure_speed_mph converts m/s to mph when max < 100"""
+        from src.utils.dataframe_helpers import ensure_speed_mph, SPEED_MS_TO_MPH
+
+        ms_data = np.array([10, 20, 30, 40])  # m/s (all < 100)
+        result = ensure_speed_mph(ms_data)
+        np.testing.assert_array_almost_equal(result, ms_data * SPEED_MS_TO_MPH)
+
+    def test_ensure_speed_mph_no_convert(self):
+        """ensure_speed_mph leaves mph data unchanged when max >= 100"""
+        from src.utils.dataframe_helpers import ensure_speed_mph
+
+        mph_data = np.array([60, 80, 120, 100])
+        result = ensure_speed_mph(mph_data)
+        np.testing.assert_array_equal(result, mph_data)
+
+    def test_sanitize_for_json(self):
+        """sanitize_for_json handles NaN, Inf, and numpy types"""
+        from src.utils.dataframe_helpers import sanitize_for_json
+
+        data = {
+            'nan_val': float('nan'),
+            'inf_val': float('inf'),
+            'np_int': np.int64(42),
+            'np_float': np.float64(3.14),
+            'np_nan': np.float64('nan'),
+            'list': [1, float('nan'), 3],
+            'normal': 5.0,
+        }
+        result = sanitize_for_json(data)
+        assert result['nan_val'] is None
+        assert result['inf_val'] is None
+        assert result['np_int'] == 42
+        assert isinstance(result['np_int'], int)
+        assert result['np_float'] == 3.14
+        assert result['np_nan'] is None
+        assert result['list'] == [1, None, 3]
+        assert result['normal'] == 5.0
+
+    def test_safe_float(self):
+        """safe_float replaces NaN/Inf with default"""
+        from src.utils.dataframe_helpers import safe_float
+
+        assert safe_float(3.14) == 3.14
+        assert safe_float(float('nan')) == 0.0
+        assert safe_float(float('inf'), default=-1.0) == -1.0
+
+    def test_known_columns_dict(self):
+        """KNOWN_COLUMNS has expected keys"""
+        from src.utils.dataframe_helpers import KNOWN_COLUMNS
+
+        assert 'speed' in KNOWN_COLUMNS
+        assert 'rpm' in KNOWN_COLUMNS
+        assert 'latitude' in KNOWN_COLUMNS
+        assert isinstance(KNOWN_COLUMNS['speed'], list)
+
+
 class TestSafetyCriticalFixes:
     """Tests for cleanup-001: safety-critical fixes"""
 

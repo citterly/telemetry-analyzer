@@ -22,6 +22,7 @@ from ..config.vehicle_config import (
     get_scenario_by_name
 )
 from ..analysis.gear_calculator import GearCalculator
+from ..utils.dataframe_helpers import SPEED_MS_TO_MPH
 
 
 @dataclass
@@ -254,21 +255,21 @@ class TransmissionComparison:
             speed_ms = theoretical_speed_at_rpm(
                 self.safe_rpm, ratio, final_drive, self.tire_circumference
             )
-            top_speeds.append(speed_ms * 2.237)  # Convert to mph
+            top_speeds.append(speed_ms * SPEED_MS_TO_MPH)  # Convert to mph
 
             # Speed at redline
             speed_redline = theoretical_speed_at_rpm(
                 self.redline_rpm, ratio, final_drive, self.tire_circumference
             )
-            top_speeds_redline.append(speed_redline * 2.237)
+            top_speeds_redline.append(speed_redline * SPEED_MS_TO_MPH)
 
             # Power band speed range
             pb_low = theoretical_speed_at_rpm(
                 self.power_band[0], ratio, final_drive, self.tire_circumference
-            ) * 2.237
+            ) * SPEED_MS_TO_MPH
             pb_high = theoretical_speed_at_rpm(
                 self.power_band[1], ratio, final_drive, self.tire_circumference
-            ) * 2.237
+            ) * SPEED_MS_TO_MPH
             power_band_coverage[i + 1] = (pb_low, pb_high)
 
         # Analyze gear overlap
@@ -300,11 +301,11 @@ class TransmissionComparison:
             # Get power band speeds for each gear
             gear_pb_high = theoretical_speed_at_rpm(
                 self.power_band[1], ratios[i], final_drive, self.tire_circumference
-            ) * 2.237
+            ) * SPEED_MS_TO_MPH
 
             next_gear_pb_low = theoretical_speed_at_rpm(
                 self.power_band[0], ratios[i + 1], final_drive, self.tire_circumference
-            ) * 2.237
+            ) * SPEED_MS_TO_MPH
 
             overlap_amount = gear_pb_high - next_gear_pb_low
 
@@ -345,15 +346,15 @@ class TransmissionComparison:
             current_speed = theoretical_speed_at_rpm(
                 self.safe_rpm, current_ratio, current['final_drive'],
                 self.tire_circumference
-            ) * 2.237 if current_ratio > 0 else 0
+            ) * SPEED_MS_TO_MPH if current_ratio > 0 else 0
 
             proposed_speed = theoretical_speed_at_rpm(
                 self.safe_rpm, proposed_ratio, proposed['final_drive'],
                 self.tire_circumference
-            ) * 2.237 if proposed_ratio > 0 else 0
+            ) * SPEED_MS_TO_MPH if proposed_ratio > 0 else 0
 
             # Calculate RPM difference at a reference speed (60 mph)
-            reference_speed_ms = 60 / 2.237
+            reference_speed_ms = 60 / SPEED_MS_TO_MPH
             current_rpm = theoretical_rpm_at_speed(
                 reference_speed_ms, current_ratio, current['final_drive'],
                 self.tire_circumference
@@ -393,7 +394,7 @@ class TransmissionComparison:
         for i, (speed, current_gear) in enumerate(zip(speed_data, current_trace)):
             gear = current_gear.gear
             if gear > 0 and gear <= len(proposed['transmission_ratios']):
-                speed_ms = speed / 2.237
+                speed_ms = speed / SPEED_MS_TO_MPH
                 new_rpm = theoretical_rpm_at_speed(
                     speed_ms,
                     proposed['transmission_ratios'][gear - 1],

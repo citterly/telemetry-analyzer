@@ -19,6 +19,7 @@ from ..config.vehicle_config import (
     TRACK_CONFIG,
     ENGINE_SPECS
 )
+from ..utils.dataframe_helpers import find_column, SPEED_MS_TO_MPH
 
 
 @dataclass
@@ -254,14 +255,14 @@ class GearAnalysis:
 
         # Find required columns
         time_data = df.index.values
-        rpm_data = self._find_column(df, ['RPM', 'rpm', 'RPM dup 3'])
-        speed_data = self._find_column(df, ['GPS Speed', 'speed', 'Speed'])
-        lat_data = self._find_column(df, ['GPS Latitude', 'latitude', 'Latitude'])
-        lon_data = self._find_column(df, ['GPS Longitude', 'longitude', 'Longitude'])
+        rpm_data = find_column(df, ['RPM', 'rpm', 'RPM dup 3'])
+        speed_data = find_column(df, ['GPS Speed', 'speed', 'Speed'])
+        lat_data = find_column(df, ['GPS Latitude', 'latitude', 'Latitude'])
+        lon_data = find_column(df, ['GPS Longitude', 'longitude', 'Longitude'])
 
         # Convert speed to mph if needed
         if speed_data is not None and speed_data.max() < 100:
-            speed_data = speed_data * 2.237
+            speed_data = speed_data * SPEED_MS_TO_MPH
 
         if rpm_data is None:
             raise ValueError("Parquet file missing RPM column")
@@ -272,17 +273,6 @@ class GearAnalysis:
         return self.analyze_from_arrays(
             time_data, rpm_data, speed_data, lat_data, lon_data, session_id
         )
-
-    def _find_column(self, df: pd.DataFrame, candidates: List[str]) -> Optional[np.ndarray]:
-        """Find a column by trying multiple names"""
-        for col in candidates:
-            if col in df.columns:
-                return df[col].values
-            # Try case-insensitive match
-            for actual_col in df.columns:
-                if actual_col.lower() == col.lower():
-                    return df[actual_col].values
-        return None
 
     def _calculate_gear_usage(
         self,
@@ -626,7 +616,7 @@ class GearAnalysis:
 
         for gear_num, ratio in enumerate(self.scenario['transmission_ratios'], 1):
             # Calculate RPM at this speed in this gear
-            speed_ms = speed_mph / 2.237
+            speed_ms = speed_mph / SPEED_MS_TO_MPH
             from ..config.vehicle_config import theoretical_rpm_at_speed
             rpm = theoretical_rpm_at_speed(
                 speed_ms, ratio, self.scenario['final_drive']

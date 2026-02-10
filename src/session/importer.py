@@ -13,6 +13,8 @@ from typing import Dict, List, Optional
 import numpy as np
 import pandas as pd
 
+from ..utils.dataframe_helpers import SPEED_MS_TO_MPH
+
 from src.analysis.lap_analyzer import LapAnalyzer, LapInfo
 from src.config.tracks import TrackDatabase, get_track_database
 from src.session.classifier import LapClassifier
@@ -277,7 +279,7 @@ class SessionImporter:
             speed_data = df[cm["speed"]].values.copy()
             # Convert to mph if needed
             if validation.detected_speed_unit == "m/s":
-                speed_mph = speed_data * 2.237
+                speed_mph = speed_data * SPEED_MS_TO_MPH
             elif validation.detected_speed_unit == "km/h":
                 speed_mph = speed_data / 1.609
             else:
@@ -291,7 +293,7 @@ class SessionImporter:
             "longitude": lon_data,
             "rpm": rpm_data,
             "speed_mph": speed_mph,
-            "speed_ms": speed_mph / 2.237,
+            "speed_ms": speed_mph / SPEED_MS_TO_MPH,
         }
 
     def _estimate_track_confidence(self, lat_data, lon_data, track) -> float:

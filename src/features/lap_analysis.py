@@ -15,13 +15,7 @@ import json
 
 from ..analysis.lap_analyzer import LapAnalyzer, LapInfo, analyze_session_laps
 from ..config.vehicle_config import TRACK_CONFIG, PROCESSING_CONFIG
-
-
-def _safe_float(value: float, default: float = 0.0) -> float:
-    """Convert a float to a JSON-safe value, replacing NaN/inf with default."""
-    if np.isnan(value) or np.isinf(value):
-        return default
-    return float(value)
+from ..utils.dataframe_helpers import find_column, SPEED_MS_TO_MPH, safe_float as _safe_float
 
 
 class LapClassification(str, Enum):
@@ -187,7 +181,7 @@ class LapAnalysis:
             'longitude': longitude_data,
             'rpm': rpm_data,
             'speed_mph': speed_data,
-            'speed_ms': speed_data / 2.237
+            'speed_ms': speed_data / SPEED_MS_TO_MPH
         }
 
         # Use existing lap analyzer
@@ -226,14 +220,14 @@ class LapAnalysis:
 
         # Find required columns
         time_data = df.index.values
-        lat_data = self._find_column(df, ['GPS Latitude', 'latitude', 'Latitude'])
-        lon_data = self._find_column(df, ['GPS Longitude', 'longitude', 'Longitude'])
-        rpm_data = self._find_column(df, ['RPM', 'rpm', 'RPM dup 3'])
-        speed_data = self._find_column(df, ['GPS Speed', 'speed', 'Speed'])
+        lat_data = find_column(df, ['GPS Latitude', 'latitude', 'Latitude'])
+        lon_data = find_column(df, ['GPS Longitude', 'longitude', 'Longitude'])
+        rpm_data = find_column(df, ['RPM', 'rpm', 'RPM dup 3'])
+        speed_data = find_column(df, ['GPS Speed', 'speed', 'Speed'])
 
         # Convert speed to mph if needed
         if speed_data is not None and speed_data.max() < 100:
-            speed_data = speed_data * 2.237
+            speed_data = speed_data * SPEED_MS_TO_MPH
 
         if lat_data is None or lon_data is None:
             raise ValueError("Parquet file missing GPS latitude/longitude columns")
@@ -247,17 +241,6 @@ class LapAnalysis:
         return self.analyze_from_arrays(
             time_data, lat_data, lon_data, rpm_data, speed_data, session_id
         )
-
-    def _find_column(self, df: pd.DataFrame, candidates: List[str]) -> Optional[np.ndarray]:
-        """Find a column by trying multiple names"""
-        for col in candidates:
-            if col in df.columns:
-                return df[col].values
-            # Try case-insensitive match
-            for actual_col in df.columns:
-                if actual_col.lower() == col.lower():
-                    return df[actual_col].values
-        return None
 
     def _build_report(
         self,
@@ -719,7 +702,7 @@ def compare_laps_detailed(
 
     # Convert speed to mph if needed
     if speed_data.max() < 100:
-        speed_data = speed_data * 2.237
+        speed_data = speed_data * SPEED_MS_TO_MPH
 
     # Build session data for lap analyzer
     session_data = {
@@ -728,7 +711,7 @@ def compare_laps_detailed(
         'longitude': lon_data,
         'rpm': np.zeros(len(time_data)),
         'speed_mph': speed_data,
-        'speed_ms': speed_data / 2.237
+        'speed_ms': speed_data / SPEED_MS_TO_MPH
     }
 
     # Detect laps
