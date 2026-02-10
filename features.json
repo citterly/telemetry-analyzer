@@ -500,13 +500,13 @@
       "name": "LapAnalysis trace + checks",
       "category": "safeguard",
       "description": "Add trace recording and 4 sanity checks to LapAnalysis. Checks: speed_unit_consistent, lap_distance_plausible, lap_time_plausible, gps_coordinates_valid. See docs/SAFEGUARD_SYSTEM.md Phase 5.",
-      "status": "planned",
+      "status": "passing",
       "priority": 32,
       "tests": ["test_lap_trace_recorded", "test_lap_sanity_checks"],
       "files": [
         "src/features/lap_analysis.py"
       ],
-      "notes": ""
+      "notes": "DONE: analyze_from_parquet gains include_trace support. Records 6 inputs, 2 config values, 5 intermediates. 4 sanity checks: speed_unit_consistent, lap_distance_plausible (1-6 miles), lap_time_plausible (30-600s), gps_coordinates_valid. 11 new tests. 28 lap tests passing."
     },
     {
       "id": "safeguard-006",
@@ -553,9 +553,9 @@
     "created_at": "2025-01-29T01:00:00Z",
     "last_updated": "2026-02-10T16:00:00Z",
     "total_features": 41,
-    "passing": 37,
+    "passing": 38,
     "failing": 0,
-    "planned": 4
+    "planned": 3
   },
   "categories": {
     "bugfix": "Bug fixes and corrections",

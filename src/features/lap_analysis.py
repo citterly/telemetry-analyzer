@@ -118,6 +118,7 @@ class LapAnalysisReport(BaseAnalysisReport):
         }
         if self.lap_recommendations:
             result["lap_recommendations"] = self.lap_recommendations.to_dict()
+        result.update(self._trace_dict())
         return result
 
     def to_json(self, indent: int = 2) -> str:
@@ -191,7 +192,9 @@ class LapAnalysis(BaseAnalyzer):
     def analyze_from_parquet(
         self,
         parquet_path: str,
-        session_id: Optional[str] = None
+        session_id: Optional[str] = None,
+        include_trace: bool = False,
+        **kwargs,
     ) -> LapAnalysisReport:
         """
         Analyze laps from a Parquet file.
@@ -199,10 +202,13 @@ class LapAnalysis(BaseAnalyzer):
         Args:
             parquet_path: Path to Parquet file
             session_id: Session identifier (defaults to filename)
+            include_trace: If True, attach CalculationTrace to report.
 
         Returns:
             LapAnalysisReport with complete analysis
         """
+        trace = self._create_trace("LapAnalysis") if include_trace else None
+
         df = pd.read_parquet(parquet_path)
 
         if session_id is None:
@@ -210,15 +216,22 @@ class LapAnalysis(BaseAnalyzer):
             session_id = Path(parquet_path).stem
 
         # Find required columns
+        from ..utils.dataframe_helpers import find_column_name
         time_data = df.index.values
+        lat_col = find_column_name(df, ['GPS Latitude', 'latitude', 'Latitude'])
+        lon_col = find_column_name(df, ['GPS Longitude', 'longitude', 'Longitude'])
+        speed_col = find_column_name(df, ['GPS Speed', 'speed', 'Speed'])
+
         lat_data = find_column(df, ['GPS Latitude', 'latitude', 'Latitude'])
         lon_data = find_column(df, ['GPS Longitude', 'longitude', 'Longitude'])
         rpm_data = find_column(df, ['RPM', 'rpm', 'RPM dup 3'])
         speed_data = find_column(df, ['GPS Speed', 'speed', 'Speed'])
 
+        speed_unit_detected = "mph"
         # Convert speed to mph if needed
         if speed_data is not None and speed_data.max() < 100:
             speed_data = speed_data * SPEED_MS_TO_MPH
+            speed_unit_detected = "m/s"
 
         if lat_data is None or lon_data is None:
             raise ValueError("Parquet file missing GPS latitude/longitude columns")
@@ -229,9 +242,126 @@ class LapAnalysis(BaseAnalyzer):
         if speed_data is None:
             speed_data = np.zeros(len(time_data))
 
-        return self.analyze_from_arrays(
+        report = self.analyze_from_arrays(
             time_data, lat_data, lon_data, rpm_data, speed_data, session_id
         )
+
+        if trace:
+            trace.record_input("latitude_column", lat_col)
+            trace.record_input("longitude_column", lon_col)
+            trace.record_input("speed_column", speed_col)
+            trace.record_input("speed_unit_detected", speed_unit_detected)
+            trace.record_input("sample_count", len(time_data))
+            trace.record_input("track_detected", self.track_name)
+
+            trace.record_config("track_name", self.track_name)
+            if self.start_finish_gps:
+                trace.record_config("start_finish_gps", self.start_finish_gps)
+
+            trace.record_intermediate("laps_detected", report.total_laps)
+            trace.record_intermediate("fastest_lap_time", report.fastest_lap_time)
+            if report.laps:
+                trace.record_intermediate("slowest_lap_time", max(l.lap_time for l in report.laps))
+            trace.record_intermediate("avg_lap_time", report.average_lap_time)
+            if report.laps:
+                total_dist = sum(l.distance_meters for l in report.laps)
+                avg_dist_miles = (total_dist / len(report.laps)) / 1609.34
+                trace.record_intermediate("estimated_lap_distance_miles", round(avg_dist_miles, 2))
+
+            self._run_sanity_checks(trace, report, lat_data, lon_data, speed_unit_detected)
+            report.trace = trace
+
+        return report
+
+    def _run_sanity_checks(self, trace, report: LapAnalysisReport,
+                           lat_data: np.ndarray, lon_data: np.ndarray,
+                           speed_unit_detected: str) -> None:
+        """Run sanity checks on lap analysis results."""
+        # Check 5.1: speed_unit_consistent
+        if speed_unit_detected == "m/s" and report.laps:
+            max_speed = max(l.max_speed_mph for l in report.laps)
+            if 30 <= max_speed <= 200:
+                trace.add_check(
+                    "speed_unit_consistent", "pass",
+                    f"Speed converted from m/s, max after conversion {max_speed:.0f} mph is reasonable",
+                    expected="30-200 mph", actual=f"{max_speed:.0f} mph",
+                )
+            else:
+                trace.add_check(
+                    "speed_unit_consistent", "warn",
+                    f"Speed converted from m/s but max {max_speed:.0f} mph is unusual",
+                    expected="30-200 mph", actual=f"{max_speed:.0f} mph",
+                )
+        else:
+            trace.add_check(
+                "speed_unit_consistent", "pass",
+                f"Speed unit detected as {speed_unit_detected}",
+            )
+
+        # Check 5.2: lap_distance_plausible
+        if report.laps:
+            avg_dist_miles = trace.intermediates.get("estimated_lap_distance_miles", 0)
+            # Road America is ~4.0 miles, most tracks 1.5-4.5 miles
+            if 1.0 <= avg_dist_miles <= 6.0:
+                trace.add_check(
+                    "lap_distance_plausible", "pass",
+                    f"Estimated lap distance {avg_dist_miles:.1f} miles is reasonable",
+                    expected="1.0-6.0 miles", actual=f"{avg_dist_miles:.1f} miles",
+                )
+            elif avg_dist_miles > 0:
+                trace.add_check(
+                    "lap_distance_plausible", "warn",
+                    f"Estimated lap distance {avg_dist_miles:.1f} miles is unusual for a road course",
+                    expected="1.0-6.0 miles", actual=f"{avg_dist_miles:.1f} miles",
+                )
+            else:
+                trace.add_check(
+                    "lap_distance_plausible", "warn",
+                    "Could not estimate lap distance",
+                )
+        else:
+            trace.add_check(
+                "lap_distance_plausible", "warn", "No laps detected, cannot check distance",
+            )
+
+        # Check 5.3: lap_time_plausible
+        if report.laps:
+            fastest = report.fastest_lap_time
+            slowest = max(l.lap_time for l in report.laps)
+            if fastest > 30 and slowest < 600:
+                trace.add_check(
+                    "lap_time_plausible", "pass",
+                    f"Lap times {fastest:.1f}s - {slowest:.1f}s are plausible",
+                    expected="30-600s", actual=f"{fastest:.1f}-{slowest:.1f}s",
+                )
+            else:
+                trace.add_check(
+                    "lap_time_plausible", "warn",
+                    f"Lap times {fastest:.1f}s - {slowest:.1f}s outside expected range",
+                    expected="30-600s", actual=f"{fastest:.1f}-{slowest:.1f}s",
+                )
+        else:
+            trace.add_check(
+                "lap_time_plausible", "warn", "No laps detected",
+            )
+
+        # Check 5.4: gps_coordinates_valid
+        valid_lat = lat_data[~np.isnan(lat_data)]
+        valid_lon = lon_data[~np.isnan(lon_data)]
+        if (len(valid_lat) > 0 and len(valid_lon) > 0
+                and -90 <= np.min(valid_lat) and np.max(valid_lat) <= 90
+                and -180 <= np.min(valid_lon) and np.max(valid_lon) <= 180
+                and not (np.all(valid_lat == 0) and np.all(valid_lon == 0))):
+            trace.add_check(
+                "gps_coordinates_valid", "pass",
+                f"GPS coordinates in valid range (lat {np.min(valid_lat):.4f}-{np.max(valid_lat):.4f})",
+            )
+        else:
+            trace.add_check(
+                "gps_coordinates_valid", "fail",
+                "GPS coordinates are invalid (out of range or all zeros)",
+                severity="error",
+            )
 
     def _build_report(
         self,

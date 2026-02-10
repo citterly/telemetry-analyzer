@@ -354,5 +354,135 @@ class TestRecommendationGeneration:
         assert any_consistency or len(recommendations) >= 1
 
 
+class TestLapAnalysisTrace:
+    """Tests for safeguard-005: LapAnalysis trace + sanity checks."""
+
+    def _make_lap_parquet(self, tmp_path, n=500):
+        """Create synthetic parquet with GPS data that forms a rough loop."""
+        import pandas as pd
+        time = np.linspace(0, 120, n)
+        # Create a loop pattern for GPS
+        t = np.linspace(0, 4 * np.pi, n)
+        lat = 43.79 + 0.01 * np.sin(t)
+        lon = -87.99 + 0.01 * np.cos(t)
+        speed = np.full(n, 30.0)  # m/s (will be converted to mph)
+        rpm = np.full(n, 5000.0)
+        df = pd.DataFrame({
+            "GPS Latitude": lat,
+            "GPS Longitude": lon,
+            "GPS Speed": speed,
+            "RPM": rpm,
+        }, index=time)
+        path = str(tmp_path / "lap_test.parquet")
+        df.to_parquet(path)
+        return path
+
+    def test_trace_recorded_when_enabled(self, tmp_path):
+        """Trace is attached when include_trace=True."""
+        path = self._make_lap_parquet(tmp_path)
+        analyzer = LapAnalysis()
+        report = analyzer.analyze_from_parquet(path, include_trace=True)
+        assert hasattr(report, 'trace')
+        assert report.trace is not None
+        assert report.trace.analyzer_name == "LapAnalysis"
+
+    def test_trace_not_recorded_by_default(self, tmp_path):
+        """Trace is NOT attached by default."""
+        path = self._make_lap_parquet(tmp_path)
+        analyzer = LapAnalysis()
+        report = analyzer.analyze_from_parquet(path)
+        assert not hasattr(report, 'trace') or report.trace is None
+
+    def test_trace_inputs_recorded(self, tmp_path):
+        """Trace records column names, sample count, track."""
+        path = self._make_lap_parquet(tmp_path)
+        analyzer = LapAnalysis()
+        report = analyzer.analyze_from_parquet(path, include_trace=True)
+        trace = report.trace
+        assert trace.inputs["latitude_column"] == "GPS Latitude"
+        assert trace.inputs["longitude_column"] == "GPS Longitude"
+        assert "speed_unit_detected" in trace.inputs
+        assert trace.inputs["sample_count"] == 500
+
+    def test_trace_config_recorded(self, tmp_path):
+        """Trace records track config."""
+        path = self._make_lap_parquet(tmp_path)
+        analyzer = LapAnalysis()
+        report = analyzer.analyze_from_parquet(path, include_trace=True)
+        assert "track_name" in report.trace.config
+
+    def test_trace_intermediates_recorded(self, tmp_path):
+        """Trace records lap detection results."""
+        path = self._make_lap_parquet(tmp_path)
+        analyzer = LapAnalysis()
+        report = analyzer.analyze_from_parquet(path, include_trace=True)
+        assert "laps_detected" in report.trace.intermediates
+        assert "fastest_lap_time" in report.trace.intermediates
+        assert "avg_lap_time" in report.trace.intermediates
+
+    def test_trace_has_four_sanity_checks(self, tmp_path):
+        """All 4 sanity checks are present."""
+        path = self._make_lap_parquet(tmp_path)
+        analyzer = LapAnalysis()
+        report = analyzer.analyze_from_parquet(path, include_trace=True)
+        check_names = [c.name for c in report.trace.sanity_checks]
+        assert "speed_unit_consistent" in check_names
+        assert "lap_distance_plausible" in check_names
+        assert "lap_time_plausible" in check_names
+        assert "gps_coordinates_valid" in check_names
+
+    def test_to_dict_includes_trace(self, tmp_path):
+        """to_dict() includes _trace when present."""
+        path = self._make_lap_parquet(tmp_path)
+        analyzer = LapAnalysis()
+        report = analyzer.analyze_from_parquet(path, include_trace=True)
+        d = report.to_dict()
+        assert "_trace" in d
+
+    def test_to_dict_omits_trace_by_default(self, tmp_path):
+        """to_dict() does NOT include _trace by default."""
+        path = self._make_lap_parquet(tmp_path)
+        analyzer = LapAnalysis()
+        report = analyzer.analyze_from_parquet(path)
+        d = report.to_dict()
+        assert "_trace" not in d
+
+    def test_check_gps_coordinates_valid(self, tmp_path):
+        """Valid GPS coordinates pass the check."""
+        path = self._make_lap_parquet(tmp_path)
+        analyzer = LapAnalysis()
+        report = analyzer.analyze_from_parquet(path, include_trace=True)
+        check = next(c for c in report.trace.sanity_checks if c.name == "gps_coordinates_valid")
+        assert check.status == "pass"
+
+    def test_check_gps_coordinates_fail_zeros(self, tmp_path):
+        """All-zero GPS coordinates fail the check."""
+        import pandas as pd
+        time = np.linspace(0, 30, 100)
+        df = pd.DataFrame({
+            "GPS Latitude": np.zeros(100),
+            "GPS Longitude": np.zeros(100),
+            "GPS Speed": np.full(100, 30.0),
+        }, index=time)
+        path = str(tmp_path / "zero_gps.parquet")
+        df.to_parquet(path)
+
+        analyzer = LapAnalysis()
+        report = analyzer.analyze_from_parquet(path, include_trace=True)
+        check = next(c for c in report.trace.sanity_checks if c.name == "gps_coordinates_valid")
+        assert check.status == "fail"
+
+    def test_existing_tests_still_pass(self):
+        """Smoke: analyze_from_arrays still works."""
+        analyzer = LapAnalysis()
+        time = np.linspace(0, 120, 500)
+        lat = 43.79 + 0.01 * np.sin(np.linspace(0, 4 * np.pi, 500))
+        lon = -87.99 + 0.01 * np.cos(np.linspace(0, 4 * np.pi, 500))
+        rpm = np.full(500, 5000.0)
+        speed = np.full(500, 80.0)
+        report = analyzer.analyze_from_arrays(time, lat, lon, rpm, speed)
+        assert isinstance(report, LapAnalysisReport)
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
