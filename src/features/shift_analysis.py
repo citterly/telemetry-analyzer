@@ -64,7 +64,7 @@ class ShiftReport(BaseAnalysisReport):
 
     def to_dict(self) -> dict:
         """Convert report to dictionary for JSON serialization"""
-        return {
+        result = {
             "session_id": self.session_id,
             "analysis_timestamp": self.analysis_timestamp,
             "total_shifts": self.total_shifts,
@@ -102,6 +102,8 @@ class ShiftReport(BaseAnalysisReport):
             "recommendations": self.recommendations,
             "summary": self.summary
         }
+        result.update(self._trace_dict())
+        return result
 
     def to_json(self, indent: int = 2) -> str:
         """Convert report to JSON string"""
@@ -221,7 +223,9 @@ class ShiftAnalyzer(BaseAnalyzer):
         parquet_path: str,
         rpm_column: str = "RPM",
         speed_column: str = "GPS Speed",
-        session_id: Optional[str] = None
+        session_id: Optional[str] = None,
+        include_trace: bool = False,
+        **kwargs,
     ) -> ShiftReport:
         """
         Analyze shifts from a Parquet file.
@@ -231,10 +235,13 @@ class ShiftAnalyzer(BaseAnalyzer):
             rpm_column: Column name for RPM data
             speed_column: Column name for speed data (mph)
             session_id: Session identifier (defaults to filename)
+            include_trace: If True, attach CalculationTrace to report.
 
         Returns:
             ShiftReport with complete analysis
         """
+        trace = self._create_trace("ShiftAnalyzer") if include_trace else None
+
         df = pd.read_parquet(parquet_path)
 
         if session_id is None:
@@ -263,11 +270,128 @@ class ShiftAnalyzer(BaseAnalyzer):
         speed_data = df[speed_col].values
         time_data = df.index.values
 
+        speed_unit_detected = "mph"
         # Convert speed to mph if needed (GPS Speed is often in m/s)
         if speed_data.max() < 100:  # Likely in m/s
             speed_data = speed_data * SPEED_MS_TO_MPH
+            speed_unit_detected = "m/s"
 
-        return self.analyze_session(rpm_data, speed_data, time_data, session_id)
+        report = self.analyze_session(rpm_data, speed_data, time_data, session_id)
+
+        if trace:
+            trace.record_input("rpm_column", rpm_col)
+            trace.record_input("speed_column", speed_col)
+            trace.record_input("speed_unit_detected", speed_unit_detected)
+            trace.record_input("sample_count", len(time_data))
+            trace.record_input("shift_count", report.total_shifts)
+
+            from ..config.vehicle_config import ENGINE_SPECS
+            trace.record_config("transmission_ratios", self.transmission_ratios)
+            trace.record_config("final_drive", self.final_drive)
+            trace.record_config("optimal_shift_rpm_min", self.OPTIMAL_SHIFT_RPM_MIN)
+            trace.record_config("optimal_shift_rpm_max", self.OPTIMAL_SHIFT_RPM_MAX)
+            trace.record_config("early_shift_rpm", self.EARLY_SHIFT_RPM)
+            trace.record_config("over_rev_rpm", self.OVER_REV_RPM)
+
+            # Intermediates
+            gears_detected = set()
+            for s in report.shifts:
+                gears_detected.add(s.from_gear)
+                gears_detected.add(s.to_gear)
+            trace.record_intermediate("gears_detected", sorted(gears_detected))
+
+            shifts_per_gear = {}
+            for s in report.shifts:
+                key = f"{s.from_gear}->{s.to_gear}"
+                shifts_per_gear[key] = shifts_per_gear.get(key, 0) + 1
+            trace.record_intermediate("shifts_per_gear", shifts_per_gear)
+
+            upshifts = [s for s in report.shifts if s.shift_type == "upshift"]
+            optimal = sum(1 for s in upshifts if s.shift_quality == "optimal")
+            early = sum(1 for s in upshifts if s.shift_quality == "early")
+            over_rev = sum(1 for s in upshifts if s.shift_quality == "over-rev")
+            total_up = len(upshifts) if upshifts else 1
+            trace.record_intermediate("pct_optimal", round(optimal / total_up * 100, 1))
+            trace.record_intermediate("pct_early", round(early / total_up * 100, 1))
+            trace.record_intermediate("pct_over_rev", round(over_rev / total_up * 100, 1))
+
+            self._run_sanity_checks(trace, report)
+            report.trace = trace
+
+        return report
+
+    def _run_sanity_checks(self, trace, report: ShiftReport) -> None:
+        """Run sanity checks on shift analysis results."""
+        # Check 3.1: gear_count_matches_config
+        gears_detected = set()
+        for s in report.shifts:
+            gears_detected.add(s.from_gear)
+            gears_detected.add(s.to_gear)
+        num_config_gears = len(self.transmission_ratios)
+        if len(gears_detected) <= num_config_gears:
+            trace.add_check(
+                "gear_count_matches_config", "pass",
+                f"Detected {len(gears_detected)} gears, config has {num_config_gears} ratios",
+                expected=f"<= {num_config_gears}", actual=len(gears_detected),
+            )
+        else:
+            trace.add_check(
+                "gear_count_matches_config", "warn",
+                f"Detected {len(gears_detected)} gears but config only has {num_config_gears} ratios",
+                expected=f"<= {num_config_gears}", actual=len(gears_detected),
+            )
+
+        # Check 3.2: shift_rpm_below_redline
+        from ..config.vehicle_config import ENGINE_SPECS
+        safe_limit = ENGINE_SPECS.get('safe_rpm_limit', 7000)
+        max_shift_rpm = max((s.rpm_at_shift for s in report.shifts), default=0)
+        threshold = safe_limit * 1.05
+        if max_shift_rpm <= threshold:
+            trace.add_check(
+                "shift_rpm_below_redline", "pass",
+                f"Max shift RPM {max_shift_rpm:.0f} is below redline ({safe_limit} + 5%)",
+                expected=f"<= {threshold:.0f}", actual=round(max_shift_rpm),
+            )
+        else:
+            trace.add_check(
+                "shift_rpm_below_redline", "fail",
+                f"Max shift RPM {max_shift_rpm:.0f} exceeds redline ({safe_limit} + 5% = {threshold:.0f})",
+                expected=f"<= {threshold:.0f}", actual=round(max_shift_rpm),
+                severity="error",
+            )
+
+        # Check 3.3: shift_confidence
+        # Use gear_trace confidence from gear_calculator if available
+        # For now, check that shifts are between adjacent gears (a proxy for confidence)
+        non_adjacent = sum(1 for s in report.shifts if abs(s.to_gear - s.from_gear) > 1)
+        total = max(len(report.shifts), 1)
+        adjacent_pct = (total - non_adjacent) / total * 100
+        if adjacent_pct >= 50:
+            trace.add_check(
+                "shift_confidence", "pass",
+                f"{adjacent_pct:.0f}% of shifts are between adjacent gears",
+                expected=">= 50%", actual=f"{adjacent_pct:.0f}%",
+            )
+        else:
+            trace.add_check(
+                "shift_confidence", "warn",
+                f"Only {adjacent_pct:.0f}% of shifts are between adjacent gears, gear detection may be unreliable",
+                expected=">= 50%", actual=f"{adjacent_pct:.0f}%",
+            )
+
+        # Check 3.4: sufficient_shifts
+        if report.total_shifts >= 3:
+            trace.add_check(
+                "sufficient_shifts", "pass",
+                f"{report.total_shifts} shifts detected, sufficient for analysis",
+                expected=">= 3", actual=report.total_shifts,
+            )
+        else:
+            trace.add_check(
+                "sufficient_shifts", "warn",
+                f"Only {report.total_shifts} shifts detected, analysis may not be meaningful",
+                expected=">= 3", actual=report.total_shifts,
+            )
 
     def _process_shifts(
         self,

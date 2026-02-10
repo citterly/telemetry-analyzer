@@ -342,5 +342,140 @@ class TestShiftQualityThresholds:
         assert ShiftAnalyzer.OVER_REV_RPM == 7200
 
 
+class TestShiftAnalyzerTrace:
+    """Tests for safeguard-003: ShiftAnalyzer trace + sanity checks."""
+
+    def _make_shift_parquet(self, tmp_path, n=300, rpm_range=(4000, 7000),
+                            speed_range=(20, 60)):
+        """Create synthetic parquet with RPM and speed data that generates shifts."""
+        import pandas as pd
+        time = np.linspace(0, 30, n)
+        # Create RPM pattern with multiple upshifts (sawtooth)
+        cycles = 5
+        rpm_per_cycle = n // cycles
+        rpm = np.zeros(n)
+        speed = np.linspace(speed_range[0], speed_range[1], n)
+        for c in range(cycles):
+            start = c * rpm_per_cycle
+            end = min(start + rpm_per_cycle, n)
+            rpm[start:end] = np.linspace(rpm_range[0], rpm_range[1], end - start)
+        df = pd.DataFrame({"RPM": rpm, "GPS Speed": speed}, index=time)
+        path = str(tmp_path / "shift_test.parquet")
+        df.to_parquet(path)
+        return path
+
+    def test_trace_recorded_when_enabled(self, tmp_path):
+        """Trace is attached when include_trace=True."""
+        path = self._make_shift_parquet(tmp_path)
+        analyzer = ShiftAnalyzer()
+        report = analyzer.analyze_from_parquet(path, include_trace=True)
+        assert hasattr(report, 'trace')
+        assert report.trace is not None
+        assert report.trace.analyzer_name == "ShiftAnalyzer"
+
+    def test_trace_not_recorded_by_default(self, tmp_path):
+        """Trace is NOT attached by default."""
+        path = self._make_shift_parquet(tmp_path)
+        analyzer = ShiftAnalyzer()
+        report = analyzer.analyze_from_parquet(path)
+        assert not hasattr(report, 'trace') or report.trace is None
+
+    def test_trace_inputs_recorded(self, tmp_path):
+        """Trace records RPM column, speed column, unit, sample count, shift count."""
+        path = self._make_shift_parquet(tmp_path)
+        analyzer = ShiftAnalyzer()
+        report = analyzer.analyze_from_parquet(path, include_trace=True)
+        trace = report.trace
+        assert "rpm_column" in trace.inputs
+        assert "speed_column" in trace.inputs
+        assert "speed_unit_detected" in trace.inputs
+        assert trace.inputs["sample_count"] == 300
+        assert "shift_count" in trace.inputs
+
+    def test_trace_config_recorded(self, tmp_path):
+        """Trace records transmission ratios, thresholds."""
+        path = self._make_shift_parquet(tmp_path)
+        analyzer = ShiftAnalyzer()
+        report = analyzer.analyze_from_parquet(path, include_trace=True)
+        trace = report.trace
+        assert "transmission_ratios" in trace.config
+        assert "final_drive" in trace.config
+        assert "optimal_shift_rpm_min" in trace.config
+        assert "over_rev_rpm" in trace.config
+
+    def test_trace_intermediates_recorded(self, tmp_path):
+        """Trace records gears_detected, shifts_per_gear, pct_optimal."""
+        path = self._make_shift_parquet(tmp_path)
+        analyzer = ShiftAnalyzer()
+        report = analyzer.analyze_from_parquet(path, include_trace=True)
+        trace = report.trace
+        assert "gears_detected" in trace.intermediates
+        assert "shifts_per_gear" in trace.intermediates
+        assert "pct_optimal" in trace.intermediates
+        assert "pct_early" in trace.intermediates
+
+    def test_trace_has_four_sanity_checks(self, tmp_path):
+        """All 4 sanity checks are present."""
+        path = self._make_shift_parquet(tmp_path)
+        analyzer = ShiftAnalyzer()
+        report = analyzer.analyze_from_parquet(path, include_trace=True)
+        check_names = [c.name for c in report.trace.sanity_checks]
+        assert "gear_count_matches_config" in check_names
+        assert "shift_rpm_below_redline" in check_names
+        assert "shift_confidence" in check_names
+        assert "sufficient_shifts" in check_names
+
+    def test_to_dict_includes_trace(self, tmp_path):
+        """to_dict() includes _trace when present."""
+        path = self._make_shift_parquet(tmp_path)
+        analyzer = ShiftAnalyzer()
+        report = analyzer.analyze_from_parquet(path, include_trace=True)
+        d = report.to_dict()
+        assert "_trace" in d
+        assert d["_trace"]["analyzer_name"] == "ShiftAnalyzer"
+
+    def test_to_dict_omits_trace_by_default(self, tmp_path):
+        """to_dict() does NOT include _trace by default."""
+        path = self._make_shift_parquet(tmp_path)
+        analyzer = ShiftAnalyzer()
+        report = analyzer.analyze_from_parquet(path)
+        d = report.to_dict()
+        assert "_trace" not in d
+
+    def test_to_dict_json_serializable_with_trace(self, tmp_path):
+        """to_dict() with trace serializes to JSON."""
+        path = self._make_shift_parquet(tmp_path)
+        analyzer = ShiftAnalyzer()
+        report = analyzer.analyze_from_parquet(path, include_trace=True)
+        serialized = json.dumps(report.to_dict())
+        assert isinstance(serialized, str)
+
+    def test_check_sufficient_shifts_warns_on_few(self, tmp_path):
+        """Warns when fewer than 3 shifts detected."""
+        import pandas as pd
+        # Constant RPM = no shifts
+        time = np.linspace(0, 10, 100)
+        df = pd.DataFrame({
+            "RPM": np.full(100, 5000.0),
+            "GPS Speed": np.linspace(30, 50, 100),
+        }, index=time)
+        path = str(tmp_path / "no_shifts.parquet")
+        df.to_parquet(path)
+
+        analyzer = ShiftAnalyzer()
+        report = analyzer.analyze_from_parquet(path, include_trace=True)
+        check = next(c for c in report.trace.sanity_checks if c.name == "sufficient_shifts")
+        assert check.status == "warn"
+
+    def test_existing_tests_still_pass(self):
+        """Smoke: analyze_session still works unchanged."""
+        analyzer = ShiftAnalyzer()
+        time = np.linspace(0, 10, 100)
+        speed = np.linspace(30, 80, 100)
+        rpm = np.linspace(4000, 7000, 100)
+        report = analyzer.analyze_session(rpm, speed, time)
+        assert isinstance(report, ShiftReport)
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

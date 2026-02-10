@@ -474,13 +474,13 @@
       "name": "ShiftAnalyzer trace + checks",
       "category": "safeguard",
       "description": "Add trace recording and 4 sanity checks to ShiftAnalyzer. Checks: gear_count_matches_config, shift_rpm_below_redline, shift_confidence, sufficient_shifts. See docs/SAFEGUARD_SYSTEM.md Phase 3.",
-      "status": "planned",
+      "status": "passing",
       "priority": 30,
       "tests": ["test_shift_trace_recorded", "test_shift_sanity_checks"],
       "files": [
         "src/features/shift_analysis.py"
       ],
-      "notes": ""
+      "notes": "DONE: analyze_from_parquet gains include_trace support. Records 5 inputs, 6 config values, 5 intermediates. 4 sanity checks: gear_count_matches_config, shift_rpm_below_redline, shift_confidence, sufficient_shifts. 11 new tests. 33 shift tests passing."
     },
     {
       "id": "safeguard-004",
@@ -553,9 +553,9 @@
     "created_at": "2025-01-29T01:00:00Z",
     "last_updated": "2026-02-10T16:00:00Z",
     "total_features": 41,
-    "passing": 35,
+    "passing": 36,
     "failing": 0,
-    "planned": 6
+    "planned": 5
   },
   "categories": {
     "bugfix": "Bug fixes and corrections",
