@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional, Any
-from datetime import datetime
+from datetime import datetime, timezone
 import json
 from pathlib import Path
 
@@ -181,7 +181,7 @@ class SessionReportGenerator:
             session_id=session_id,
             track_name=self.track_name,
             vehicle_setup=self.vehicle_setup,
-            analysis_timestamp=datetime.utcnow().isoformat(),
+            analysis_timestamp=datetime.now(timezone.utc).isoformat(),
             data_source="array",
             total_duration_seconds=float(time_data[-1] - time_data[0]) if len(time_data) > 1 else 0,
             sample_count=len(time_data)

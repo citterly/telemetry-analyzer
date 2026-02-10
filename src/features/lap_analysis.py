@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional, Tuple
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 import json
 
@@ -271,7 +271,7 @@ class LapAnalysis:
             return LapAnalysisReport(
                 session_id=session_id,
                 track_name=self.track_name,
-                analysis_timestamp=datetime.utcnow().isoformat(),
+                analysis_timestamp=datetime.now(timezone.utc).isoformat(),
                 total_laps=0,
                 fastest_lap_number=0,
                 fastest_lap_time=0,
@@ -335,7 +335,7 @@ class LapAnalysis:
         return LapAnalysisReport(
             session_id=session_id,
             track_name=self.track_name,
-            analysis_timestamp=datetime.utcnow().isoformat(),
+            analysis_timestamp=datetime.now(timezone.utc).isoformat(),
             total_laps=len(laps),
             fastest_lap_number=fastest_lap.lap_number if fastest_lap else laps[0].lap_number,
             fastest_lap_time=fastest_time,

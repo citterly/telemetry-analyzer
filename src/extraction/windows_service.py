@@ -14,7 +14,7 @@ import sys
 import tempfile
 import shutil
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks
@@ -93,7 +93,7 @@ async def health_check():
         platform=sys.platform,
         dll_available=check_dll_available() if IS_WINDOWS else False,
         temp_dir=str(TEMP_DIR),
-        timestamp=datetime.utcnow().isoformat()
+        timestamp=datetime.now(timezone.utc).isoformat()
     )
 
 
@@ -123,7 +123,7 @@ async def extract_xrk(
         )
 
     # Save uploaded file to temp location
-    temp_xrk = TEMP_DIR / f"upload_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}_{file.filename}"
+    temp_xrk = TEMP_DIR / f"upload_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}_{file.filename}"
 
     try:
         with open(temp_xrk, "wb") as f:
@@ -149,7 +149,7 @@ async def extract_xrk(
             )
 
         # Save to Parquet
-        output_filename = f"{Path(file.filename).stem}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.parquet"
+        output_filename = f"{Path(file.filename).stem}_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.parquet"
         output_path = TEMP_DIR / output_filename
         df.to_parquet(output_path, engine="pyarrow", index=True)
 

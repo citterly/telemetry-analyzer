@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional, Tuple
-from datetime import datetime
+from datetime import datetime, timezone
 import json
 
 from ..config.vehicle_config import (
@@ -174,7 +174,7 @@ class TransmissionComparison:
         summary = self._build_summary(current_perf, proposed_perf)
 
         return TransmissionComparisonReport(
-            analysis_timestamp=datetime.utcnow().isoformat(),
+            analysis_timestamp=datetime.now(timezone.utc).isoformat(),
             current_setup=current_perf,
             proposed_setup=proposed_perf,
             gear_comparisons=gear_comparisons,

@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional, Tuple
-from datetime import datetime
+from datetime import datetime, timezone
 import json
 
 
@@ -399,7 +399,7 @@ class GGAnalyzer:
 
         return GGAnalysisResult(
             session_id=session_id,
-            analysis_timestamp=datetime.utcnow().isoformat(),
+            analysis_timestamp=datetime.now(timezone.utc).isoformat(),
             stats=stats,
             points=points,
             reference_max_g=reference_max_g,

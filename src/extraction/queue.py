@@ -5,7 +5,7 @@ Survives restarts and supports retry logic
 
 import sqlite3
 import threading
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional
 from contextlib import contextmanager
@@ -85,7 +85,7 @@ class ExtractionQueue:
         Returns:
             The created ExtractionJob with assigned ID
         """
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
 
         with self._lock:
             with self._get_connection() as conn:

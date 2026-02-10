@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional, Tuple
-from datetime import datetime
+from datetime import datetime, timezone
 import json
 
 from ..analysis.gear_calculator import GearCalculator, GearInfo
@@ -201,7 +201,7 @@ class ShiftAnalyzer:
 
         return ShiftReport(
             session_id=session_id,
-            analysis_timestamp=datetime.utcnow().isoformat(),
+            analysis_timestamp=datetime.now(timezone.utc).isoformat(),
             total_shifts=len(shifts),
             total_upshifts=len(upshifts),
             total_downshifts=len(downshifts),

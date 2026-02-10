@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional, Tuple
-from datetime import datetime
+from datetime import datetime, timezone
 import json
 
 from ..analysis.gear_calculator import GearCalculator, GearInfo, analyze_lap_gearing
@@ -221,7 +221,7 @@ class GearAnalysis:
         return GearAnalysisReport(
             session_id=session_id,
             track_name=self.track_name,
-            analysis_timestamp=datetime.utcnow().isoformat(),
+            analysis_timestamp=datetime.now(timezone.utc).isoformat(),
             total_duration_seconds=total_duration,
             gear_usage=gear_usage,
             track_sections=track_sections,

@@ -18,6 +18,10 @@ scipy>=1.11.0
 # Optional: Database support (SQLite is built-in, PostgreSQL for later)
 # psycopg2-binary>=2.9.0  # Uncomment for PostgreSQL support
 
+# HTTP clients
+httpx>=0.25.0               # For FastAPI TestClient
+requests>=2.31.0            # For extraction worker
+
 # Testing
 pytest>=7.4.0
 pyarrow>=15.0.0

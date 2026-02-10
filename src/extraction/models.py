@@ -3,7 +3,7 @@ Data models for extraction queue
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Optional
 import json
@@ -65,8 +65,8 @@ class ExtractionJob:
             id=data.get("id"),
             xrk_filename=data.get("xrk_filename", ""),
             status=JobStatus(data.get("status", "pending")),
-            created_at=parse_dt(data.get("created_at")) or datetime.utcnow(),
-            updated_at=parse_dt(data.get("updated_at")) or datetime.utcnow(),
+            created_at=parse_dt(data.get("created_at")) or datetime.now(timezone.utc),
+            updated_at=parse_dt(data.get("updated_at")) or datetime.now(timezone.utc),
             started_at=parse_dt(data.get("started_at")),
             completed_at=parse_dt(data.get("completed_at")),
             retry_count=data.get("retry_count", 0),
@@ -83,15 +83,15 @@ class ExtractionJob:
     def mark_processing(self) -> None:
         """Mark job as processing"""
         self.status = JobStatus.PROCESSING
-        self.started_at = datetime.utcnow()
-        self.updated_at = datetime.utcnow()
+        self.started_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(timezone.utc)
 
     def mark_completed(self, output_path: str) -> None:
         """Mark job as completed"""
         self.status = JobStatus.COMPLETED
         self.output_path = output_path
-        self.completed_at = datetime.utcnow()
-        self.updated_at = datetime.utcnow()
+        self.completed_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(timezone.utc)
         self.error_message = None
 
     def mark_failed(self, error: str) -> None:
@@ -99,10 +99,10 @@ class ExtractionJob:
         self.status = JobStatus.FAILED
         self.error_message = error
         self.retry_count += 1
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
 
     def reset_for_retry(self) -> None:
         """Reset job for retry attempt"""
         self.status = JobStatus.PENDING
         self.started_at = None
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)

@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional, Tuple
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 import json
 
@@ -313,7 +313,7 @@ class CornerAnalyzer:
             return CornerAnalysisResult(
                 session_id=session_id,
                 track_name=track_name,
-                analysis_timestamp=datetime.utcnow().isoformat(),
+                analysis_timestamp=datetime.now(timezone.utc).isoformat(),
                 laps=[],
                 corner_comparisons=[],
                 corner_zones=[],
@@ -396,7 +396,7 @@ class CornerAnalyzer:
         return CornerAnalysisResult(
             session_id=session_id,
             track_name=track_name,
-            analysis_timestamp=datetime.utcnow().isoformat(),
+            analysis_timestamp=datetime.now(timezone.utc).isoformat(),
             laps=[lap_analysis],
             corner_comparisons=corner_comparisons,
             corner_zones=detection.corners,

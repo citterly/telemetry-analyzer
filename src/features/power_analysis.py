@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional, Tuple
-from datetime import datetime
+from datetime import datetime, timezone
 import json
 from scipy import signal
 
@@ -235,7 +235,7 @@ class PowerAnalysis:
 
         return PowerAnalysisReport(
             session_id=session_id,
-            analysis_timestamp=datetime.utcnow().isoformat(),
+            analysis_timestamp=datetime.now(timezone.utc).isoformat(),
             vehicle_mass_kg=self.vehicle_mass_kg,
             total_duration_seconds=total_duration,
             max_power_hp=max_power,
