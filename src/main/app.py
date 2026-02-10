@@ -5,16 +5,37 @@ Minimal web interface for trackside use
 
 from fastapi import FastAPI, UploadFile, File, HTTPException, Request, Form
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
+from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, Response
 from fastapi.templating import Jinja2Templates
 import shutil
 import json
 from pathlib import Path
 from typing import List, Optional
 import traceback
+import math
 
 from src.config.config import get_config
 from src.io.file_manager import FileManager
+
+
+def _sanitize_for_json(obj):
+    """Recursively replace NaN/Inf with None and numpy types with native Python types."""
+    import numpy as np
+    if isinstance(obj, dict):
+        return {k: _sanitize_for_json(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [_sanitize_for_json(v) for v in obj]
+    elif isinstance(obj, float) and (math.isnan(obj) or math.isinf(obj)):
+        return None
+    elif isinstance(obj, (np.integer,)):
+        return int(obj)
+    elif isinstance(obj, (np.floating,)):
+        v = float(obj)
+        return None if math.isnan(v) or math.isinf(v) else v
+    elif isinstance(obj, np.ndarray):
+        return _sanitize_for_json(obj.tolist())
+    return obj
+
 
 # Initialize configuration
 config = get_config()
@@ -699,73 +720,12 @@ async def analyze_full_report(filename: str):
             time_data, lat_data, lon_data, rpm_data, speed_data, filename
         )
 
-        return report.to_dict()
+        return _sanitize_for_json(report.to_dict())
 
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Report generation failed: {str(e)}")
-
-
-@app.get("/api/track-map/{filename:path}")
-async def get_track_map(
-    filename: str,
-    color_by: str = "speed",
-    format: str = "svg",
-    discrete: bool = True,
-    low_threshold: float = 33.0,
-    high_threshold: float = 66.0
-):
-    """Generate track map visualization"""
-    import pandas as pd
-
-    file_path = _find_parquet_file(filename)
-    if not file_path:
-        raise HTTPException(status_code=404, detail=f"Parquet file not found: {filename}")
-
-    try:
-        df = pd.read_parquet(file_path)
-
-        lat_data = _find_column(df, ['GPS Latitude', 'latitude'])
-        lon_data = _find_column(df, ['GPS Longitude', 'longitude'])
-
-        if lat_data is None or lon_data is None:
-            raise HTTPException(status_code=400, detail="GPS data not found in file")
-
-        # Get color data based on selection
-        color_data = None
-        if color_by == 'speed':
-            color_data = _find_column(df, ['GPS Speed', 'speed', 'Speed'])
-            if color_data is not None and color_data.max() < 100:
-                color_data = color_data * 2.237
-        elif color_by == 'rpm':
-            color_data = _find_column(df, ['RPM', 'rpm'])
-
-        track_map = TrackMap()
-
-        if format == 'html':
-            return HTMLResponse(
-                content=track_map.render_html(
-                    lat_data, lon_data, color_data, color_by, f"Track Map - {filename}"
-                )
-            )
-        elif format == 'json':
-            return track_map.to_dict(lat_data, lon_data, color_data, color_by)
-        else:
-            return HTMLResponse(
-                content=track_map.render_svg(
-                    lat_data, lon_data, color_data, color_by, f"Track Map - {filename}",
-                    discrete_mode=discrete,
-                    low_threshold=low_threshold,
-                    high_threshold=high_threshold
-                ),
-                media_type="image/svg+xml"
-            )
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Track map generation failed: {str(e)}")
 
 
 @app.get("/api/track-map/delta/{filename:path}")
@@ -885,6 +845,67 @@ async def get_delta_track_map(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Delta track map generation failed: {str(e)}")
+
+
+@app.get("/api/track-map/{filename:path}")
+async def get_track_map(
+    filename: str,
+    color_by: str = "speed",
+    format: str = "svg",
+    discrete: bool = True,
+    low_threshold: float = 33.0,
+    high_threshold: float = 66.0
+):
+    """Generate track map visualization"""
+    import pandas as pd
+
+    file_path = _find_parquet_file(filename)
+    if not file_path:
+        raise HTTPException(status_code=404, detail=f"Parquet file not found: {filename}")
+
+    try:
+        df = pd.read_parquet(file_path)
+
+        lat_data = _find_column(df, ['GPS Latitude', 'latitude'])
+        lon_data = _find_column(df, ['GPS Longitude', 'longitude'])
+
+        if lat_data is None or lon_data is None:
+            raise HTTPException(status_code=400, detail="GPS data not found in file")
+
+        # Get color data based on selection
+        color_data = None
+        if color_by == 'speed':
+            color_data = _find_column(df, ['GPS Speed', 'speed', 'Speed'])
+            if color_data is not None and color_data.max() < 100:
+                color_data = color_data * 2.237
+        elif color_by == 'rpm':
+            color_data = _find_column(df, ['RPM', 'rpm'])
+
+        track_map = TrackMap()
+
+        if format == 'html':
+            return HTMLResponse(
+                content=track_map.render_html(
+                    lat_data, lon_data, color_data, color_by, f"Track Map - {filename}"
+                )
+            )
+        elif format == 'json':
+            return track_map.to_dict(lat_data, lon_data, color_data, color_by)
+        else:
+            return HTMLResponse(
+                content=track_map.render_svg(
+                    lat_data, lon_data, color_data, color_by, f"Track Map - {filename}",
+                    discrete_mode=discrete,
+                    low_threshold=low_threshold,
+                    high_threshold=high_threshold
+                ),
+                media_type="image/svg+xml"
+            )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Track map generation failed: {str(e)}")
 
 
 # ============================================================
@@ -1079,7 +1100,7 @@ async def get_corner_analysis(
             track_name=track_name
         )
 
-        return result.to_dict()
+        return _sanitize_for_json(result.to_dict())
 
     except HTTPException:
         raise

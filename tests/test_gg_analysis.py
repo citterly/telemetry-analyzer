@@ -335,7 +335,20 @@ class TestConvenienceFunction:
         if not files:
             pytest.skip("No parquet files available")
 
-        result = analyze_gg_diagram(str(files[0]), max_g_reference=1.3)
+        # Find a file with GPS acceleration columns
+        import pandas as pd
+        target_file = None
+        for f in files:
+            cols = pd.read_parquet(f, columns=[]).columns.tolist()
+            # Re-read just column names by reading 0 rows
+            cols = pd.read_parquet(f).columns.tolist()
+            if any('LatAcc' in c for c in cols):
+                target_file = f
+                break
+        if target_file is None:
+            pytest.skip("No parquet files with GPS LatAcc/LonAcc columns")
+
+        result = analyze_gg_diagram(str(target_file), max_g_reference=1.3)
 
         assert isinstance(result, GGAnalysisResult)
         assert result.stats.points_count > 0

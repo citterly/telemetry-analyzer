@@ -9,12 +9,15 @@ echo "=== aim-telemetry Bootstrap ==="
 # Confirm directory
 echo "Working directory: $(pwd)"
 
-# Activate conda environment
-if [ -f ~/miniconda3/bin/activate ]; then
+# Activate virtual environment
+if [ -d "venv" ]; then
+    source venv/bin/activate
+    echo "Venv activated: $(which python)"
+elif [ -f ~/miniconda3/bin/activate ]; then
     source ~/miniconda3/bin/activate
     echo "Conda activated"
 else
-    echo "Warning: Conda not found, using system Python"
+    echo "Warning: No venv or conda found, using system Python"
 fi
 
 # Install/verify dependencies
@@ -29,7 +32,7 @@ if curl -s http://127.0.0.1:8000/health > /dev/null 2>&1; then
     echo "Server already running at http://127.0.0.1:8000"
 else
     echo "Starting server..."
-    nohup uvicorn src.main.app:app --host 127.0.0.1 --port 8000 > /tmp/telemetry-server.log 2>&1 &
+    nohup python -m uvicorn src.main.app:app --host 127.0.0.1 --port 8000 > /tmp/telemetry-server.log 2>&1 &
     sleep 2
     if curl -s http://127.0.0.1:8000/health > /dev/null 2>&1; then
         echo "Server started at http://127.0.0.1:8000"
