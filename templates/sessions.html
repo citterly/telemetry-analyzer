@@ -1,0 +1,209 @@
+{% extends "base.html" %}
+
+{% block title %}Sessions - Telemetry Analyzer{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h1>Sessions</h1>
+        <p class="text-muted">Browse and manage track sessions</p>
+    </div>
+    <div class="col-auto">
+        <a href="/sessions/import" class="btn btn-primary">
+            <i class="bi bi-upload"></i> Import Session
+        </a>
+    </div>
+</div>
+
+<!-- Filter Bar -->
+<div class="card mb-4">
+    <div class="card-body">
+        <div class="row g-3">
+            <div class="col-md-3">
+                <label for="filterTrack" class="form-label">Track</label>
+                <select class="form-control" id="filterTrack">
+                    <option value="">All Tracks</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label for="filterSessionType" class="form-label">Session Type</label>
+                <select class="form-control" id="filterSessionType">
+                    <option value="">All Types</option>
+                    <option value="practice">Practice</option>
+                    <option value="qualifying">Qualifying</option>
+                    <option value="race">Race</option>
+                    <option value="test">Test</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label for="filterStatus" class="form-label">Status</label>
+                <select class="form-control" id="filterStatus">
+                    <option value="">All Status</option>
+                    <option value="pending">Pending</option>
+                    <option value="confirmed">Confirmed</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">&nbsp;</label>
+                <button class="btn btn-secondary w-100" id="clearFilters">Clear Filters</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Sessions Table -->
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0">Track Sessions</h5>
+    </div>
+    <div class="card-body">
+        <div id="loadingSpinner" class="text-center py-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-2 text-muted">Loading sessions...</p>
+        </div>
+
+        <div id="sessionsTableContainer" style="display: none;">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Track</th>
+                            <th>Vehicle</th>
+                            <th>Laps</th>
+                            <th>Best Time</th>
+                            <th>Type</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="sessionsTableBody">
+                    </tbody>
+                </table>
+            </div>
+
+            <div id="noSessionsMessage" class="text-center py-5" style="display: none;">
+                <p class="text-muted">No sessions found matching the filters.</p>
+                <a href="/sessions/import" class="btn btn-primary">Import Your First Session</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+let allSessions = [];
+
+async function loadSessions() {
+    try {
+        const response = await apiCall('/api/v2/sessions');
+        allSessions = response.sessions || [];
+
+        // Populate track filter
+        const tracks = [...new Set(allSessions.map(s => s.track_name).filter(Boolean))];
+        const trackSelect = document.getElementById('filterTrack');
+        tracks.forEach(track => {
+            const option = document.createElement('option');
+            option.value = track;
+            option.textContent = track;
+            trackSelect.appendChild(option);
+        });
+
+        renderSessions();
+    } catch (error) {
+        showAlert(`Failed to load sessions: ${error.message}`, 'danger');
+        document.getElementById('loadingSpinner').style.display = 'none';
+    }
+}
+
+function renderSessions() {
+    const tbody = document.getElementById('sessionsTableBody');
+    const container = document.getElementById('sessionsTableContainer');
+    const loading = document.getElementById('loadingSpinner');
+    const noSessions = document.getElementById('noSessionsMessage');
+
+    // Apply filters
+    const trackFilter = document.getElementById('filterTrack').value;
+    const typeFilter = document.getElementById('filterSessionType').value;
+    const statusFilter = document.getElementById('filterStatus').value;
+
+    const filtered = allSessions.filter(session => {
+        if (trackFilter && session.track_name !== trackFilter) return false;
+        if (typeFilter && session.session_type !== typeFilter) return false;
+        if (statusFilter && session.status !== statusFilter) return false;
+        return true;
+    });
+
+    // Clear table
+    tbody.innerHTML = '';
+
+    if (filtered.length === 0) {
+        loading.style.display = 'none';
+        container.style.display = 'block';
+        noSessions.style.display = 'block';
+        return;
+    }
+
+    noSessions.style.display = 'none';
+
+    // Sort by date descending
+    filtered.sort((a, b) => new Date(b.session_date) - new Date(a.session_date));
+
+    filtered.forEach(session => {
+        const row = document.createElement('tr');
+        row.style.cursor = 'pointer';
+
+        const date = new Date(session.session_date).toLocaleString();
+        const bestTime = session.best_lap_time ? formatLapTime(session.best_lap_time) : 'N/A';
+
+        const statusBadge = session.status === 'confirmed'
+            ? '<span class="badge bg-success">Confirmed</span>'
+            : '<span class="badge bg-warning">Pending</span>';
+
+        const typeBadge = `<span class="badge bg-info">${session.session_type || 'unknown'}</span>`;
+
+        row.innerHTML = `
+            <td>${date}</td>
+            <td>${session.track_name || 'Unknown'}</td>
+            <td>${session.vehicle_name || 'N/A'}</td>
+            <td>${session.total_laps || 0}</td>
+            <td>${bestTime}</td>
+            <td>${typeBadge}</td>
+            <td>${statusBadge}</td>
+            <td>
+                <a href="/sessions/${session.id}" class="btn btn-sm btn-outline-primary">View</a>
+            </td>
+        `;
+
+        row.addEventListener('click', (e) => {
+            if (e.target.tagName !== 'A' && e.target.tagName !== 'BUTTON') {
+                window.location.href = `/sessions/${session.id}`;
+            }
+        });
+
+        tbody.appendChild(row);
+    });
+
+    loading.style.display = 'none';
+    container.style.display = 'block';
+}
+
+// Filter event listeners
+document.getElementById('filterTrack').addEventListener('change', renderSessions);
+document.getElementById('filterSessionType').addEventListener('change', renderSessions);
+document.getElementById('filterStatus').addEventListener('change', renderSessions);
+
+document.getElementById('clearFilters').addEventListener('click', () => {
+    document.getElementById('filterTrack').value = '';
+    document.getElementById('filterSessionType').value = '';
+    document.getElementById('filterStatus').value = '';
+    renderSessions();
+});
+
+// Load on page load
+loadSessions();
+</script>
+{% endblock %}

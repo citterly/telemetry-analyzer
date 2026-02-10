@@ -1,0 +1,372 @@
+{% extends "base.html" %}
+
+{% block title %}Import Session - Telemetry Analyzer{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h1>Import Session</h1>
+        <p class="text-muted">Import telemetry data from Parquet files</p>
+    </div>
+    <div class="col-auto">
+        <a href="/sessions" class="btn btn-secondary">Back to Sessions</a>
+    </div>
+</div>
+
+<!-- Wizard Steps -->
+<div class="row mb-4">
+    <div class="col">
+        <div class="d-flex justify-content-between">
+            <div class="text-center flex-fill">
+                <div class="rounded-circle bg-primary d-inline-block" style="width: 40px; height: 40px; line-height: 40px;" id="step1Indicator">1</div>
+                <div class="mt-2 small">Select File</div>
+            </div>
+            <div class="text-center flex-fill">
+                <div class="rounded-circle bg-secondary d-inline-block" style="width: 40px; height: 40px; line-height: 40px;" id="step2Indicator">2</div>
+                <div class="mt-2 small">Review Detection</div>
+            </div>
+            <div class="text-center flex-fill">
+                <div class="rounded-circle bg-secondary d-inline-block" style="width: 40px; height: 40px; line-height: 40px;" id="step3Indicator">3</div>
+                <div class="mt-2 small">Session Details</div>
+            </div>
+            <div class="text-center flex-fill">
+                <div class="rounded-circle bg-secondary d-inline-block" style="width: 40px; height: 40px; line-height: 40px;" id="step4Indicator">4</div>
+                <div class="mt-2 small">Confirm</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Step 1: Select File -->
+<div class="card" id="step1">
+    <div class="card-header">
+        <h5 class="mb-0">Step 1: Select Telemetry File</h5>
+    </div>
+    <div class="card-body">
+        <div id="fileLoadingSpinner" class="text-center py-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-2 text-muted">Loading available files...</p>
+        </div>
+
+        <div id="fileListContainer" style="display: none;">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Filename</th>
+                            <th>Size</th>
+                            <th>Modified</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="fileListBody">
+                    </tbody>
+                </table>
+            </div>
+
+            <div id="noFilesMessage" class="text-center py-5" style="display: none;">
+                <p class="text-muted">No Parquet files found.</p>
+                <a href="/upload" class="btn btn-primary">Upload Telemetry Data</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Step 2: Review Detection Results -->
+<div class="card" id="step2" style="display: none;">
+    <div class="card-header">
+        <h5 class="mb-0">Step 2: Review Detection Results</h5>
+    </div>
+    <div class="card-body">
+        <div id="detectionResults">
+            <div class="alert alert-info">
+                <strong>Track Detected:</strong> <span id="detectedTrack"></span><br>
+                <strong>Confidence:</strong> <span id="detectedConfidence"></span>
+            </div>
+
+            <h6>Lap Classifications</h6>
+            <div class="table-responsive">
+                <table class="table table-sm">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Lap Time</th>
+                            <th>Classification</th>
+                            <th>Confidence</th>
+                        </tr>
+                    </thead>
+                    <tbody id="detectionLapsBody">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="mt-3">
+            <button class="btn btn-secondary" onclick="goToStep(1)">Back</button>
+            <button class="btn btn-primary" onclick="goToStep(3)">Continue</button>
+        </div>
+    </div>
+</div>
+
+<!-- Step 3: Session Details -->
+<div class="card" id="step3" style="display: none;">
+    <div class="card-header">
+        <h5 class="mb-0">Step 3: Enter Session Details</h5>
+    </div>
+    <div class="card-body">
+        <form id="sessionDetailsForm">
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label for="sessionType" class="form-label">Session Type</label>
+                    <select class="form-control" id="sessionType" required>
+                        <option value="">Select type...</option>
+                        <option value="practice">Practice</option>
+                        <option value="qualifying">Qualifying</option>
+                        <option value="race">Race</option>
+                        <option value="test">Test</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <label for="sessionNotes" class="form-label">Notes</label>
+                <textarea class="form-control" id="sessionNotes" rows="3" placeholder="Optional notes about this session..."></textarea>
+            </div>
+
+            <div class="mt-3">
+                <button type="button" class="btn btn-secondary" onclick="goToStep(2)">Back</button>
+                <button type="button" class="btn btn-primary" onclick="goToStep(4)">Continue</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Step 4: Confirm -->
+<div class="card" id="step4" style="display: none;">
+    <div class="card-header">
+        <h5 class="mb-0">Step 4: Confirm Import</h5>
+    </div>
+    <div class="card-body">
+        <div class="alert alert-success">
+            <h6>Ready to Import</h6>
+            <p class="mb-0">Review the information below and click Confirm to complete the import.</p>
+        </div>
+
+        <dl class="row">
+            <dt class="col-sm-3">File:</dt>
+            <dd class="col-sm-9" id="confirmFile"></dd>
+
+            <dt class="col-sm-3">Track:</dt>
+            <dd class="col-sm-9" id="confirmTrack"></dd>
+
+            <dt class="col-sm-3">Session Type:</dt>
+            <dd class="col-sm-9" id="confirmType"></dd>
+
+            <dt class="col-sm-3">Total Laps:</dt>
+            <dd class="col-sm-9" id="confirmLaps"></dd>
+
+            <dt class="col-sm-3">Notes:</dt>
+            <dd class="col-sm-9" id="confirmNotes"></dd>
+        </dl>
+
+        <div class="mt-3">
+            <button class="btn btn-secondary" onclick="goToStep(3)">Back</button>
+            <button class="btn btn-success" id="confirmButton" onclick="confirmImport()">
+                <span id="confirmButtonText">Confirm Import</span>
+                <span id="confirmButtonSpinner" style="display: none;" class="spinner-border spinner-border-sm ms-2"></span>
+            </button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+let currentStep = 1;
+let selectedFile = null;
+let importedSessionId = null;
+let detectionData = null;
+
+async function loadParquetFiles() {
+    try {
+        const response = await apiCall('/api/parquet/list');
+        const files = response.parquet_files || [];
+
+        const tbody = document.getElementById('fileListBody');
+        const container = document.getElementById('fileListContainer');
+        const loading = document.getElementById('fileLoadingSpinner');
+        const noFiles = document.getElementById('noFilesMessage');
+
+        if (files.length === 0) {
+            loading.style.display = 'none';
+            container.style.display = 'block';
+            noFiles.style.display = 'block';
+            return;
+        }
+
+        files.forEach(file => {
+            const row = document.createElement('tr');
+            const size = file.size_mb ? `${file.size_mb} MB` : 'N/A';
+            const rows = file.rows || 'N/A';
+
+            row.innerHTML = `
+                <td>${file.filename}</td>
+                <td>${size}</td>
+                <td>${rows} rows</td>
+                <td>
+                    <button class="btn btn-sm btn-primary" onclick="importFile('${file.full_path || file.path}', '${file.filename}')">
+                        Import
+                    </button>
+                </td>
+            `;
+
+            tbody.appendChild(row);
+        });
+
+        loading.style.display = 'none';
+        container.style.display = 'block';
+    } catch (error) {
+        showAlert(`Failed to load files: ${error.message}`, 'danger');
+    }
+}
+
+async function importFile(path, name) {
+    try {
+        showAlert('Importing file and detecting track/laps...', 'info');
+        selectedFile = { path, name };
+
+        const response = await apiCall('/api/v2/sessions/import', {
+            method: 'POST',
+            body: JSON.stringify({ parquet_path: path })
+        });
+
+        importedSessionId = response.session_id;
+        detectionData = response;
+
+        // Populate step 2
+        document.getElementById('detectedTrack').textContent = response.detected_track || 'Unknown';
+        document.getElementById('detectedConfidence').innerHTML = `
+            <div class="progress" style="width: 100px; display: inline-block;">
+                <div class="progress-bar bg-success" role="progressbar" style="width: ${(response.track_confidence * 100).toFixed(0)}%">
+                    ${(response.track_confidence * 100).toFixed(0)}%
+                </div>
+            </div>
+        `;
+
+        const lapsBody = document.getElementById('detectionLapsBody');
+        lapsBody.innerHTML = '';
+
+        response.lap_classifications.forEach(lap => {
+            const badgeClass = getClassificationBadgeClass(lap.classification);
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${lap.lap_number}</td>
+                <td>${formatLapTime(lap.lap_time)}</td>
+                <td><span class="badge ${badgeClass}">${lap.classification}</span></td>
+                <td>
+                    <div class="progress" style="width: 60px;">
+                        <div class="progress-bar" role="progressbar" style="width: ${(lap.confidence * 100).toFixed(0)}%">
+                            ${(lap.confidence * 100).toFixed(0)}%
+                        </div>
+                    </div>
+                </td>
+            `;
+            lapsBody.appendChild(row);
+        });
+
+        goToStep(2);
+        showAlert('Track and laps detected successfully!', 'success');
+    } catch (error) {
+        showAlert(`Import failed: ${error.message}`, 'danger');
+    }
+}
+
+function goToStep(step) {
+    // Validate current step before proceeding
+    if (step > currentStep) {
+        if (currentStep === 3) {
+            const type = document.getElementById('sessionType').value;
+            if (!type) {
+                showAlert('Please select a session type', 'warning');
+                return;
+            }
+        }
+    }
+
+    // Update indicators
+    for (let i = 1; i <= 4; i++) {
+        const indicator = document.getElementById(`step${i}Indicator`);
+        indicator.classList.remove('bg-primary', 'bg-success');
+        indicator.classList.add(i < step ? 'bg-success' : i === step ? 'bg-primary' : 'bg-secondary');
+    }
+
+    // Hide all steps
+    for (let i = 1; i <= 4; i++) {
+        document.getElementById(`step${i}`).style.display = 'none';
+    }
+
+    // Show current step
+    document.getElementById(`step${step}`).style.display = 'block';
+    currentStep = step;
+
+    // Populate step 4 confirmation
+    if (step === 4) {
+        document.getElementById('confirmFile').textContent = selectedFile.name;
+        document.getElementById('confirmTrack').textContent = detectionData.detected_track || 'Unknown';
+        document.getElementById('confirmType').textContent = document.getElementById('sessionType').value;
+        document.getElementById('confirmLaps').textContent = detectionData.lap_count || 0;
+        document.getElementById('confirmNotes').textContent = document.getElementById('sessionNotes').value || 'None';
+    }
+}
+
+async function confirmImport() {
+    const button = document.getElementById('confirmButton');
+    const buttonText = document.getElementById('confirmButtonText');
+    const spinner = document.getElementById('confirmButtonSpinner');
+
+    try {
+        button.disabled = true;
+        buttonText.style.display = 'none';
+        spinner.style.display = 'inline-block';
+
+        const sessionType = document.getElementById('sessionType').value;
+        const notes = document.getElementById('sessionNotes').value;
+
+        await apiCall(`/api/v2/sessions/${importedSessionId}/confirm`, {
+            method: 'PUT',
+            body: JSON.stringify({
+                session_type: sessionType,
+                notes: notes
+            })
+        });
+
+        showAlert('Session imported successfully!', 'success');
+        setTimeout(() => {
+            window.location.href = `/sessions/${importedSessionId}`;
+        }, 1500);
+    } catch (error) {
+        showAlert(`Failed to confirm import: ${error.message}`, 'danger');
+        button.disabled = false;
+        buttonText.style.display = 'inline';
+        spinner.style.display = 'none';
+    }
+}
+
+function getClassificationBadgeClass(classification) {
+    const classes = {
+        'hot_lap': 'bg-success',
+        'out_lap': 'bg-info',
+        'in_lap': 'bg-warning',
+        'warm_up': 'bg-warning',
+        'cool_down': 'bg-secondary',
+        'normal': 'bg-secondary'
+    };
+    return classes[classification] || 'bg-secondary';
+}
+
+// Load files on page load
+loadParquetFiles();
+</script>
+{% endblock %}

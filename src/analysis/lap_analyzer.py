@@ -8,6 +8,7 @@ from typing import Dict, List, Tuple, Optional
 from dataclasses import dataclass
 
 from src.config.vehicle_config import PROCESSING_CONFIG, TRACK_CONFIG
+from src.config.tracks import Track
 
 @dataclass
 class LapInfo:
@@ -30,30 +31,44 @@ class LapAnalyzer:
         self.session_data = session_data
         self.laps = []
         self.fastest_lap = None
+        self._min_lap_time = None
+        self._max_lap_time = None
         
-    def detect_laps(self) -> List[LapInfo]:
+    def detect_laps(self, track: Optional['Track'] = None) -> List[LapInfo]:
         """
         Detect individual laps by finding start/finish line crossings
-        Uses specified GPS coordinates for Road America start/finish line
+
+        Args:
+            track: Optional Track object with start/finish GPS coordinates and timing constraints.
+                   If None, falls back to TRACK_CONFIG from vehicle_config.
         """
         lat = self.session_data['latitude']
         lon = self.session_data['longitude']
         time = self.session_data['time']
-        
-        # Use actual Road America start/finish line coordinates
-        from ..config.vehicle_config import TRACK_CONFIG
-        start_lat, start_lon = TRACK_CONFIG['start_finish_gps']
-        
-        print(f"Detecting laps using Road America start/finish at: {start_lat:.6f}, {start_lon:.6f}")
-        
+
+        # Use track-specific or default start/finish coordinates
+        if track is not None:
+            start_lat = track.start_finish_lat
+            start_lon = track.start_finish_lon
+            self._min_lap_time = track.min_lap_time_seconds
+            self._max_lap_time = track.max_lap_time_seconds
+            threshold = PROCESSING_CONFIG['start_finish_threshold']
+            print(f"Detecting laps using {track.name} start/finish at: {start_lat:.6f}, {start_lon:.6f}")
+        else:
+            from ..config.vehicle_config import TRACK_CONFIG
+            start_lat, start_lon = TRACK_CONFIG['start_finish_gps']
+            self._min_lap_time = PROCESSING_CONFIG['min_lap_time_seconds']
+            self._max_lap_time = PROCESSING_CONFIG['max_lap_time_seconds']
+            threshold = PROCESSING_CONFIG['start_finish_threshold']
+            print(f"Detecting laps using Road America start/finish at: {start_lat:.6f}, {start_lon:.6f}")
+
         # Debug GPS detection
-        self.debug_lap_detection_fixed(start_lat, start_lon)
+        self.debug_lap_detection_fixed(start_lat, start_lon, threshold)
         
         # Calculate distance from start/finish line
         distances = np.sqrt((lat - start_lat)**2 + (lon - start_lon)**2)
-        
+
         # Find crossings (close approaches to start/finish)
-        threshold = PROCESSING_CONFIG['start_finish_threshold']
         crossings = self._find_crossings(distances, threshold, time)
         
         if len(crossings) < 2:
@@ -71,19 +86,19 @@ class LapAnalyzer:
         self.laps = laps
         return laps
     
-    def debug_lap_detection_fixed(self, start_lat: float, start_lon: float) -> None:
+    def debug_lap_detection_fixed(self, start_lat: float, start_lon: float, threshold: float) -> None:
         """Print detailed debugging info for lap detection with fixed coordinates"""
         lat = self.session_data['latitude']
         lon = self.session_data['longitude']
         time = self.session_data['time']
-        
+
         # Calculate distances to fixed start/finish
         distances = np.sqrt((lat - start_lat)**2 + (lon - start_lon)**2)
-        
+
         print(f"GPS Lap Detection Debug (Fixed Coordinates):")
         print(f"  Start/Finish: {start_lat:.6f}, {start_lon:.6f}")
         print(f"  Distance range: {distances.min():.6f} - {distances.max():.6f}")
-        print(f"  Current threshold: {PROCESSING_CONFIG['start_finish_threshold']:.6f}")
+        print(f"  Current threshold: {threshold:.6f}")
         
         # Find and show the closest approaches
         min_distance = distances.min()
@@ -202,9 +217,9 @@ class LapAnalyzer:
     
     def _is_valid_lap(self, lap_info: LapInfo) -> bool:
         """Check if lap has reasonable characteristics"""
-        min_time = PROCESSING_CONFIG['min_lap_time_seconds']
-        max_time = PROCESSING_CONFIG['max_lap_time_seconds']
-        
+        min_time = self._min_lap_time if self._min_lap_time is not None else PROCESSING_CONFIG['min_lap_time_seconds']
+        max_time = self._max_lap_time if self._max_lap_time is not None else PROCESSING_CONFIG['max_lap_time_seconds']
+
         if lap_info.lap_time < min_time or lap_info.lap_time > max_time:
             print(f"Lap {lap_info.lap_number}: {lap_info.lap_time:.1f}s - outside valid range ({min_time}-{max_time}s)")
             return False

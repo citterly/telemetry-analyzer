@@ -1,0 +1,357 @@
+{% extends "base.html" %}
+
+{% block title %}Session: {{ session.track_name }} - Telemetry Analyzer{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h1>Session: {{ session.track_name }} - {{ session.session_date }}</h1>
+        <p class="text-muted">{{ session.session_type|capitalize }} session details and lap analysis</p>
+    </div>
+    <div class="col-auto">
+        <a href="/sessions" class="btn btn-secondary">Back to Sessions</a>
+    </div>
+</div>
+
+<!-- Session Info Card -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0">Session Information</h5>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-3">
+                <h6 class="text-muted">Track</h6>
+                <p class="fs-5">{{ session.track_name }}</p>
+            </div>
+            <div class="col-md-3">
+                <h6 class="text-muted">Vehicle</h6>
+                <p class="fs-5">{{ session.vehicle_id or 'N/A' }}</p>
+            </div>
+            <div class="col-md-3">
+                <h6 class="text-muted">Date</h6>
+                <p class="fs-5">{{ session.session_date }}</p>
+            </div>
+            <div class="col-md-3">
+                <h6 class="text-muted">Type</h6>
+                <p class="fs-5">
+                    <span class="badge bg-info">{{ session.session_type or 'unknown' }}</span>
+                    {% if session.import_status == 'confirmed' %}
+                    <span class="badge bg-success">Confirmed</span>
+                    {% else %}
+                    <span class="badge bg-warning">Pending</span>
+                    {% endif %}
+                </p>
+            </div>
+        </div>
+
+        <hr>
+
+        <div class="row">
+            <div class="col-md-3">
+                <h6 class="text-muted">Total Laps</h6>
+                <p class="fs-5">{{ session.total_laps or 0 }}</p>
+            </div>
+            <div class="col-md-3">
+                <h6 class="text-muted">Best Lap Time</h6>
+                <p class="fs-5" id="bestLapTime">Loading...</p>
+            </div>
+            <div class="col-md-3">
+                <h6 class="text-muted">Duration</h6>
+                <p class="fs-5">{{ session.total_duration or 'N/A' }}</p>
+            </div>
+            <div class="col-md-3">
+                <h6 class="text-muted">Data File</h6>
+                <p class="fs-6 text-break">{{ session.parquet_path.split('/')[-1] if '/' in session.parquet_path else session.parquet_path }}</p>
+            </div>
+        </div>
+
+        {% if session.notes %}
+        <hr>
+        <div class="row">
+            <div class="col">
+                <h6 class="text-muted">Notes</h6>
+                <p>{{ session.notes }}</p>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Lap Analysis Table -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0">Lap Analysis</h5>
+    </div>
+    <div class="card-body">
+        <div id="lapsLoadingSpinner" class="text-center py-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-2 text-muted">Loading laps...</p>
+        </div>
+
+        <div id="lapsTableContainer" style="display: none;">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Lap Time</th>
+                            <th>Gap</th>
+                            <th>Classification</th>
+                            <th>Confidence</th>
+                            <th>Override</th>
+                        </tr>
+                    </thead>
+                    <tbody id="lapsTableBody">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Setup Section -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0">
+            <button class="btn btn-link text-decoration-none text-white p-0" type="button" data-bs-toggle="collapse" data-bs-target="#setupCollapse">
+                Setup & Conditions
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chevron-down" viewBox="0 0 16 16">
+                    <path fill-rule="evenodd" d="M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z"/>
+                </svg>
+            </button>
+        </h5>
+    </div>
+    <div class="collapse" id="setupCollapse">
+        <div class="card-body">
+            <form id="setupForm">
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <h6>Tire Pressures (PSI)</h6>
+                        <div class="row g-2">
+                            <div class="col-6">
+                                <label class="form-label small">Front Left</label>
+                                <input type="number" class="form-control form-control-sm" id="tireFrontLeft" step="0.1" placeholder="0.0">
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label small">Front Right</label>
+                                <input type="number" class="form-control form-control-sm" id="tireFrontRight" step="0.1" placeholder="0.0">
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label small">Rear Left</label>
+                                <input type="number" class="form-control form-control-sm" id="tireRearLeft" step="0.1" placeholder="0.0">
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label small">Rear Right</label>
+                                <input type="number" class="form-control form-control-sm" id="tireRearRight" step="0.1" placeholder="0.0">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-md-6">
+                        <h6>Conditions</h6>
+                        <div class="mb-2">
+                            <label class="form-label small">Fuel Level</label>
+                            <input type="text" class="form-control form-control-sm" id="fuelLevel" placeholder="e.g., 1/2 tank">
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label small">Temperature</label>
+                            <input type="text" class="form-control form-control-sm" id="temperature" placeholder="e.g., 75°F">
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label small">Weather</label>
+                            <input type="text" class="form-control form-control-sm" id="weather" placeholder="e.g., Sunny, Cloudy">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Setup Notes</label>
+                    <textarea class="form-control" id="setupNotes" rows="3" placeholder="Spring rates, damper settings, alignment, etc..."></textarea>
+                </div>
+
+                <button type="button" class="btn btn-primary" onclick="saveSetup()">Save Setup</button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Analysis Links -->
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0">Analysis Tools</h5>
+    </div>
+    <div class="card-body">
+        <div class="row g-3">
+            <div class="col-md-4">
+                <a href="/parquet?file={{ session.parquet_path }}" class="btn btn-outline-primary w-100">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-map me-2" viewBox="0 0 16 16">
+                        <path fill-rule="evenodd" d="M15.817.113A.5.5 0 0 1 16 .5v14a.5.5 0 0 1-.402.49l-5 1a.502.502 0 0 1-.196 0L5.5 15.01l-4.902.98A.5.5 0 0 1 0 15.5v-14a.5.5 0 0 1 .402-.49l5-1a.5.5 0 0 1 .196 0L10.5.99l4.902-.98a.5.5 0 0 1 .415.103zM10 1.91l-4-.8v12.98l4 .8V1.91zm1 12.98 4-.8V1.11l-4 .8v12.98zm-6-.8V1.11l-4 .8v12.98l4-.8z"/>
+                    </svg>
+                    View Track Map
+                </a>
+            </div>
+            <div class="col-md-4">
+                <a href="/gg-diagram?file={{ session.parquet_path }}" class="btn btn-outline-primary w-100">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-bullseye me-2" viewBox="0 0 16 16">
+                        <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/>
+                        <path d="M8 13A5 5 0 1 1 8 3a5 5 0 0 1 0 10zm0 1A6 6 0 1 0 8 2a6 6 0 0 0 0 12z"/>
+                        <path d="M8 11a3 3 0 1 1 0-6 3 3 0 0 1 0 6zm0 1a4 4 0 1 0 0-8 4 4 0 0 0 0 8z"/>
+                        <path d="M9.5 8a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0z"/>
+                    </svg>
+                    G-G Diagram
+                </a>
+            </div>
+            <div class="col-md-4">
+                <a href="/corner-analysis?file={{ session.parquet_path }}" class="btn btn-outline-primary w-100">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-signpost-split me-2" viewBox="0 0 16 16">
+                        <path d="M7 7V1.414a1 1 0 0 1 2 0V2h5a1 1 0 0 1 .8.4l.975 1.3a.5.5 0 0 1 0 .6L14.8 5.6a1 1 0 0 1-.8.4H9v10H7v-5H2a1 1 0 0 1-.8-.4L.225 9.3a.5.5 0 0 1 0-.6L1.2 7.4A1 1 0 0 1 2 7h5zm1 3V8H2l-.75 1L2 10h6zm0-5h6l.75-1L14 3H8v2z"/>
+                    </svg>
+                    Corner Analysis
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const sessionId = {{ session.id }};
+let lapsData = [];
+
+async function loadLaps() {
+    try {
+        const response = await apiCall(`/api/v2/sessions/${sessionId}/laps`);
+        lapsData = response.laps || [];
+
+        renderLaps();
+
+        // Update best lap time in header
+        const bestLap = lapsData.reduce((best, lap) => {
+            if (!best || (lap.lap_time && lap.lap_time < best.lap_time)) {
+                return lap;
+            }
+            return best;
+        }, null);
+
+        document.getElementById('bestLapTime').textContent = bestLap ? formatLapTime(bestLap.lap_time) : 'N/A';
+    } catch (error) {
+        showAlert(`Failed to load laps: ${error.message}`, 'danger');
+        document.getElementById('lapsLoadingSpinner').style.display = 'none';
+    }
+}
+
+function renderLaps() {
+    const tbody = document.getElementById('lapsTableBody');
+    const container = document.getElementById('lapsTableContainer');
+    const loading = document.getElementById('lapsLoadingSpinner');
+
+    tbody.innerHTML = '';
+
+    if (lapsData.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">No laps found</td></tr>';
+    } else {
+        lapsData.forEach((lap, index) => {
+            const row = document.createElement('tr');
+
+            const badgeClass = getClassificationBadgeClass(lap.classification);
+            const gap = lap.gap_to_best != null ?
+                `+${lap.gap_to_best.toFixed(3)}s` : '-';
+
+            row.innerHTML = `
+                <td>${lap.lap_number}</td>
+                <td>${formatLapTime(lap.lap_time)}</td>
+                <td class="text-muted small">${gap}</td>
+                <td><span class="badge ${badgeClass}">${lap.classification}</span></td>
+                <td>
+                    <div class="progress" style="width: 80px;">
+                        <div class="progress-bar" role="progressbar" style="width: ${(lap.classification_confidence * 100).toFixed(0)}%">
+                            ${(lap.classification_confidence * 100).toFixed(0)}%
+                        </div>
+                    </div>
+                </td>
+                <td>
+                    <select class="form-select form-select-sm" style="width: 150px;"
+                            onchange="updateClassification(${lap.lap_number}, this.value)">
+                        <option value="">Override...</option>
+                        <option value="hot_lap">Hot Lap</option>
+                        <option value="out_lap">Out Lap</option>
+                        <option value="in_lap">In Lap</option>
+                        <option value="warm_up">Warm Up</option>
+                        <option value="cool_down">Cool Down</option>
+                        <option value="normal">Normal</option>
+                    </select>
+                </td>
+            `;
+
+            tbody.appendChild(row);
+        });
+    }
+
+    loading.style.display = 'none';
+    container.style.display = 'block';
+}
+
+async function updateClassification(lapNumber, newClassification) {
+    if (!newClassification) return;
+
+    try {
+        await apiCall(`/api/v2/sessions/${sessionId}/laps/${lapNumber}/classify`, {
+            method: 'PUT',
+            body: JSON.stringify({ classification: newClassification })
+        });
+
+        showAlert('Lap classification updated', 'success');
+
+        // Reload laps to reflect change
+        await loadLaps();
+    } catch (error) {
+        showAlert(`Failed to update classification: ${error.message}`, 'danger');
+    }
+}
+
+async function saveSetup() {
+    try {
+        const setup = {
+            tire_pressures: {
+                front_left: parseFloat(document.getElementById('tireFrontLeft').value) || null,
+                front_right: parseFloat(document.getElementById('tireFrontRight').value) || null,
+                rear_left: parseFloat(document.getElementById('tireRearLeft').value) || null,
+                rear_right: parseFloat(document.getElementById('tireRearRight').value) || null
+            },
+            fuel_level: document.getElementById('fuelLevel').value || null,
+            temperature: document.getElementById('temperature').value || null,
+            weather: document.getElementById('weather').value || null,
+            notes: document.getElementById('setupNotes').value || null
+        };
+
+        await apiCall(`/api/v2/sessions/${sessionId}/setup`, {
+            method: 'PUT',
+            body: JSON.stringify(setup)
+        });
+
+        showAlert('Setup information saved', 'success');
+    } catch (error) {
+        showAlert(`Failed to save setup: ${error.message}`, 'danger');
+    }
+}
+
+function getClassificationBadgeClass(classification) {
+    const classes = {
+        'hot_lap': 'bg-success',
+        'out_lap': 'bg-info',
+        'in_lap': 'bg-warning',
+        'warm_up': 'bg-warning',
+        'cool_down': 'bg-secondary',
+        'normal': 'bg-secondary'
+    };
+    return classes[classification] || 'bg-secondary';
+}
+
+// Load laps on page load
+loadLaps();
+</script>
+{% endblock %}
