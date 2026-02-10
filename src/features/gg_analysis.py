@@ -242,12 +242,15 @@ class GGAnalyzer:
         Returns:
             GGAnalysisResult with statistics and points
         """
-        # Filter out invalid/zero data points
+        # Filter out invalid/zero data points - apply mask to ALL arrays
         valid_mask = ~(np.isnan(lat_acc_data) | np.isnan(lon_acc_data))
 
         lat_acc = lat_acc_data[valid_mask]
         lon_acc = lon_acc_data[valid_mask]
         time = time_data[valid_mask]
+        speed_filtered = speed_data[valid_mask] if speed_data is not None else None
+        gear_filtered = gear_data[valid_mask] if gear_data is not None else None
+        lap_filtered = lap_data[valid_mask] if lap_data is not None else None
 
         # Calculate combined g-force for each point
         total_g = np.sqrt(lat_acc**2 + lon_acc**2)
@@ -284,10 +287,10 @@ class GGAnalyzer:
                 lat_acc=float(lat_acc[i]),
                 lon_acc=float(lon_acc[i]),
                 total_g=float(total_g[i]),
-                speed_mph=float(speed_data[valid_mask][i]) if speed_data is not None else 0.0,
+                speed_mph=float(speed_filtered[i]) if speed_filtered is not None else 0.0,
                 throttle_pct=float(throttle[i]),
-                gear=int(gear_data[valid_mask][i]) if gear_data is not None else 0,
-                lap_number=int(lap_data[valid_mask][i]) if lap_data is not None else 0,
+                gear=int(gear_filtered[i]) if gear_filtered is not None else 0,
+                lap_number=int(lap_filtered[i]) if lap_filtered is not None else 0,
                 lat=float(gps_lat[i]),
                 lon=float(gps_lon[i])
             )
@@ -313,8 +316,8 @@ class GGAnalyzer:
         )
 
         # Get unique lap numbers
-        if lap_data is not None:
-            lap_numbers = sorted(list(set(int(x) for x in lap_data[valid_mask] if x > 0)))
+        if lap_filtered is not None:
+            lap_numbers = sorted(list(set(int(x) for x in lap_filtered if x > 0)))
         else:
             lap_numbers = []
 

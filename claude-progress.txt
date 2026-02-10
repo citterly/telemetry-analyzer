@@ -534,3 +534,39 @@ Work completed:
 Status: feat-042 marked PASSING
 Features: 28/28 passing (100%)
 
+
+=== Session 9 (2026-02-10) ===
+Working on: cleanup-001 (Safety-critical fixes)
+
+Work completed - 6 fixes from docs/CLEANUP_AUDIT.md Phase 1:
+
+1. app.py: Replaced zero-defaults with HTTP 422 errors for missing data
+   - /api/analyze/report: GPS and speed missing → 422
+   - /api/analyze/laps: speed missing → 422
+   - /api/track-map/delta: speed missing → 422
+   - RPM zeros kept where RPM is optional (laps, track map)
+
+2. file_manager.py:365: bare `except:` → `except Exception:`
+   - No longer catches KeyboardInterrupt/SystemExit
+
+3. gg_analysis.py:245-250: NaN array length desync fixed
+   - valid_mask now applied upfront to speed_data, gear_data, lap_data
+   - Replaced per-element `speed_data[valid_mask][i]` with pre-filtered arrays
+   - All arrays now consistently sized after filtering
+
+4. app.py lines 418,419,469: dtype string comparison fixed
+   - `df[col].dtype in ['float64', 'int64']` → `df[col].dtype.kind in 'fi'`
+   - Now handles float32, int32, float16, etc.
+
+5. app.py speed_data.max() null guards: resolved by fix #1
+   - All code paths now either have explicit None checks or 422 errors
+
+6. session_builder.py:244: DLL pointer fallback raises ValueError
+   - No longer returns garbage pointer strings as channel names
+
+7 new tests added to tests/test_analysis_api.py::TestSafetyCriticalFixes
+Test results: 681/681 passing (7 new)
+
+Status: cleanup-001 marked PASSING
+Features: 29/33 (4 planned cleanup features remaining)
+

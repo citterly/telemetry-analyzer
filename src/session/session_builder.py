@@ -241,8 +241,8 @@ def _safe_decode(ptr) -> str:
             return f"chan_{ptr}"
         # Try generic cast/decode if possible
         return str(ptr)
-    except Exception:
-        return str(ptr)
+    except Exception as e:
+        raise ValueError(f"Cannot decode DLL pointer {type(ptr)!r}: {e}")
 
 def _normalize_unit_text(text: str) -> str:
     """

@@ -362,7 +362,7 @@ class FileManager:
                     try:
                         date_str = filename_parts[0]
                         metadata.session_date = f"{date_str[:4]}-{date_str[4:6]}-{date_str[6:8]}"
-                    except:
+                    except Exception:
                         pass
                         
         except Exception as e:

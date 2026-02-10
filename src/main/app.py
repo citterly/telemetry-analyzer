@@ -415,8 +415,8 @@ async def view_parquet_file(filename: str, limit: int = 100, offset: int = 0):
             col_stats[col] = {
                 "valid_count": int(valid),
                 "valid_pct": round(100 * valid / len(df), 1),
-                "min": float(df[col].min()) if valid > 0 and df[col].dtype in ['float64', 'int64'] else None,
-                "max": float(df[col].max()) if valid > 0 and df[col].dtype in ['float64', 'int64'] else None,
+                "min": float(df[col].min()) if valid > 0 and df[col].dtype.kind in 'fi' else None,
+                "max": float(df[col].max()) if valid > 0 and df[col].dtype.kind in 'fi' else None,
             }
 
         return {
@@ -466,7 +466,7 @@ async def parquet_summary(filename: str):
 
         for col in df.columns:
             valid = df[col].notna().sum()
-            if valid > 0 and df[col].dtype in ['float64', 'int64']:
+            if valid > 0 and df[col].dtype.kind in 'fi':
                 summary["channels"][col] = {
                     "min": round(float(df[col].min()), 2),
                     "max": round(float(df[col].max()), 2),
@@ -591,12 +591,12 @@ async def analyze_laps(filename: str):
         if lat_data is None or lon_data is None:
             raise HTTPException(status_code=400, detail="GPS data not found in file")
 
+        if speed_data is None:
+            raise HTTPException(status_code=422, detail="Speed data not found in file - required for lap analysis")
+        if speed_data.max() < 100:
+            speed_data = speed_data * 2.237
         if rpm_data is None:
             rpm_data = np.zeros(len(time_data))
-        if speed_data is None:
-            speed_data = np.zeros(len(time_data))
-        elif speed_data.max() < 100:
-            speed_data = speed_data * 2.237
 
         analyzer = LapAnalysis()
         report = analyzer.analyze_from_arrays(
@@ -703,17 +703,14 @@ async def analyze_full_report(filename: str):
         rpm_data = _find_column(df, ['RPM', 'rpm'])
         speed_data = _find_column(df, ['GPS Speed', 'speed', 'Speed'])
 
-        # Use zeros for missing data
-        if lat_data is None:
-            lat_data = np.zeros(len(time_data))
-        if lon_data is None:
-            lon_data = np.zeros(len(time_data))
+        if lat_data is None or lon_data is None:
+            raise HTTPException(status_code=422, detail="GPS data (Latitude/Longitude) not found - required for session report")
+        if speed_data is None:
+            raise HTTPException(status_code=422, detail="Speed data not found - required for session report")
+        if speed_data.max() < 100:
+            speed_data = speed_data * 2.237
         if rpm_data is None:
             rpm_data = np.zeros(len(time_data))
-        if speed_data is None:
-            speed_data = np.zeros(len(time_data))
-        elif speed_data.max() < 100:
-            speed_data = speed_data * 2.237
 
         generator = SessionReportGenerator()
         report = generator.generate_from_arrays(
@@ -780,7 +777,9 @@ async def get_delta_track_map(
 
         lat_data = df[lat_col].values
         lon_data = df[lon_col].values
-        speed_data = df[speed_col].values if speed_col else np.zeros(len(time_data))
+        if speed_col is None:
+            raise HTTPException(status_code=422, detail="Speed data not found - required for lap comparison")
+        speed_data = df[speed_col].values
 
         if speed_data.max() < 100:
             speed_data = speed_data * 2.237
@@ -1017,8 +1016,9 @@ async def get_gg_diagram(
                                 speed_data = speed_data[lap_mask]
                             if throttle_data is not None:
                                 throttle_data = throttle_data[lap_mask]
-                except Exception:
-                    pass  # Continue without filtering SVG arrays
+                except Exception as e:
+                    import logging
+                    logging.warning(f"Lap filtering for SVG arrays failed: {e}")
 
         if format == 'json':
             return result.to_dict()

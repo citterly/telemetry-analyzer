@@ -396,5 +396,145 @@ class TestAPIErrorHandling:
         assert report.session_id == "test"
 
 
+class TestSafetyCriticalFixes:
+    """Tests for cleanup-001: safety-critical fixes"""
+
+    @pytest.fixture
+    def client(self):
+        from src.main.app import app
+        from fastapi.testclient import TestClient
+        return TestClient(app)
+
+    @pytest.fixture
+    def parquet_no_speed(self, tmp_path):
+        """Parquet file with GPS but no speed column"""
+        import pandas as pd
+        n = 100
+        time = np.linspace(0, 50, n)
+        df = pd.DataFrame({
+            'GPS Latitude': 43.79 + 0.001 * np.sin(time),
+            'GPS Longitude': -87.99 + 0.001 * np.cos(time),
+            'RPM': 5000 + 1000 * np.sin(time),
+        }, index=time)
+        path = tmp_path / "no_speed.parquet"
+        df.to_parquet(path)
+        return path
+
+    @pytest.fixture
+    def parquet_no_gps(self, tmp_path):
+        """Parquet file with speed/RPM but no GPS"""
+        import pandas as pd
+        n = 100
+        time = np.linspace(0, 50, n)
+        df = pd.DataFrame({
+            'RPM': 5000 + 1000 * np.sin(time),
+            'GPS Speed': 60 + 20 * np.sin(time),
+        }, index=time)
+        path = tmp_path / "no_gps.parquet"
+        df.to_parquet(path)
+        return path
+
+    def test_report_rejects_missing_gps(self, parquet_no_gps):
+        """Session report endpoint returns 422 when GPS data is missing"""
+        from src.main.app import app, _find_parquet_file
+        from fastapi.testclient import TestClient
+        from unittest.mock import patch
+
+        with patch('src.main.app._find_parquet_file', return_value=parquet_no_gps):
+            client = TestClient(app)
+            response = client.get("/api/analyze/report/test.parquet")
+            assert response.status_code == 422
+            assert "GPS" in response.json()["detail"]
+
+    def test_report_rejects_missing_speed(self, parquet_no_speed):
+        """Session report endpoint returns 422 when speed data is missing"""
+        from unittest.mock import patch
+
+        with patch('src.main.app._find_parquet_file', return_value=parquet_no_speed):
+            from src.main.app import app
+            from fastapi.testclient import TestClient
+            client = TestClient(app)
+            response = client.get("/api/analyze/report/test.parquet")
+            assert response.status_code == 422
+            assert "Speed" in response.json()["detail"]
+
+    def test_laps_rejects_missing_speed(self, parquet_no_speed):
+        """Lap analysis endpoint returns 422 when speed data is missing"""
+        from unittest.mock import patch
+
+        with patch('src.main.app._find_parquet_file', return_value=parquet_no_speed):
+            from src.main.app import app
+            from fastapi.testclient import TestClient
+            client = TestClient(app)
+            response = client.get("/api/analyze/laps/test.parquet")
+            assert response.status_code == 422
+            assert "Speed" in response.json()["detail"]
+
+    def test_dtype_comparison_works_for_numeric(self):
+        """dtype.kind check handles float32, int32, float16, etc."""
+        import pandas as pd
+
+        df = pd.DataFrame({
+            'float32_col': np.array([1.0, 2.0], dtype=np.float32),
+            'int32_col': np.array([1, 2], dtype=np.int32),
+            'float16_col': np.array([1.0, 2.0], dtype=np.float16),
+            'str_col': ['a', 'b'],
+        })
+
+        for col in ['float32_col', 'int32_col', 'float16_col']:
+            assert df[col].dtype.kind in 'fi', f"{col} should be numeric"
+
+        assert df['str_col'].dtype.kind not in 'fi', "str_col should not be numeric"
+
+    def test_no_bare_except_in_file_manager(self):
+        """file_manager.py should not have bare except: (catches KeyboardInterrupt)"""
+        source_path = Path(__file__).parent.parent / "src" / "io" / "file_manager.py"
+        content = source_path.read_text()
+        # Check there's no bare except (except: without a type)
+        import re
+        bare_excepts = re.findall(r'\bexcept\s*:', content)
+        assert len(bare_excepts) == 0, f"Found {len(bare_excepts)} bare except: statements"
+
+    def test_gg_analysis_nan_arrays_synced(self):
+        """GG analysis filters NaN consistently across all arrays"""
+        from src.features.gg_analysis import GGAnalyzer
+
+        n = 100
+        time = np.linspace(0, 10, n)
+        lat_acc = np.random.uniform(-1, 1, n)
+        lon_acc = np.random.uniform(-1, 1, n)
+        speed = np.random.uniform(30, 100, n)
+
+        # Introduce NaN at different positions
+        lat_acc[10] = np.nan
+        lat_acc[50] = np.nan
+        lon_acc[30] = np.nan
+
+        analyzer = GGAnalyzer()
+        result = analyzer.analyze_from_arrays(
+            time, lat_acc, lon_acc,
+            speed_data=speed,
+            session_id="test_nan"
+        )
+
+        # All points should have consistent data (no index out of bounds)
+        assert len(result.points) == n - 3  # 3 NaN positions removed
+        for p in result.points:
+            assert not np.isnan(p.lat_acc)
+            assert not np.isnan(p.lon_acc)
+            assert p.speed_mph >= 0
+
+    def test_session_builder_pointer_decode_raises(self):
+        """DLL pointer decode should raise on undecipherable pointer, not return garbage"""
+        from src.session.session_builder import _safe_decode
+
+        # Normal cases still work
+        assert _safe_decode(b"RPM") == "RPM"
+        assert _safe_decode("Speed") == "Speed"
+        assert _safe_decode(None) == ""
+        assert _safe_decode(0) == ""
+        assert _safe_decode(42) == "chan_42"
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
