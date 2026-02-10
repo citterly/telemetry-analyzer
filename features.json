@@ -487,13 +487,13 @@
       "name": "GGAnalyzer trace + checks",
       "category": "safeguard",
       "description": "Add trace recording and 4 sanity checks to GGAnalyzer. Checks: config_matches_vehicle, data_quality, g_force_plausible, utilization_plausible. See docs/SAFEGUARD_SYSTEM.md Phase 4.",
-      "status": "planned",
+      "status": "passing",
       "priority": 31,
       "tests": ["test_gg_trace_recorded", "test_gg_sanity_checks"],
       "files": [
         "src/features/gg_analysis.py"
       ],
-      "notes": ""
+      "notes": "DONE: analyze_from_parquet gains include_trace support. Records 7 inputs (columns, sample_count, nan_pct, lap_filter), 4 config values, 5 intermediates. 4 sanity checks: config_matches_vehicle, data_quality (NaN %), g_force_plausible (<3.0g), utilization_plausible (10-100%). 12 new tests. 37 GG tests passing."
     },
     {
       "id": "safeguard-005",
@@ -553,9 +553,9 @@
     "created_at": "2025-01-29T01:00:00Z",
     "last_updated": "2026-02-10T16:00:00Z",
     "total_features": 41,
-    "passing": 36,
+    "passing": 37,
     "failing": 0,
-    "planned": 5
+    "planned": 4
   },
   "categories": {
     "bugfix": "Bug fixes and corrections",

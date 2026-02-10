@@ -120,7 +120,7 @@ class GGAnalysisResult(BaseAnalysisReport):
 
     def to_dict(self) -> dict:
         """Convert to dictionary for JSON serialization"""
-        return {
+        result = {
             "session_id": self.session_id,
             "analysis_timestamp": self.analysis_timestamp,
             "stats": {
@@ -178,6 +178,8 @@ class GGAnalysisResult(BaseAnalysisReport):
                 for i, p in enumerate(self.points) if i % 5 == 0
             ]
         }
+        result.update(self._trace_dict())
+        return result
 
     def to_json(self, indent: int = 2) -> str:
         """Convert to JSON string"""
@@ -427,7 +429,9 @@ class GGAnalyzer(BaseAnalyzer):
         self,
         parquet_path: str,
         session_id: Optional[str] = None,
-        lap_filter: Optional[int] = None
+        lap_filter: Optional[int] = None,
+        include_trace: bool = False,
+        **kwargs,
     ) -> GGAnalysisResult:
         """
         Analyze G-G data from a Parquet file.
@@ -436,10 +440,13 @@ class GGAnalyzer(BaseAnalyzer):
             parquet_path: Path to Parquet file
             session_id: Session identifier (defaults to filename)
             lap_filter: If specified, only analyze data from this lap number
+            include_trace: If True, attach CalculationTrace to report.
 
         Returns:
             GGAnalysisResult with statistics and points
         """
+        trace = self._create_trace("GGAnalyzer") if include_trace else None
+
         df = pd.read_parquet(parquet_path)
 
         if session_id is None:
@@ -449,6 +456,9 @@ class GGAnalyzer(BaseAnalyzer):
         time_data = df.index.values
 
         # Find required columns
+        from ..utils.dataframe_helpers import find_column_name
+        lat_acc_col = find_column_name(df, ['GPS LatAcc', 'LatAcc', 'lateral_acc'])
+        lon_acc_col = find_column_name(df, ['GPS LonAcc', 'LonAcc', 'longitudinal_acc'])
         lat_acc = find_column(df, ['GPS LatAcc', 'LatAcc', 'lateral_acc'])
         lon_acc = find_column(df, ['GPS LonAcc', 'LonAcc', 'longitudinal_acc'])
 
@@ -456,15 +466,21 @@ class GGAnalyzer(BaseAnalyzer):
             raise ValueError("Parquet file missing GPS LatAcc/LonAcc columns")
 
         # Find optional columns
+        speed_col = find_column_name(df, ['GPS Speed', 'speed', 'Speed'])
         speed_data = find_column(df, ['GPS Speed', 'speed', 'Speed'])
         if speed_data is not None and speed_data.max() < 100:
             speed_data = speed_data * SPEED_MS_TO_MPH  # Convert m/s to mph
 
+        throttle_col = find_column_name(df, ['PedalPos', 'throttle', 'Throttle'])
         throttle_data = find_column(df, ['PedalPos', 'throttle', 'Throttle'])
 
         # GPS coordinates for track map
         lat_gps = find_column(df, ['GPS Latitude', 'latitude', 'gps_lat'])
         lon_gps = find_column(df, ['GPS Longitude', 'longitude', 'gps_lon'])
+
+        # Count NaN before filtering
+        total_samples = len(lat_acc)
+        nan_count = int(np.sum(np.isnan(lat_acc) | np.isnan(lon_acc)))
 
         # Try to detect laps if not already in data
         lap_data = None
@@ -523,7 +539,118 @@ class GGAnalyzer(BaseAnalyzer):
         if all_lap_numbers:
             result.lap_numbers = all_lap_numbers
 
+        if trace:
+            nan_pct = (nan_count / total_samples * 100) if total_samples > 0 else 0
+            trace.record_input("lat_acc_column", lat_acc_col)
+            trace.record_input("lon_acc_column", lon_acc_col)
+            trace.record_input("speed_column", speed_col)
+            trace.record_input("throttle_column", throttle_col)
+            trace.record_input("sample_count", total_samples - nan_count)
+            trace.record_input("nan_pct", round(nan_pct, 1))
+            trace.record_input("lap_filter", lap_filter)
+
+            trace.record_config("max_g_reference", self.max_g_reference)
+            trace.record_config("max_braking_g", self.max_braking_g)
+            trace.record_config("power_limited_accel_g", self.power_limited_accel_g)
+            try:
+                from ..config.vehicles import get_active_vehicle
+                vehicle = get_active_vehicle()
+                trace.record_config("vehicle_name", vehicle.name if vehicle else "unknown")
+            except Exception:
+                trace.record_config("vehicle_name", "unknown")
+
+            trace.record_intermediate("max_combined_g", result.stats.max_combined_g)
+            trace.record_intermediate("p95_combined_g", result.stats.data_derived_max_g)
+            trace.record_intermediate("utilization_pct", result.stats.utilization_pct)
+            trace.record_intermediate("corner_utilization_pct", result.stats.corner_utilization_pct)
+            trace.record_intermediate("braking_to_lateral_ratio", result.stats.braking_to_lateral_ratio)
+
+            self._run_sanity_checks(trace, result, nan_pct)
+            result.trace = trace
+
         return result
+
+    def _run_sanity_checks(self, trace, result: GGAnalysisResult, nan_pct: float) -> None:
+        """Run sanity checks on G-G analysis results."""
+        # Check 4.1: config_matches_vehicle
+        try:
+            from ..config.vehicles import get_active_vehicle
+            vehicle = get_active_vehicle()
+            if vehicle and hasattr(vehicle, 'max_lateral_g'):
+                if abs(self.max_g_reference - vehicle.max_lateral_g) < 0.01:
+                    trace.add_check(
+                        "config_matches_vehicle", "pass",
+                        f"Reference G ({self.max_g_reference}) matches vehicle config ({vehicle.max_lateral_g})",
+                        expected=vehicle.max_lateral_g, actual=self.max_g_reference,
+                    )
+                else:
+                    trace.add_check(
+                        "config_matches_vehicle", "warn",
+                        f"Reference G ({self.max_g_reference}) differs from vehicle config ({vehicle.max_lateral_g})",
+                        expected=vehicle.max_lateral_g, actual=self.max_g_reference,
+                    )
+            else:
+                trace.add_check(
+                    "config_matches_vehicle", "warn",
+                    "No active vehicle or max_lateral_g not set",
+                )
+        except Exception:
+            trace.add_check(
+                "config_matches_vehicle", "warn",
+                "Could not load vehicle config for comparison",
+            )
+
+        # Check 4.2: data_quality
+        if nan_pct < 5:
+            trace.add_check(
+                "data_quality", "pass",
+                f"Only {nan_pct:.1f}% NaN values in accelerometer data",
+                expected="< 5%", actual=f"{nan_pct:.1f}%",
+            )
+        elif nan_pct < 20:
+            trace.add_check(
+                "data_quality", "warn",
+                f"{nan_pct:.1f}% NaN values in accelerometer data, results may be less reliable",
+                expected="< 5%", actual=f"{nan_pct:.1f}%",
+            )
+        else:
+            trace.add_check(
+                "data_quality", "fail",
+                f"{nan_pct:.1f}% NaN values in accelerometer data, analysis unreliable",
+                expected="< 20%", actual=f"{nan_pct:.1f}%",
+                severity="error",
+            )
+
+        # Check 4.3: g_force_plausible
+        max_combined = result.stats.max_combined_g
+        if max_combined < 3.0:
+            trace.add_check(
+                "g_force_plausible", "pass",
+                f"Max combined G-force {max_combined:.2f}g is plausible",
+                expected="< 3.0", actual=round(max_combined, 2),
+            )
+        else:
+            trace.add_check(
+                "g_force_plausible", "fail",
+                f"Max combined G-force {max_combined:.2f}g exceeds 3.0g limit for street tires",
+                expected="< 3.0", actual=round(max_combined, 2),
+                severity="error",
+            )
+
+        # Check 4.4: utilization_plausible
+        util_pct = result.stats.utilization_pct
+        if 10 <= util_pct <= 100:
+            trace.add_check(
+                "utilization_plausible", "pass",
+                f"Utilization {util_pct:.1f}% is in expected range (10-100%)",
+                expected="10-100%", actual=f"{util_pct:.1f}%",
+            )
+        else:
+            trace.add_check(
+                "utilization_plausible", "warn",
+                f"Utilization {util_pct:.1f}% is outside expected range (10-100%)",
+                expected="10-100%", actual=f"{util_pct:.1f}%",
+            )
 
     def _calculate_quadrants(
         self,

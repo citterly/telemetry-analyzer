@@ -354,5 +354,143 @@ class TestConvenienceFunction:
         assert result.stats.points_count > 0
 
 
+class TestGGAnalyzerTrace:
+    """Tests for safeguard-004: GGAnalyzer trace + sanity checks."""
+
+    def _make_gg_parquet(self, tmp_path, n=200, max_g=1.0, nan_pct=0.0):
+        """Create synthetic parquet with acceleration data."""
+        import pandas as pd
+        time = np.linspace(0, 30, n)
+        # Circular pattern for lat/lon acceleration
+        angles = np.linspace(0, 4 * np.pi, n)
+        lat_acc = np.sin(angles) * max_g
+        lon_acc = np.cos(angles) * max_g * 0.8
+
+        # Inject NaN if requested
+        if nan_pct > 0:
+            nan_count = int(n * nan_pct / 100)
+            nan_indices = np.random.choice(n, nan_count, replace=False)
+            lat_acc[nan_indices] = np.nan
+
+        speed = np.linspace(20, 80, n)
+        df = pd.DataFrame({
+            "GPS LatAcc": lat_acc,
+            "GPS LonAcc": lon_acc,
+            "GPS Speed": speed,
+        }, index=time)
+        path = str(tmp_path / "gg_test.parquet")
+        df.to_parquet(path)
+        return path
+
+    def test_trace_recorded_when_enabled(self, tmp_path):
+        """Trace is attached when include_trace=True."""
+        path = self._make_gg_parquet(tmp_path)
+        analyzer = GGAnalyzer(max_g_reference=1.3)
+        result = analyzer.analyze_from_parquet(path, include_trace=True)
+        assert hasattr(result, 'trace')
+        assert result.trace is not None
+        assert result.trace.analyzer_name == "GGAnalyzer"
+
+    def test_trace_not_recorded_by_default(self, tmp_path):
+        """Trace is NOT attached by default."""
+        path = self._make_gg_parquet(tmp_path)
+        analyzer = GGAnalyzer()
+        result = analyzer.analyze_from_parquet(path)
+        assert not hasattr(result, 'trace') or result.trace is None
+
+    def test_trace_inputs_recorded(self, tmp_path):
+        """Trace records column names, sample count, nan_pct."""
+        path = self._make_gg_parquet(tmp_path)
+        analyzer = GGAnalyzer()
+        result = analyzer.analyze_from_parquet(path, include_trace=True)
+        trace = result.trace
+        assert trace.inputs["lat_acc_column"] == "GPS LatAcc"
+        assert trace.inputs["lon_acc_column"] == "GPS LonAcc"
+        assert trace.inputs["speed_column"] == "GPS Speed"
+        assert "sample_count" in trace.inputs
+        assert "nan_pct" in trace.inputs
+
+    def test_trace_config_recorded(self, tmp_path):
+        """Trace records G-force reference values."""
+        path = self._make_gg_parquet(tmp_path)
+        analyzer = GGAnalyzer(max_g_reference=1.5, max_braking_g=1.6)
+        result = analyzer.analyze_from_parquet(path, include_trace=True)
+        trace = result.trace
+        assert trace.config["max_g_reference"] == 1.5
+        assert trace.config["max_braking_g"] == 1.6
+        assert "vehicle_name" in trace.config
+
+    def test_trace_intermediates_recorded(self, tmp_path):
+        """Trace records key analysis intermediates."""
+        path = self._make_gg_parquet(tmp_path)
+        analyzer = GGAnalyzer()
+        result = analyzer.analyze_from_parquet(path, include_trace=True)
+        trace = result.trace
+        assert "max_combined_g" in trace.intermediates
+        assert "p95_combined_g" in trace.intermediates
+        assert "utilization_pct" in trace.intermediates
+
+    def test_trace_has_four_sanity_checks(self, tmp_path):
+        """All 4 sanity checks are present."""
+        path = self._make_gg_parquet(tmp_path)
+        analyzer = GGAnalyzer()
+        result = analyzer.analyze_from_parquet(path, include_trace=True)
+        check_names = [c.name for c in result.trace.sanity_checks]
+        assert "config_matches_vehicle" in check_names
+        assert "data_quality" in check_names
+        assert "g_force_plausible" in check_names
+        assert "utilization_plausible" in check_names
+
+    def test_to_dict_includes_trace(self, tmp_path):
+        """to_dict() includes _trace when present."""
+        path = self._make_gg_parquet(tmp_path)
+        analyzer = GGAnalyzer()
+        result = analyzer.analyze_from_parquet(path, include_trace=True)
+        d = result.to_dict()
+        assert "_trace" in d
+        assert d["_trace"]["analyzer_name"] == "GGAnalyzer"
+
+    def test_to_dict_omits_trace_by_default(self, tmp_path):
+        """to_dict() does NOT include _trace by default."""
+        path = self._make_gg_parquet(tmp_path)
+        analyzer = GGAnalyzer()
+        result = analyzer.analyze_from_parquet(path)
+        d = result.to_dict()
+        assert "_trace" not in d
+
+    def test_check_data_quality_warns_high_nan(self, tmp_path):
+        """High NaN percentage triggers data quality warning."""
+        path = self._make_gg_parquet(tmp_path, nan_pct=15)
+        analyzer = GGAnalyzer()
+        result = analyzer.analyze_from_parquet(path, include_trace=True)
+        check = next(c for c in result.trace.sanity_checks if c.name == "data_quality")
+        assert check.status == "warn"
+
+    def test_check_g_force_plausible_passes(self, tmp_path):
+        """Normal G-force values pass plausibility check."""
+        path = self._make_gg_parquet(tmp_path, max_g=1.0)
+        analyzer = GGAnalyzer()
+        result = analyzer.analyze_from_parquet(path, include_trace=True)
+        check = next(c for c in result.trace.sanity_checks if c.name == "g_force_plausible")
+        assert check.status == "pass"
+
+    def test_check_g_force_plausible_fails_extreme(self, tmp_path):
+        """Extreme G-force values fail plausibility check."""
+        path = self._make_gg_parquet(tmp_path, max_g=3.5)
+        analyzer = GGAnalyzer()
+        result = analyzer.analyze_from_parquet(path, include_trace=True)
+        check = next(c for c in result.trace.sanity_checks if c.name == "g_force_plausible")
+        assert check.status == "fail"
+
+    def test_existing_tests_still_pass(self):
+        """Smoke: analyze_from_arrays still works."""
+        analyzer = GGAnalyzer()
+        time = np.linspace(0, 10, 100)
+        lat_acc = np.sin(np.linspace(0, 4, 100))
+        lon_acc = np.cos(np.linspace(0, 4, 100)) * 0.8
+        result = analyzer.analyze_from_arrays(time, lat_acc, lon_acc)
+        assert isinstance(result, GGAnalysisResult)
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
