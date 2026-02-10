@@ -200,7 +200,7 @@ class CornerAnalysisResult(BaseAnalysisReport):
     recommendations: List[str]
 
     def to_dict(self) -> dict:
-        return {
+        result = {
             "session_id": self.session_id,
             "track_name": self.track_name,
             "analysis_timestamp": self.analysis_timestamp,
@@ -211,6 +211,8 @@ class CornerAnalysisResult(BaseAnalysisReport):
             "corner_zones": [z.to_dict() for z in self.corner_zones],
             "recommendations": self.recommendations
         }
+        result.update(self._trace_dict())
+        return result
 
     def to_json(self, indent: int = 2) -> str:
         return json.dumps(self.to_dict(), indent=indent)
@@ -241,7 +243,9 @@ class CornerAnalyzer(BaseAnalyzer):
         self,
         parquet_path: str,
         session_id: Optional[str] = None,
-        track_name: str = "Unknown Track"
+        include_trace: bool = False,
+        track_name: str = "Unknown Track",
+        **kwargs,
     ) -> CornerAnalysisResult:
         """
         Analyze corners from a Parquet file.
@@ -249,11 +253,14 @@ class CornerAnalyzer(BaseAnalyzer):
         Args:
             parquet_path: Path to parquet file
             session_id: Session identifier (defaults to filename)
+            include_trace: If True, attach CalculationTrace to report.
             track_name: Track name for the report
 
         Returns:
             CornerAnalysisResult
         """
+        trace = self._create_trace("CornerAnalyzer") if include_trace else None
+
         df = pd.read_parquet(parquet_path)
 
         if session_id is None:
@@ -272,19 +279,109 @@ class CornerAnalyzer(BaseAnalyzer):
         if lat_data is None or lon_data is None:
             raise ValueError("Missing GPS latitude/longitude columns")
 
+        speed_unit_detected = "mph"
         if speed_data is None:
             speed_data = np.zeros(len(time_data))
+            speed_unit_detected = "none"
         elif speed_data.max() < 100:
             speed_data = speed_data * SPEED_MS_TO_MPH
+            speed_unit_detected = "m/s"
 
         if throttle_data is None:
             throttle_data = np.zeros(len(time_data))
 
-        return self.analyze_from_arrays(
+        result = self.analyze_from_arrays(
             time_data, lat_data, lon_data, speed_data,
             radius_data, lat_acc_data, lon_acc_data, throttle_data,
             session_id, track_name
         )
+
+        if trace:
+            trace.record_input("sample_count", len(time_data))
+            trace.record_input("speed_unit_detected", speed_unit_detected)
+            trace.record_input("has_radius_data", radius_data is not None)
+            trace.record_input("has_lat_acc_data", lat_acc_data is not None)
+            trace.record_input("has_throttle_data", throttle_data is not None)
+
+            trace.record_config("radius_threshold", self.detector.radius_threshold)
+            trace.record_config("lat_acc_threshold", self.detector.lat_acc_threshold)
+            trace.record_config("min_corner_duration", self.detector.min_corner_duration)
+            trace.record_config("track_name", track_name)
+
+            trace.record_intermediate("corners_detected", int(len(result.corner_zones)))
+            trace.record_intermediate("laps_analyzed", int(len(result.laps)))
+            if result.laps and result.laps[0].corners:
+                speeds = [c.entry_speed for c in result.laps[0].corners]
+                trace.record_intermediate("avg_entry_speed", float(np.mean(speeds)))
+                trace.record_intermediate("avg_exit_speed", float(result.laps[0].avg_exit_speed))
+
+            self._run_corner_sanity_checks(trace, result, lat_data, lon_data, speed_data)
+            result.trace = trace
+
+        return result
+
+    def _run_corner_sanity_checks(self, trace, result: CornerAnalysisResult,
+                                  lat_data: np.ndarray, lon_data: np.ndarray,
+                                  speed_data: np.ndarray) -> None:
+        """Run sanity checks on corner analysis results."""
+        # Check 6.4: gps_quality
+        lat_range = float(np.ptp(lat_data[~np.isnan(lat_data)])) if len(lat_data) > 0 else 0
+        lon_range = float(np.ptp(lon_data[~np.isnan(lon_data)])) if len(lon_data) > 0 else 0
+        if lat_range > 0.0001 and lon_range > 0.0001:
+            trace.add_check(
+                "gps_quality", "pass",
+                f"GPS data has movement: lat range {lat_range:.4f}, lon range {lon_range:.4f}",
+                expected="lat/lon range > 0.0001", actual=f"lat={lat_range:.4f}, lon={lon_range:.4f}",
+            )
+        else:
+            trace.add_check(
+                "gps_quality", "fail",
+                f"GPS data shows no movement: lat range {lat_range:.6f}, lon range {lon_range:.6f}",
+                expected="lat/lon range > 0.0001", actual=f"lat={lat_range:.6f}, lon={lon_range:.6f}",
+                severity="error",
+            )
+
+        # Check 6.5: corner_count_plausible
+        n_corners = len(result.corner_zones)
+        if 3 <= n_corners <= 50:
+            trace.add_check(
+                "corner_count_plausible", "pass",
+                f"Detected {n_corners} corners (expected 3-50 for a typical track)",
+                expected="3-50", actual=n_corners,
+            )
+        elif n_corners == 0:
+            trace.add_check(
+                "corner_count_plausible", "warn",
+                "No corners detected - data may be from a straight or parking lot",
+                expected="3-50", actual=0,
+            )
+        else:
+            trace.add_check(
+                "corner_count_plausible", "warn",
+                f"Detected {n_corners} corners (outside 3-50 range for typical track)",
+                expected="3-50", actual=n_corners,
+            )
+
+        # Check 6.6: corner_speeds_plausible
+        if result.laps and result.laps[0].corners:
+            all_speeds = []
+            for c in result.laps[0].corners:
+                all_speeds.extend([c.entry_speed, c.min_speed, c.exit_speed])
+            max_speed = max(all_speeds) if all_speeds else 0
+            min_speed = min(all_speeds) if all_speeds else 0
+
+            if 5 <= min_speed and max_speed <= 180:
+                trace.add_check(
+                    "corner_speeds_plausible", "pass",
+                    f"Corner speeds range {min_speed:.0f}-{max_speed:.0f} mph (plausible)",
+                    expected="5-180 mph", actual=f"{min_speed:.0f}-{max_speed:.0f} mph",
+                )
+            else:
+                trace.add_check(
+                    "corner_speeds_plausible", "warn",
+                    f"Corner speeds range {min_speed:.0f}-{max_speed:.0f} mph (outside plausible range)",
+                    expected="5-180 mph", actual=f"{min_speed:.0f}-{max_speed:.0f} mph",
+                )
 
     def analyze_from_arrays(
         self,

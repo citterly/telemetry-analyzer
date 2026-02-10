@@ -494,5 +494,141 @@ class TestMinimalData:
             assert report.gear_usage[0].usage_percent > 90
 
 
+class TestGearAnalysisTrace:
+    """Tests for safeguard-006: GearAnalysis trace + sanity checks."""
+
+    def _make_parquet(self, tmp_path, n=1000, rpm_base=5000, speed_base=70):
+        """Create a synthetic parquet file for testing."""
+        import pandas as pd
+        time = np.linspace(0, 100, n)
+        rpm = rpm_base + 1500 * np.sin(time / 20)
+        speed = speed_base + 30 * np.sin(time / 15)
+        df = pd.DataFrame({
+            "RPM": rpm,
+            "GPS Speed": speed,
+        }, index=time)
+        path = str(tmp_path / "gear_test.parquet")
+        df.to_parquet(path)
+        return path
+
+    def test_trace_recorded_when_enabled(self, tmp_path):
+        """Trace is attached to report when include_trace=True."""
+        path = self._make_parquet(tmp_path)
+        analyzer = GearAnalysis()
+        report = analyzer.analyze_from_parquet(path, include_trace=True)
+        assert hasattr(report, 'trace')
+        assert report.trace is not None
+        assert report.trace.analyzer_name == "GearAnalysis"
+
+    def test_trace_not_recorded_by_default(self, tmp_path):
+        """Trace is NOT attached when include_trace=False (default)."""
+        path = self._make_parquet(tmp_path)
+        analyzer = GearAnalysis()
+        report = analyzer.analyze_from_parquet(path)
+        assert not hasattr(report, 'trace') or report.trace is None
+
+    def test_trace_inputs_recorded(self, tmp_path):
+        """Trace records RPM column, speed column, sample count."""
+        path = self._make_parquet(tmp_path)
+        analyzer = GearAnalysis()
+        report = analyzer.analyze_from_parquet(path, include_trace=True)
+        trace = report.trace
+        assert trace.inputs["rpm_column"] == "RPM"
+        assert trace.inputs["speed_column"] == "GPS Speed"
+        assert trace.inputs["sample_count"] == 1000
+
+    def test_trace_config_recorded(self, tmp_path):
+        """Trace records transmission ratios and final drive."""
+        path = self._make_parquet(tmp_path)
+        analyzer = GearAnalysis()
+        report = analyzer.analyze_from_parquet(path, include_trace=True)
+        trace = report.trace
+        assert "transmission_ratios" in trace.config
+        assert "final_drive" in trace.config
+        assert "track_name" in trace.config
+
+    def test_trace_intermediates_recorded(self, tmp_path):
+        """Trace records gears_detected, pct_over_safe_limit, total_shifts."""
+        path = self._make_parquet(tmp_path)
+        analyzer = GearAnalysis()
+        report = analyzer.analyze_from_parquet(path, include_trace=True)
+        trace = report.trace
+        assert "gears_detected" in trace.intermediates
+        assert "pct_over_safe_limit" in trace.intermediates
+        assert "pct_in_power_band" in trace.intermediates
+        assert "total_shifts" in trace.intermediates
+
+    def test_trace_has_three_sanity_checks(self, tmp_path):
+        """All 3 sanity checks are present."""
+        path = self._make_parquet(tmp_path)
+        analyzer = GearAnalysis()
+        report = analyzer.analyze_from_parquet(path, include_trace=True)
+        check_names = [c.name for c in report.trace.sanity_checks]
+        assert "gear_count_matches_config" in check_names
+        assert "rpm_data_sufficient" in check_names
+        assert "gear_usage_balanced" in check_names
+
+    def test_to_dict_includes_trace(self, tmp_path):
+        """to_dict() includes _trace when trace is present."""
+        path = self._make_parquet(tmp_path)
+        analyzer = GearAnalysis()
+        report = analyzer.analyze_from_parquet(path, include_trace=True)
+        d = report.to_dict()
+        assert "_trace" in d
+        assert d["_trace"]["analyzer_name"] == "GearAnalysis"
+        assert len(d["_trace"]["sanity_checks"]) == 3
+
+    def test_to_dict_omits_trace_by_default(self, tmp_path):
+        """to_dict() does NOT include _trace when trace is absent."""
+        path = self._make_parquet(tmp_path)
+        analyzer = GearAnalysis()
+        report = analyzer.analyze_from_parquet(path)
+        d = report.to_dict()
+        assert "_trace" not in d
+
+    def test_to_dict_json_serializable_with_trace(self, tmp_path):
+        """to_dict() with trace produces valid JSON."""
+        path = self._make_parquet(tmp_path)
+        analyzer = GearAnalysis()
+        report = analyzer.analyze_from_parquet(path, include_trace=True)
+        serialized = json.dumps(report.to_dict())
+        assert isinstance(serialized, str)
+        roundtrip = json.loads(serialized)
+        assert "_trace" in roundtrip
+
+    def test_check_rpm_data_sufficient_passes(self, tmp_path):
+        """Normal RPM data passes the rpm_data_sufficient check."""
+        path = self._make_parquet(tmp_path, rpm_base=5000)
+        analyzer = GearAnalysis()
+        report = analyzer.analyze_from_parquet(path, include_trace=True)
+        check = next(c for c in report.trace.sanity_checks if c.name == "rpm_data_sufficient")
+        assert check.status == "pass"
+
+    def test_check_rpm_data_warns_low_rpm(self, tmp_path):
+        """Low RPM data warns in the rpm_data_sufficient check."""
+        import pandas as pd
+        time = np.linspace(0, 100, 1000)
+        rpm = np.full(1000, 500.0)  # All below 1000 RPM
+        speed = np.full(1000, 50.0)
+        df = pd.DataFrame({"RPM": rpm, "GPS Speed": speed}, index=time)
+        path = str(tmp_path / "low_rpm.parquet")
+        df.to_parquet(path)
+
+        analyzer = GearAnalysis()
+        report = analyzer.analyze_from_parquet(path, include_trace=True)
+        check = next(c for c in report.trace.sanity_checks if c.name == "rpm_data_sufficient")
+        assert check.status == "warn"
+
+    def test_existing_tests_still_pass(self):
+        """Smoke test: existing analyze_from_arrays still works unchanged."""
+        analyzer = GearAnalysis()
+        time = np.linspace(0, 60, 600)
+        rpm = 5000 + 1000 * np.sin(time / 10)
+        speed = 60 + 20 * np.sin(time / 8)
+        report = analyzer.analyze_from_arrays(time, rpm, speed)
+        assert report is not None
+        assert len(report.gear_usage) >= 0
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

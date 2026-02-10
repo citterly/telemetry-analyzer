@@ -513,14 +513,14 @@
       "name": "GearAnalysis + CornerAnalyzer trace + checks",
       "category": "safeguard",
       "description": "Add trace recording and sanity checks to both remaining analyzers. GearAnalysis: 3 checks (gear_count_matches_config, rpm_data_sufficient, gear_usage_balanced). CornerAnalyzer: 3 checks (gps_quality, corner_count_plausible, corner_speeds_plausible). See docs/SAFEGUARD_SYSTEM.md Phase 6.",
-      "status": "planned",
+      "status": "passing",
       "priority": 33,
       "tests": ["test_gear_trace_recorded", "test_gear_sanity_checks", "test_corner_trace_recorded", "test_corner_sanity_checks"],
       "files": [
         "src/features/gear_analysis.py",
         "src/features/corner_analysis.py"
       ],
-      "notes": ""
+      "notes": "DONE: GearAnalysis records 4 inputs, 6 config, 4 intermediates + 3 sanity checks. CornerAnalyzer records 5 inputs, 4 config, 2-4 intermediates + 3 sanity checks. Both to_dict() include _trace when present. 24 new tests (12 gear + 12 corner). 805 tests passing."
     },
     {
       "id": "safeguard-007",
@@ -553,9 +553,9 @@
     "created_at": "2025-01-29T01:00:00Z",
     "last_updated": "2026-02-10T16:00:00Z",
     "total_features": 41,
-    "passing": 38,
+    "passing": 39,
     "failing": 0,
-    "planned": 3
+    "planned": 2
   },
   "categories": {
     "bugfix": "Bug fixes and corrections",

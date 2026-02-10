@@ -811,3 +811,50 @@ Features: 35/41 passing (6 planned)
 
 Next priority: safeguard-003 (ShiftAnalyzer trace + checks)
 
+
+=== Session 11 continued (2026-02-10) ===
+Working on: safeguard-003 through safeguard-006
+
+Work completed:
+
+1. safeguard-003: ShiftAnalyzer trace + checks
+   - analyze_from_parquet() gains include_trace support
+   - Records 5 inputs, 6 config values, 5 intermediates
+   - 4 sanity checks: gear_count_matches_config, shift_rpm_below_redline,
+     shift_confidence, sufficient_shifts
+   - 11 new tests. 33 shift tests passing.
+
+2. safeguard-004: GGAnalyzer trace + checks
+   - analyze_from_parquet() gains include_trace support
+   - Records 7 inputs, 4 config values, 5 intermediates
+   - 4 sanity checks: config_matches_vehicle, data_quality, g_force_plausible,
+     utilization_plausible
+   - 12 new tests. 37 GG tests passing.
+
+3. safeguard-005: LapAnalysis trace + checks
+   - analyze_from_parquet() gains include_trace support
+   - Records 6 inputs, 2 config values, 5 intermediates
+   - 4 sanity checks: speed_unit_consistent, lap_distance_plausible,
+     lap_time_plausible, gps_coordinates_valid
+   - 11 new tests. 28 lap tests passing.
+
+4. safeguard-006: GearAnalysis + CornerAnalyzer trace + checks
+   - GearAnalysis.analyze_from_parquet() gains include_trace support
+     - Records 4 inputs, 6 config values, 4 intermediates
+     - 3 sanity checks: gear_count_matches_config, rpm_data_sufficient,
+       gear_usage_balanced
+     - 12 new tests. 36 gear tests passing.
+   - CornerAnalyzer.analyze_from_parquet() gains include_trace support
+     - Records 5 inputs, 4 config values, 2-4 intermediates
+     - 3 sanity checks: gps_quality, corner_count_plausible,
+       corner_speeds_plausible
+     - 12 new tests. 92 corner tests passing.
+   - Both to_dict() methods include _trace when present
+
+Test results: 805/805 passing (4 pre-existing DLL failures excluded)
+
+Status: safeguard-003 through safeguard-006 all marked PASSING
+Features: 39/41 passing (2 planned: safeguard-007, safeguard-008)
+
+Next priority: safeguard-007 (SessionReport aggregation + API endpoints)
+

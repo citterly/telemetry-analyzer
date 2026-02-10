@@ -1735,3 +1735,157 @@ class TestRealDataCompatibility:
             assert corner.apex_idx <= corner.end_idx
             assert corner.min_speed_idx >= corner.start_idx
             assert corner.min_speed_idx <= corner.end_idx
+
+
+class TestCornerAnalyzerTrace:
+    """Tests for safeguard-006: CornerAnalyzer trace + sanity checks."""
+
+    def _make_parquet(self, tmp_path, n=500):
+        """Create a synthetic parquet file with cornering data."""
+        time = np.linspace(0, 50, n)
+        t = time / 10
+        lat = 43.797 + 0.005 * np.sin(t)
+        lon = -87.99 + 0.005 * np.cos(t)
+        speed = (100 - 40 * np.abs(np.sin(t))) * 0.44704  # m/s
+        radius = 1000 - 900 * np.abs(np.sin(t))
+        lat_acc = 0.8 * np.sin(t)
+        lon_acc = -0.5 * np.sin(t + 0.5)
+        throttle = 50 + 40 * np.cos(t)
+
+        df = pd.DataFrame({
+            'GPS Latitude': lat,
+            'GPS Longitude': lon,
+            'GPS Speed': speed,
+            'GPS Radius': radius,
+            'GPS LatAcc': lat_acc,
+            'GPS LonAcc': lon_acc,
+            'PedalPos': throttle,
+        }, index=time)
+        path = str(tmp_path / "corner_test.parquet")
+        df.to_parquet(path)
+        return path
+
+    def test_trace_recorded_when_enabled(self, tmp_path):
+        """Trace is attached to report when include_trace=True."""
+        path = self._make_parquet(tmp_path)
+        analyzer = CornerAnalyzer()
+        result = analyzer.analyze_from_parquet(path, include_trace=True)
+        assert hasattr(result, 'trace')
+        assert result.trace is not None
+        assert result.trace.analyzer_name == "CornerAnalyzer"
+
+    def test_trace_not_recorded_by_default(self, tmp_path):
+        """Trace is NOT attached when include_trace=False (default)."""
+        path = self._make_parquet(tmp_path)
+        analyzer = CornerAnalyzer()
+        result = analyzer.analyze_from_parquet(path)
+        assert not hasattr(result, 'trace') or result.trace is None
+
+    def test_trace_inputs_recorded(self, tmp_path):
+        """Trace records sample_count, speed_unit, data availability."""
+        path = self._make_parquet(tmp_path)
+        analyzer = CornerAnalyzer()
+        result = analyzer.analyze_from_parquet(path, include_trace=True)
+        trace = result.trace
+        assert trace.inputs["sample_count"] == 500
+        assert trace.inputs["speed_unit_detected"] in ("m/s", "mph", "none")
+        assert "has_radius_data" in trace.inputs
+        assert "has_lat_acc_data" in trace.inputs
+        assert "has_throttle_data" in trace.inputs
+
+    def test_trace_config_recorded(self, tmp_path):
+        """Trace records detector configuration."""
+        path = self._make_parquet(tmp_path)
+        analyzer = CornerAnalyzer()
+        result = analyzer.analyze_from_parquet(path, include_trace=True)
+        trace = result.trace
+        assert "radius_threshold" in trace.config
+        assert "lat_acc_threshold" in trace.config
+        assert "min_corner_duration" in trace.config
+        assert trace.config["track_name"] == "Unknown Track"
+
+    def test_trace_intermediates_recorded(self, tmp_path):
+        """Trace records corners_detected and laps_analyzed."""
+        path = self._make_parquet(tmp_path)
+        analyzer = CornerAnalyzer()
+        result = analyzer.analyze_from_parquet(path, include_trace=True)
+        trace = result.trace
+        assert "corners_detected" in trace.intermediates
+        assert "laps_analyzed" in trace.intermediates
+
+    def test_trace_has_three_sanity_checks(self, tmp_path):
+        """All 3 sanity checks are present."""
+        path = self._make_parquet(tmp_path)
+        analyzer = CornerAnalyzer()
+        result = analyzer.analyze_from_parquet(path, include_trace=True)
+        check_names = [c.name for c in result.trace.sanity_checks]
+        assert "gps_quality" in check_names
+        assert "corner_count_plausible" in check_names
+        assert "corner_speeds_plausible" in check_names
+
+    def test_gps_quality_passes_with_movement(self, tmp_path):
+        """GPS quality check passes with moving data."""
+        path = self._make_parquet(tmp_path)
+        analyzer = CornerAnalyzer()
+        result = analyzer.analyze_from_parquet(path, include_trace=True)
+        check = next(c for c in result.trace.sanity_checks if c.name == "gps_quality")
+        assert check.status == "pass"
+
+    def test_gps_quality_fails_stationary(self, tmp_path):
+        """GPS quality check fails with stationary data."""
+        time = np.linspace(0, 50, 500)
+        lat = np.full(500, 43.797)
+        lon = np.full(500, -87.99)
+        speed = np.full(500, 50.0)
+
+        df = pd.DataFrame({
+            'GPS Latitude': lat,
+            'GPS Longitude': lon,
+            'GPS Speed': speed,
+        }, index=time)
+        path = str(tmp_path / "stationary.parquet")
+        df.to_parquet(path)
+
+        analyzer = CornerAnalyzer()
+        result = analyzer.analyze_from_parquet(path, include_trace=True)
+        check = next(c for c in result.trace.sanity_checks if c.name == "gps_quality")
+        assert check.status == "fail"
+
+    def test_to_dict_includes_trace(self, tmp_path):
+        """to_dict() includes _trace when trace is present."""
+        path = self._make_parquet(tmp_path)
+        analyzer = CornerAnalyzer()
+        result = analyzer.analyze_from_parquet(path, include_trace=True)
+        d = result.to_dict()
+        assert "_trace" in d
+        assert d["_trace"]["analyzer_name"] == "CornerAnalyzer"
+
+    def test_to_dict_omits_trace_by_default(self, tmp_path):
+        """to_dict() does NOT include _trace when trace is absent."""
+        path = self._make_parquet(tmp_path)
+        analyzer = CornerAnalyzer()
+        result = analyzer.analyze_from_parquet(path)
+        d = result.to_dict()
+        assert "_trace" not in d
+
+    def test_to_dict_json_serializable_with_trace(self, tmp_path):
+        """Trace portion of to_dict() produces valid JSON."""
+        import json
+        path = self._make_parquet(tmp_path)
+        analyzer = CornerAnalyzer()
+        result = analyzer.analyze_from_parquet(path, include_trace=True)
+        d = result.to_dict()
+        assert "_trace" in d
+        # Verify the trace itself is JSON-serializable
+        serialized = json.dumps(d["_trace"])
+        assert isinstance(serialized, str)
+        roundtrip = json.loads(serialized)
+        assert roundtrip["analyzer_name"] == "CornerAnalyzer"
+
+    def test_existing_analyze_from_parquet_unchanged(self, tmp_path):
+        """Existing analyze_from_parquet still works without trace args."""
+        path = self._make_parquet(tmp_path)
+        analyzer = CornerAnalyzer()
+        result = analyzer.analyze_from_parquet(path)
+        assert isinstance(result, CornerAnalysisResult)
+        assert result.session_id is not None

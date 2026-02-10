@@ -67,7 +67,7 @@ class GearAnalysisReport(BaseAnalysisReport):
 
     def to_dict(self) -> dict:
         """Convert to dictionary"""
-        return {
+        result = {
             "session_id": self.session_id,
             "track_name": self.track_name,
             "analysis_timestamp": self.analysis_timestamp,
@@ -109,6 +109,8 @@ class GearAnalysisReport(BaseAnalysisReport):
             "recommendations": self.recommendations,
             "summary": self.summary
         }
+        result.update(self._trace_dict())
+        return result
 
     def to_json(self, indent: int = 2) -> str:
         """Convert to JSON string"""
@@ -236,7 +238,9 @@ class GearAnalysis(BaseAnalyzer):
     def analyze_from_parquet(
         self,
         parquet_path: str,
-        session_id: Optional[str] = None
+        session_id: Optional[str] = None,
+        include_trace: bool = False,
+        **kwargs,
     ) -> GearAnalysisReport:
         """
         Analyze gear usage from a Parquet file.
@@ -244,10 +248,13 @@ class GearAnalysis(BaseAnalyzer):
         Args:
             parquet_path: Path to Parquet file
             session_id: Session identifier (defaults to filename)
+            include_trace: If True, attach CalculationTrace to report.
 
         Returns:
             GearAnalysisReport with complete analysis
         """
+        trace = self._create_trace("GearAnalysis") if include_trace else None
+
         df = pd.read_parquet(parquet_path)
 
         if session_id is None:
@@ -255,15 +262,20 @@ class GearAnalysis(BaseAnalyzer):
             session_id = Path(parquet_path).stem
 
         # Find required columns
+        from ..utils.dataframe_helpers import find_column_name
         time_data = df.index.values
+        rpm_col = find_column_name(df, ['RPM', 'rpm', 'RPM dup 3'])
+        speed_col = find_column_name(df, ['GPS Speed', 'speed', 'Speed'])
         rpm_data = find_column(df, ['RPM', 'rpm', 'RPM dup 3'])
         speed_data = find_column(df, ['GPS Speed', 'speed', 'Speed'])
         lat_data = find_column(df, ['GPS Latitude', 'latitude', 'Latitude'])
         lon_data = find_column(df, ['GPS Longitude', 'longitude', 'Longitude'])
 
+        speed_unit_detected = "mph"
         # Convert speed to mph if needed
         if speed_data is not None and speed_data.max() < 100:
             speed_data = speed_data * SPEED_MS_TO_MPH
+            speed_unit_detected = "m/s"
 
         if rpm_data is None:
             raise ValueError("Parquet file missing RPM column")
@@ -271,9 +283,89 @@ class GearAnalysis(BaseAnalyzer):
         if speed_data is None:
             raise ValueError("Parquet file missing speed column")
 
-        return self.analyze_from_arrays(
+        report = self.analyze_from_arrays(
             time_data, rpm_data, speed_data, lat_data, lon_data, session_id
         )
+
+        if trace:
+            trace.record_input("rpm_column", rpm_col)
+            trace.record_input("speed_column", speed_col)
+            trace.record_input("speed_unit_detected", speed_unit_detected)
+            trace.record_input("sample_count", len(time_data))
+
+            trace.record_config("transmission_ratios", self.scenario['transmission_ratios'])
+            trace.record_config("final_drive", self.scenario['final_drive'])
+            trace.record_config("safe_rpm_limit", ENGINE_SPECS.get('safe_rpm_limit', 7000))
+            trace.record_config("power_band_min", ENGINE_SPECS.get('power_band_min', 5500))
+            trace.record_config("power_band_max", ENGINE_SPECS.get('power_band_max', 7000))
+            trace.record_config("track_name", self.track_name)
+
+            # Intermediates
+            gears_detected = sorted(set(gu.gear_number for gu in report.gear_usage if gu.time_seconds > 0))
+            trace.record_intermediate("gears_detected", gears_detected)
+            pct_over = report.rpm_analysis.get("pct_over_safe_limit", 0)
+            trace.record_intermediate("pct_over_safe_limit", pct_over)
+            pct_in_band = report.rpm_analysis.get("pct_in_power_band", 0)
+            trace.record_intermediate("pct_in_power_band", pct_in_band)
+            total_shifts = report.shift_summary.get("total_shifts", 0)
+            trace.record_intermediate("total_shifts", total_shifts)
+
+            self._run_gear_sanity_checks(trace, report, rpm_data)
+            report.trace = trace
+
+        return report
+
+    def _run_gear_sanity_checks(self, trace, report: GearAnalysisReport,
+                                rpm_data: np.ndarray) -> None:
+        """Run sanity checks on gear analysis results."""
+        # Check 6.1: gear_count_matches_config
+        gears_detected = [gu.gear_number for gu in report.gear_usage if gu.time_seconds > 0]
+        num_config_gears = len(self.scenario['transmission_ratios'])
+        if len(gears_detected) <= num_config_gears:
+            trace.add_check(
+                "gear_count_matches_config", "pass",
+                f"Detected {len(gears_detected)} gears, config has {num_config_gears} ratios",
+                expected=f"<= {num_config_gears}", actual=len(gears_detected),
+            )
+        else:
+            trace.add_check(
+                "gear_count_matches_config", "warn",
+                f"Detected {len(gears_detected)} gears but config only has {num_config_gears} ratios",
+                expected=f"<= {num_config_gears}", actual=len(gears_detected),
+            )
+
+        # Check 6.2: rpm_data_sufficient
+        valid_rpm = rpm_data[rpm_data > 1000]
+        pct_valid = len(valid_rpm) / len(rpm_data) * 100 if len(rpm_data) > 0 else 0
+        if pct_valid >= 50:
+            trace.add_check(
+                "rpm_data_sufficient", "pass",
+                f"{pct_valid:.0f}% of samples have RPM > 1000 (engine running)",
+                expected=">= 50%", actual=f"{pct_valid:.0f}%",
+            )
+        else:
+            trace.add_check(
+                "rpm_data_sufficient", "warn",
+                f"Only {pct_valid:.0f}% of samples have RPM > 1000",
+                expected=">= 50%", actual=f"{pct_valid:.0f}%",
+            )
+
+        # Check 6.3: gear_usage_balanced
+        if report.gear_usage:
+            max_usage = max(gu.usage_percent for gu in report.gear_usage)
+            if max_usage < 80:
+                trace.add_check(
+                    "gear_usage_balanced", "pass",
+                    f"No single gear exceeds 80% usage (max {max_usage:.0f}%)",
+                    expected="< 80%", actual=f"{max_usage:.0f}%",
+                )
+            else:
+                dominant = next(gu for gu in report.gear_usage if gu.usage_percent == max_usage)
+                trace.add_check(
+                    "gear_usage_balanced", "warn",
+                    f"Gear {dominant.gear_number} used {max_usage:.0f}% of time (stuck detection or highway?)",
+                    expected="< 80%", actual=f"{max_usage:.0f}%",
+                )
 
     def _calculate_gear_usage(
         self,
