@@ -78,7 +78,7 @@ class SessionDataLoader:
         "throttle": "throttle",
     }
 
-    def load(self, parquet_path: str) -> SessionChannels:
+    def load(self, parquet_path: str, tier: str = "merged") -> SessionChannels:
         """
         Load a parquet file and resolve all known channels.
 
@@ -87,10 +87,14 @@ class SessionDataLoader:
 
         Args:
             parquet_path: Path to parquet file
+            tier: Storage tier to load. Default "merged" loads the standard
+                parquet. "summary" and "raw" load tier-specific sidecars
+                if they exist, falling back to merged.
 
         Returns:
             SessionChannels with all discovered data
         """
+        parquet_path = self._resolve_tier_path(parquet_path, tier)
         df = pd.read_parquet(parquet_path)
         time_data = df.index.values
         session_id = Path(parquet_path).stem
@@ -232,3 +236,35 @@ class SessionDataLoader:
             "throttle": "throttle",
         }
         return mapping.get(logical_name, logical_name)
+
+    @staticmethod
+    def _resolve_tier_path(parquet_path: str, tier: str) -> str:
+        """
+        Resolve the actual file path for a given tier.
+
+        For "merged" (default), returns the path unchanged.
+        For "summary" or "raw", looks for tier-specific sidecar files
+        and falls back to the merged file if not found.
+
+        Sidecar naming:
+            {session_id}.parquet           → merged (10 Hz)
+            {session_id}_summary_50hz.parquet → summary
+            {session_id}_raw_500hz.parquet   → raw
+        """
+        if tier == "merged":
+            return parquet_path
+
+        p = Path(parquet_path)
+        stem = p.stem
+        suffix_map = {
+            "summary": "_summary_50hz",
+            "raw": "_raw_500hz",
+        }
+        tier_suffix = suffix_map.get(tier)
+        if tier_suffix:
+            tier_path = p.parent / f"{stem}{tier_suffix}.parquet"
+            if tier_path.exists():
+                return str(tier_path)
+
+        # Fallback to merged
+        return parquet_path

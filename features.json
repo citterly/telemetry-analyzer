@@ -663,11 +663,11 @@
       "name": "Execute: Tiered storage foundation",
       "category": "architecture",
       "description": "Implement tiered storage per docs/architecture/arch-004.md. Update session_builder.py to preserve native rates, add decimation filters, implement tiered export API.",
-      "status": "planned",
+      "status": "passing",
       "priority": 46,
-      "tests": [],
-      "files": [],
-      "notes": "Blocked by: arch-004-plan"
+      "tests": ["pytest tests/test_channel_tiers.py tests/test_tiered_storage.py (45 tests)"],
+      "files": ["src/session/channel_tiers.py", "src/session/session_builder.py", "src/services/session_data_loader.py", "tests/test_channel_tiers.py", "tests/test_tiered_storage.py"],
+      "notes": "DONE: Created channel_tiers.py with classify_channels() and compute_native_rates(). Updated _build_dataframe() to track native rates in attrs and use anti-alias decimation (scipy.signal.decimate) for high-freq channels. Added export_session_tiered() with raw/summary/merged tiers. Raw tier preserves native rate. Summary tier computes windowed stats (mean/min/max/velocity). SessionDataLoader.load() gains tier parameter with sidecar file fallback. 939 tests passing."
     },
     {
       "id": "arch-004-test",
@@ -718,9 +718,9 @@
     "created_at": "2025-01-29T01:00:00Z",
     "last_updated": "2026-02-10T17:00:00Z",
     "total_features": 56,
-    "passing": 51,
+    "passing": 52,
     "failing": 0,
-    "planned": 5
+    "planned": 4
   },
   "categories": {
     "bugfix": "Bug fixes and corrections",

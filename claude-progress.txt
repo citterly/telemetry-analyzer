@@ -1288,3 +1288,51 @@ Features: 51/56 passing (5 planned)
 
 Next priority: arch-004-exec (Execute tiered storage foundation)
 
+
+=== Session 14 continued (2026-02-10) ===
+Working on: arch-004-exec (Execute tiered storage foundation)
+
+Work completed:
+
+1. Created src/session/channel_tiers.py:
+   - ChannelTierConfig dataclass with is_raw/is_summary/is_merged properties
+   - classify_channels(): auto-classify by rate (>=200→raw, >=20→summary, <20→merged)
+   - channels_for_tier(): filter channels by tier membership
+   - compute_native_rates(): derive Hz from raw channel time arrays
+   - RAW_THRESHOLD_HZ=200, SUMMARY_THRESHOLD_HZ=20
+
+2. Updated src/session/session_builder.py:
+   - _build_dataframe(): now tracks native rates in df.attrs["native_rates"]
+   - _resample_channel(): anti-alias decimation via scipy.signal.decimate for
+     channels above 1.5x target rate, linear interp for near-rate/upsampling
+   - export_session_tiered(): new tiered export API with raw/summary/merged
+   - _build_raw_tier(): preserves native rate for high-freq channels
+   - _build_summary_tier(): windowed stats (mean/min/max/velocity) at 50 Hz
+   - _compute_summary_windows(): vectorized window statistics
+
+3. Updated src/services/session_data_loader.py:
+   - load() gains tier parameter (default "merged")
+   - _resolve_tier_path(): routes to sidecar files with fallback to merged
+   - Sidecar naming: _summary_50hz.parquet, _raw_500hz.parquet
+
+4. Created tests/test_channel_tiers.py (18 tests):
+   - TestChannelTierConfig: raw/summary/merged property tests
+   - TestClassifyChannels: thresholds, boundaries, mixed, zero rate
+   - TestChannelsForTier: tier filtering
+   - TestComputeNativeRates: rate computation, edge cases
+
+5. Created tests/test_tiered_storage.py (27 tests):
+   - TestNativeRateTracking: attrs present, values correct, base_rate_hz
+   - TestAntiAliasDecimation: near-rate interp, high-freq decimation,
+     aliasing removal, zero-rate fallback, short signal fallback
+   - TestSummaryWindowing: counts, mean/min/max, velocity, empty, lengths
+   - TestTieredExport: defaults, filenames, all tiers, rates, columns, skip
+   - TestSessionDataLoaderTierAware: merged/summary/raw/fallback
+
+Test results: 939/939 passing (45 new, 4 pre-existing DLL failures excluded)
+
+Status: arch-004-exec marked PASSING
+Features: 52/56 passing (4 planned)
+
+Next priority: arch-004-test (Test tiered storage compliance)
+
