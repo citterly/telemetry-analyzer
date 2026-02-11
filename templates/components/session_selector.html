@@ -1,0 +1,134 @@
+<!-- Session Selector Modal Component -->
+<!-- Include this template in analysis pages that need session selection -->
+
+<!-- Modal -->
+<div class="modal fade" id="sessionSelectorModal" tabindex="-1" aria-labelledby="sessionSelectorModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="sessionSelectorModalLabel">Select Session</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Filters Section -->
+                <div class="session-filters">
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <label for="filterTrack" class="form-label">Track</label>
+                            <select id="filterTrack" class="form-select form-select-sm" onchange="window._sessionSelector.applyFilters()">
+                                <option value="">All Tracks</option>
+                                <!-- Populated dynamically -->
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="filterVehicle" class="form-label">Vehicle</label>
+                            <select id="filterVehicle" class="form-select form-select-sm" onchange="window._sessionSelector.applyFilters()">
+                                <option value="">All Vehicles</option>
+                                <!-- Populated dynamically -->
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="filterDriver" class="form-label">Driver</label>
+                            <select id="filterDriver" class="form-select form-select-sm" onchange="window._sessionSelector.applyFilters()">
+                                <option value="">All Drivers</option>
+                                <!-- Populated dynamically -->
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="searchSessions" class="form-label">Search</label>
+                            <input type="text" id="searchSessions" class="form-control form-control-sm"
+                                   placeholder="Search..."
+                                   oninput="window._sessionSelector.applyFilters()">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Session List -->
+                <div id="sessionListContainer">
+                    <!-- Populated by SessionSelector.renderSessionList() -->
+                    <div class="session-loading">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading sessions...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Scope Indicator (Sticky Header) -->
+<!-- Place this at the top of your analysis page content -->
+<div id="scopeIndicator">
+    <!-- Populated by SessionSelector.renderScopeIndicator() -->
+</div>
+
+<!-- Required Scripts -->
+<script src="/static/js/session_selector.js"></script>
+
+<!-- Initialization Script -->
+<script>
+    // Initialize session selector when page loads
+    document.addEventListener('DOMContentLoaded', async function() {
+        await window._sessionSelector.init();
+
+        // Optional: Set up callback for when context changes
+        window._sessionSelector.onContextChange = function(context) {
+            console.log('Analysis context changed:', context);
+
+            // Page-specific reload logic
+            // Example: reload analysis data with new context
+            // if (typeof loadAnalysisData === 'function') {
+            //     loadAnalysisData();
+            // }
+        };
+
+        // Optional: Populate filter dropdowns with unique values
+        populateFilterDropdowns();
+    });
+
+    function populateFilterDropdowns() {
+        const sessions = window._sessionSelector.sessions;
+
+        // Get unique tracks
+        const tracks = [...new Set(sessions.map(s => s.track_id).filter(Boolean))];
+        const trackSelect = document.getElementById('filterTrack');
+        if (trackSelect) {
+            tracks.forEach(trackId => {
+                const session = sessions.find(s => s.track_id === trackId);
+                const trackName = session?.track_name || trackId;
+                const option = document.createElement('option');
+                option.value = trackId;
+                option.textContent = trackName;
+                trackSelect.appendChild(option);
+            });
+        }
+
+        // Get unique vehicles
+        const vehicles = [...new Set(sessions.map(s => s.vehicle_id).filter(Boolean))];
+        const vehicleSelect = document.getElementById('filterVehicle');
+        if (vehicleSelect) {
+            vehicles.forEach(vehicleId => {
+                const option = document.createElement('option');
+                option.value = vehicleId;
+                option.textContent = vehicleId.replace(/-/g, ' ');
+                vehicleSelect.appendChild(option);
+            });
+        }
+
+        // Get unique drivers
+        const drivers = [...new Set(sessions.map(s => s.driver_name).filter(Boolean))];
+        const driverSelect = document.getElementById('filterDriver');
+        if (driverSelect) {
+            drivers.forEach(driver => {
+                const option = document.createElement('option');
+                option.value = driver;
+                option.textContent = driver;
+                driverSelect.appendChild(option);
+            });
+        }
+    }
+</script>

@@ -3,6 +3,7 @@
 {% block title %}Analysis Results - {{ super() }}{% endblock %}
 
 {% block extra_head %}
+<link rel="stylesheet" href="/static/css/session_selector.css">
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <style>
     .analysis-card {
@@ -151,41 +152,44 @@
     </div>
 </div>
 
-<!-- File Selection -->
+<!-- Session Scope Indicator -->
+<div id="scopeIndicator"></div>
+
+<!-- Analysis Type Selection -->
 <div class="row mb-4">
     <div class="col-md-8">
         <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center">
-                <span>Select Session</span>
+                <span>Analysis Type</span>
                 <div id="audit-toggle-container"></div>
             </div>
             <div class="card-body">
-                <select class="form-select" id="file-select" onchange="updateAnalysisButtons()">
-                    <option value="">Loading sessions...</option>
-                </select>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-4">
-        <div class="card">
-            <div class="card-header">Analysis Type</div>
-            <div class="card-body">
-                <div class="btn-group-vertical w-100" id="analysis-buttons">
-                    <button class="btn btn-outline-primary" onclick="runAnalysis('report')" id="btn-report" disabled>
-                        Full Report
-                    </button>
-                    <button class="btn btn-outline-info" onclick="runAnalysis('shifts')" id="btn-shifts" disabled>
-                        Shift Analysis
-                    </button>
-                    <button class="btn btn-outline-info" onclick="runAnalysis('laps')" id="btn-laps" disabled>
-                        Lap Analysis
-                    </button>
-                    <button class="btn btn-outline-info" onclick="runAnalysis('gears')" id="btn-gears" disabled>
-                        Gear Usage
-                    </button>
-                    <button class="btn btn-outline-info" onclick="runAnalysis('power')" id="btn-power" disabled>
-                        Power Analysis
-                    </button>
+                <div class="row g-2">
+                    <div class="col-md-4">
+                        <button class="btn btn-outline-primary w-100" onclick="runAnalysis('report')" id="btn-report" disabled>
+                            📊 Full Report
+                        </button>
+                    </div>
+                    <div class="col-md-4">
+                        <button class="btn btn-outline-info w-100" onclick="runAnalysis('shifts')" id="btn-shifts" disabled>
+                            ⚙️ Shift Analysis
+                        </button>
+                    </div>
+                    <div class="col-md-4">
+                        <button class="btn btn-outline-info w-100" onclick="runAnalysis('laps')" id="btn-laps" disabled>
+                            🏁 Lap Analysis
+                        </button>
+                    </div>
+                    <div class="col-md-4">
+                        <button class="btn btn-outline-info w-100" onclick="runAnalysis('gears')" id="btn-gears" disabled>
+                            🔧 Gear Usage
+                        </button>
+                    </div>
+                    <div class="col-md-4">
+                        <button class="btn btn-outline-info w-100" onclick="runAnalysis('power')" id="btn-power" disabled>
+                            ⚡ Power Analysis
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -353,6 +357,9 @@
 
 </div>
 
+<!-- Session Selector Modal -->
+{% include 'components/session_selector.html' %}
+
 {% endblock %}
 
 {% block extra_scripts %}
@@ -360,47 +367,72 @@
     let currentAnalysisType = null;
     let currentData = null;
     let charts = {};
+    let currentSessionId = null;
+    let currentParquetPath = null;
 
-    // Load file list on page load
-    document.addEventListener('DOMContentLoaded', loadFileList);
+    // Initialize on page load
+    document.addEventListener('DOMContentLoaded', async function() {
+        // Initialize audit toggle
+        const toggleContainer = document.getElementById('audit-toggle-container');
+        if (toggleContainer && window._auditManager) {
+            toggleContainer.innerHTML = window._auditManager.renderToggleButton();
+        }
 
-    async function loadFileList() {
+        // Set up context change handler
+        window._sessionSelector.onContextChange = async function(context) {
+            await loadSessionForAnalysis(context.active_session_id);
+        };
+
+        // Load current context if it exists
+        const context = window._sessionSelector.currentContext;
+        if (context && context.active_session_id) {
+            await loadSessionForAnalysis(context.active_session_id);
+        } else {
+            // No context - disable analysis buttons
+            updateAnalysisButtons(false);
+        }
+
+        setupLapFilters();
+    });
+
+    async function loadSessionForAnalysis(sessionId) {
         try {
-            const response = await fetch('/api/parquet/list');
-            const data = await response.json();
+            currentSessionId = sessionId;
 
-            const select = document.getElementById('file-select');
-            select.innerHTML = '<option value="">Select a session...</option>';
+            // Fetch session details to get parquet path
+            const response = await apiCall(`/api/v2/sessions/${sessionId}`);
+            const session = response.session;
 
-            for (const file of data.parquet_files) {
-                if (!file.error) {
-                    const option = document.createElement('option');
-                    option.value = file.path;
-                    option.textContent = `${file.filename} (${file.rows.toLocaleString()} rows, ${file.columns} channels)`;
-                    select.appendChild(option);
-                }
+            if (!session || !session.parquet_path) {
+                throw new Error('Session does not have associated parquet data');
             }
+
+            currentParquetPath = session.parquet_path;
+            updateAnalysisButtons(true);
+
         } catch (error) {
-            showAlert('Failed to load session list: ' + error.message, 'danger');
+            showAlert('Failed to load session: ' + error.message, 'danger');
+            currentParquetPath = null;
+            updateAnalysisButtons(false);
         }
     }
 
-    function updateAnalysisButtons() {
-        const hasFile = document.getElementById('file-select').value !== '';
-        document.querySelectorAll('#analysis-buttons button').forEach(btn => {
-            btn.disabled = !hasFile;
+    function updateAnalysisButtons(enabled) {
+        ['btn-report', 'btn-shifts', 'btn-laps', 'btn-gears', 'btn-power'].forEach(id => {
+            const btn = document.getElementById(id);
+            if (btn) btn.disabled = !enabled;
         });
     }
 
     async function runAnalysis(type) {
-        const filename = document.getElementById('file-select').value;
-        if (!filename) {
+        if (!currentParquetPath) {
             showAlert('Please select a session first', 'warning');
+            window._sessionSelector.showModal();
             return;
         }
 
         currentAnalysisType = type;
-        currentFile = filename;
+        currentFile = currentParquetPath;
         document.getElementById('loading').style.display = 'flex';
 
         // Destroy existing charts
@@ -1268,8 +1300,7 @@
         charts['lap-times'].update();
     }
 
-    // Initialize filters on page load
-    document.addEventListener('DOMContentLoaded', setupLapFilters);
+    // Initialize filters is now handled in main DOMContentLoaded listener
 
     // Lap selection for comparison
     let selectedLaps = [];
@@ -1553,13 +1584,5 @@
             runAnalysis(currentAnalysisType);
         }
     };
-
-    // Initialize audit toggle on page load
-    document.addEventListener('DOMContentLoaded', () => {
-        const toggleContainer = document.getElementById('audit-toggle-container');
-        if (toggleContainer && window._auditManager) {
-            toggleContainer.innerHTML = window._auditManager.renderToggleButton();
-        }
-    });
 </script>
 {% endblock %}

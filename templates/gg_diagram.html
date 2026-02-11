@@ -3,6 +3,7 @@
 {% block title %}G-G Diagram - {{ super() }}{% endblock %}
 
 {% block extra_head %}
+<link rel="stylesheet" href="/static/css/session_selector.css">
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <style>
     .gg-container {
@@ -288,15 +289,13 @@
     </div>
 </div>
 
-<!-- File Selection -->
+<!-- Session Scope Indicator -->
+<div id="scopeIndicator"></div>
+
+<!-- Controls -->
 <div class="row mb-4">
     <div class="col-md-6">
         <div class="control-panel">
-            <label for="file-select" class="form-label">Select Session</label>
-            <select class="form-select" id="file-select" onchange="loadGGDiagram()">
-                <option value="">Loading sessions...</option>
-            </select>
-        </div>
     </div>
     <div class="col-md-6">
         <div class="control-panel">
@@ -773,32 +772,60 @@
     let ggChart = null;
     let allPoints = [];
 
-    document.addEventListener('DOMContentLoaded', loadFileList);
+    let currentSessionId = null;
+    let currentParquetPath = null;
 
-    async function loadFileList() {
+    // Initialize on page load
+    document.addEventListener('DOMContentLoaded', async function() {
+        // Initialize audit toggle
+        const toggleContainer = document.getElementById('audit-toggle-container');
+        if (toggleContainer && window._auditManager) {
+            toggleContainer.innerHTML = window._auditManager.renderToggleButton();
+        }
+
+        // Set up context change handler
+        window._sessionSelector.onContextChange = async function(context) {
+            await loadSessionForAnalysis(context.active_session_id);
+        };
+
+        // Load current context if it exists
+        const context = window._sessionSelector.currentContext;
+        if (context && context.active_session_id) {
+            await loadSessionForAnalysis(context.active_session_id);
+        }
+    });
+
+    async function loadSessionForAnalysis(sessionId) {
         try {
-            const response = await fetch('/api/parquet/list');
-            const data = await response.json();
+            currentSessionId = sessionId;
 
-            const select = document.getElementById('file-select');
-            select.innerHTML = '<option value="">Select a session...</option>';
+            // Fetch session details to get parquet path
+            const response = await apiCall(`/api/v2/sessions/${sessionId}`);
+            const session = response.session;
 
-            for (const file of data.parquet_files) {
-                if (!file.error) {
-                    const option = document.createElement('option');
-                    option.value = file.path;
-                    option.textContent = `${file.filename} (${file.rows.toLocaleString()} rows)`;
-                    select.appendChild(option);
-                }
+            if (!session || !session.parquet_path) {
+                throw new Error('Session does not have associated parquet data');
             }
+
+            currentParquetPath = session.parquet_path;
+
+            // Auto-load GG diagram when session is selected
+            await loadGGDiagram();
+
         } catch (error) {
-            console.error('Failed to load file list:', error);
+            showAlert('Failed to load session: ' + error.message, 'danger');
+            currentParquetPath = null;
         }
     }
 
     async function loadGGDiagram() {
-        const filename = document.getElementById('file-select').value;
-        if (!filename) return;
+        if (!currentParquetPath) {
+            showAlert('Please select a session first', 'warning');
+            window._sessionSelector.showModal();
+            return;
+        }
+
+        const filename = currentParquetPath;
 
         document.getElementById('loading').style.display = 'block';
         document.getElementById('results-section').style.display = 'none';
@@ -2665,18 +2692,13 @@
 
     // Callback when audit toggle changes
     window.onAuditToggle = function(enabled) {
-        const filename = document.getElementById('file-select').value;
-        if (filename) {
+        if (currentParquetPath) {
             loadGGDiagram();
         }
     };
-
-    // Initialize audit toggle on page load
-    document.addEventListener('DOMContentLoaded', () => {
-        const toggleContainer = document.getElementById('audit-toggle-container');
-        if (toggleContainer && window._auditManager) {
-            toggleContainer.innerHTML = window._auditManager.renderToggleButton();
-        }
-    });
 </script>
+
+<!-- Session Selector Modal -->
+{% include 'components/session_selector.html' %}
+
 {% endblock %}
