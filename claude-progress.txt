@@ -962,3 +962,24 @@ Features: 41/56 passing (15 planned architecture features)
 
 Next priority: arch-001-plan (Plan vehicle config unification)
 
+
+=== Session 12 continued (2026-02-10) ===
+Working on: arch-001-plan (Plan vehicle config unification)
+
+Work completed:
+
+1. Created docs/architecture/arch-001.md design doc:
+   - Mapped all 13 source files and 3 test files importing vehicle_config.py
+   - Catalogued all exports with usage counts and vehicles.py equivalents
+   - Identified 2 missing equivalents (TRACK_CONFIG → tracks.py, PROCESSING_CONFIG)
+   - 5-step migration strategy: add equivalents → bridge module → migrate consumers → move non-vehicle config → delete bridge
+   - Python module __getattr__ (PEP 562) for transparent bridge
+   - 10 acceptance criteria
+   - Risk assessment (singleton init order, test isolation, speed unit mismatch)
+   - 17 files to modify
+
+Status: arch-001-plan marked PASSING
+Features: 42/56 passing (14 planned)
+
+Next priority: arch-001-exec (Execute vehicle config unification)
+
