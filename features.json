@@ -749,6 +749,17 @@
       "notes": "DONE: Completed Steps 7-9 (page integrations) from arch-006.md. (7) analysis.html: Added audit toggle in session selector card header, modified runAnalysis to append traceParam, added renderAuditPanels function to handle both full report (cross-validation + sub-analyzer traces) and individual analyses, added window.onAuditToggle callback, integrated into all display functions (displayFullReport, displayShiftAnalysis, displayLapAnalysis, displayGearAnalysis, displayPowerAnalysis). (8) gg_diagram.html: Added audit toggle in control panel, modified loadGGDiagram to append traceParam, added renderAuditPanel function, window.onAuditToggle callback. (9) corner_analysis.html: Added audit toggle in control panel, modified loadCornerAnalysis to append traceParam, added renderAuditPanel function, window.onAuditToggle callback. Created 10 compliance tests verifying all acceptance criteria. All 10 tests passing. 1021 total tests passing (1011 baseline + 10 new)."
     },
     {
+      "id": "arch-007-plan",
+      "name": "Plan: Session-centric analysis UX",
+      "category": "architecture",
+      "description": "Design the UX transformation from file-centric (pick file on every page) to session-centric (select once, analyze anywhere). Enhanced session metadata (driver, weather, setup snapshot, tags), session selector component, analysis context persistence, comparison mode, URL state, cross-session queries. Output: docs/architecture/arch-007.md",
+      "status": "passing",
+      "priority": 54,
+      "tests": [],
+      "files": ["docs/architecture/arch-007.md"],
+      "notes": "DONE: Design doc covers 7 major components: analysis context system, enhanced session metadata (12 new fields including setup snapshot), session-centric import wizard, session selector component (replaces all file dropdowns), analysis pages refactor, URL state for sharing, quick access features, cross-session analysis. 6 implementation phases planned. Complete replacement strategy - no side-by-side with old file-centric UI. Dependencies: arch-001 (vehicle config), arch-002 (SessionDataLoader), arch-004 (tiered storage)."
+    },
+    {
       "id": "feat-070",
       "name": "Integrate feedback widget",
       "category": "ui",
@@ -775,9 +786,9 @@
   ],
   "metadata": {
     "created_at": "2025-01-29T01:00:00Z",
-    "last_updated": "2026-02-11T23:45:00Z",
-    "total_features": 61,
-    "passing": 60,
+    "last_updated": "2026-02-11T23:50:00Z",
+    "total_features": 62,
+    "passing": 61,
     "failing": 0,
     "planned": 1
   },

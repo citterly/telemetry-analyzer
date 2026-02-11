@@ -1664,3 +1664,45 @@ Status: uat-001 PLANNED (awaiting user testing results)
 Features: 61 total (60 passing, 1 planned)
 
 Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>
+
+
+=== Session 18 (2026-02-11) ===
+Working on: arch-007-plan (Plan: Session-centric analysis UX)
+
+Work completed:
+
+1. Comprehensive codebase exploration (Explore agent):
+   - Mapped current file management: /data/uploads, /data/exports/processed, sessions.db
+   - Analyzed SessionDataLoader, VehicleDatabase, TrackDatabase infrastructure
+   - Identified 30+ duplicated file selection patterns across analysis pages
+   - Documented current analysis workflow (file dropdown on every page)
+
+2. Created docs/architecture/arch-007.md design doc:
+   - Problem: File-centric UX (pick file on every page) vs session-centric vision
+   - 7 major components:
+     * Analysis Context System (AnalysisScope, persistent state)
+     * Enhanced Session Metadata (12 new fields: driver, weather, setup_snapshot, tire_pressures, tags, etc.)
+     * Session-Centric Import Wizard (3-step flow with full metadata capture)
+     * Session Selector Component (replaces all file dropdowns, 3 tabs: Single/Comparison/Filtered)
+     * Analysis Pages Refactor (DELETE file dropdowns, use context API)
+     * URL State (share/bookmark with ?session=abc123&baseline=def456)
+     * Quick Access Features (recent sessions, bookmarks, filters)
+   - 6 implementation phases (12-15 days total)
+   - Complete replacement strategy: NO side-by-side with old file-centric UI (user decision)
+   - Dependencies: arch-001 (vehicle config), arch-002 (SessionDataLoader), arch-004 (tiered storage)
+   - Leverages: SessionDatabase (already exists!), VehicleDatabase, TrackDatabase
+   - 10 acceptance criteria defined
+
+Key design decisions:
+- Session metadata captures setup snapshot at import time (allows post-hoc comparison)
+- Context stored in backend session + localStorage + URL state
+- Comparison mode supports baseline + up to 3 additional sessions
+- Cross-session queries: "all Road America Turn 3 from 2025" (aggregated analysis)
+- Migration script for importing existing parquet files as sessions
+
+Status: arch-007-plan marked PASSING
+Features: 62 total (61 passing, 1 planned)
+
+Next priority: arch-007-exec (Execute: Session-centric analysis UX)
+
+Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>
