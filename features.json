@@ -652,11 +652,11 @@
       "name": "Plan: Tiered storage foundation",
       "category": "architecture",
       "description": "Design the tiered storage system per CLAUDE.md spec: 500Hz raw → 50Hz summary → 10Hz merged. Must handle native sample rate preservation in session_builder.py, anti-alias filtering for downsampling, sidecar file export for high-frequency channels, and a tiered export API. Output: docs/architecture/arch-004.md",
-      "status": "planned",
+      "status": "passing",
       "priority": 45,
       "tests": [],
       "files": ["docs/architecture/arch-004.md"],
-      "notes": "No blockers. Benefits from arch-002-exec (data loader can route to correct tier)."
+      "notes": "DONE: Design doc covers 5-step migration: native rate tracking → channel classification → anti-alias decimation (scipy.signal.decimate) → tiered export API (raw/summary/merged) → summary windowing (mean/min/max/velocity). 10 acceptance criteria. File naming: {session_id}.parquet (merged), _summary_50hz.parquet, _raw_500hz.parquet. SessionDataLoader tier-aware extension."
     },
     {
       "id": "arch-004-exec",
@@ -718,9 +718,9 @@
     "created_at": "2025-01-29T01:00:00Z",
     "last_updated": "2026-02-10T17:00:00Z",
     "total_features": 56,
-    "passing": 50,
+    "passing": 51,
     "failing": 0,
-    "planned": 6
+    "planned": 5
   },
   "categories": {
     "bugfix": "Bug fixes and corrections",

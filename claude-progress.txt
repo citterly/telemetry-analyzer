@@ -1262,3 +1262,29 @@ Features: 50/56 passing (6 planned)
 
 Next priority: arch-004-plan (Plan tiered storage foundation)
 
+
+=== Session 14 continued (2026-02-10) ===
+Working on: arch-004-plan (Plan tiered storage foundation)
+
+Work completed:
+
+1. Created docs/architecture/arch-004.md design doc:
+   - Problem: _build_dataframe() discards native timestamps, uses naive np.interp
+   - Current: all channels resampled to 10 Hz, no anti-aliasing, no native rate tracking
+   - 5-step migration:
+     Step 1: Track native rates in df.attrs["native_rates"] (non-breaking)
+     Step 2: Anti-alias filter via scipy.signal.decimate for downsampled channels
+     Step 3: Tiered export API: export_session(raw_channels, session_id, tiers=["merged"])
+     Step 4: Summary windowing: mean/min/max/velocity at 50 Hz for high-freq channels
+     Step 5: SessionDataLoader tier parameter (extends arch-002)
+   - Channel classification by rate: >=200 Hz → raw, >=20 Hz → summary, <20 Hz → merged
+   - File naming: {session_id}.parquet (merged), _summary_50hz.parquet, _raw_500hz.parquet
+   - 10 acceptance criteria
+   - Risk: no high-freq data until suspension hardware arrives, scipy dependency,
+     file size (50-100 MB for raw tier), sync deferred to future feature
+
+Status: arch-004-plan marked PASSING
+Features: 51/56 passing (5 planned)
+
+Next priority: arch-004-exec (Execute tiered storage foundation)
+
