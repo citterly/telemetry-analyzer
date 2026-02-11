@@ -753,21 +753,21 @@
       "name": "Integrate feedback widget",
       "category": "ui",
       "description": "Add feedback-widget.js script tag to templates/base.html with data-app='telemetry-analyzer' pointing at the standalone feedback service. One-line integration. Blocked until ~/projects/feedback-service fb-002 (widget) is complete.",
-      "status": "planned",
+      "status": "passing",
       "priority": 60,
       "depends_on": ["external:feedback-service/fb-002"],
       "tests": [],
       "files": ["templates/base.html"],
-      "notes": "Depends on external project ~/projects/feedback-service. See docs/architecture/feedback-service-design.md for full spec."
+      "notes": "DONE: Added script tag to base.html pointing at http://localhost:8100/static/feedback-widget.js with data-app='telemetry-analyzer'. External dependency (feedback-service) complete with all 12 features passing. Widget ready for use on all pages."
     }
   ],
   "metadata": {
     "created_at": "2025-01-29T01:00:00Z",
-    "last_updated": "2026-02-11T15:00:00Z",
+    "last_updated": "2026-02-11T23:45:00Z",
     "total_features": 60,
-    "passing": 59,
+    "passing": 60,
     "failing": 0,
-    "planned": 1
+    "planned": 0
   },
   "categories": {
     "bugfix": "Bug fixes and corrections",
