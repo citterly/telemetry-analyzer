@@ -1363,3 +1363,23 @@ Features: 53/56 passing (3 planned)
 
 Next priority: arch-005-plan (Plan API integration test coverage)
 
+
+=== Session 14 continued (2026-02-10) ===
+Working on: arch-005-plan (Plan API integration test coverage)
+
+Work completed:
+
+1. Created docs/architecture/arch-005.md design doc:
+   - Cataloged 33+ endpoints across 6 routers + app.py
+   - Identified 28 untested endpoints (only analysis + sessions have tests)
+   - 5 new test files: visualization, parquet, queue, vehicles, health
+   - TestClient-based with shared synthetic parquet fixtures
+   - Coverage plan: happy path, 404, 422, optional params for each endpoint
+   - Mocking strategy: monkeypatch find_parquet_file, temp DBs for queue/sessions
+   - 10 acceptance criteria
+
+Status: arch-005-plan marked PASSING
+Features: 54/56 passing (2 planned)
+
+Next priority: arch-005-exec (Execute API integration test coverage)
+

@@ -685,11 +685,11 @@
       "name": "Plan: API integration test coverage",
       "category": "architecture",
       "description": "Design an API integration test suite using FastAPI TestClient that exercises real endpoints with real (or realistic synthetic) data. Current tests mostly mock the data layer. Goal: catch wiring bugs, serialization issues, and error handling gaps. Cover all 33 API endpoints across 6 routers. Output: docs/architecture/arch-005.md",
-      "status": "planned",
+      "status": "passing",
       "priority": 48,
       "tests": [],
       "files": ["docs/architecture/arch-005.md"],
-      "notes": "No blockers. Can run independently of arch-001 through arch-004."
+      "notes": "DONE: Design doc catalogs 33+ endpoints across 6 routers + app.py. Identifies 28 untested endpoints. 5 new test files planned: visualization (10+), parquet (5+), queue (7+), vehicles (5+), health (2+). TestClient-based with synthetic parquet fixtures. 10 acceptance criteria. Shared fixture strategy for file discovery mocking."
     },
     {
       "id": "arch-005-exec",
@@ -718,9 +718,9 @@
     "created_at": "2025-01-29T01:00:00Z",
     "last_updated": "2026-02-10T17:00:00Z",
     "total_features": 56,
-    "passing": 53,
+    "passing": 54,
     "failing": 0,
-    "planned": 3
+    "planned": 2
   },
   "categories": {
     "bugfix": "Bug fixes and corrections",
