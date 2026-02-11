@@ -759,15 +759,27 @@
       "tests": [],
       "files": ["templates/base.html"],
       "notes": "DONE: Added script tag to base.html pointing at http://localhost:8100/static/feedback-widget.js with data-app='telemetry-analyzer'. External dependency (feedback-service) complete with all 12 features passing. Widget ready for use on all pages."
+    },
+    {
+      "id": "uat-001",
+      "name": "Execute UAT script for recent features",
+      "category": "testing",
+      "description": "Manual user acceptance testing of all recent frontend features (arch-001 through arch-006 + feedback widget). Walk through docs/UAT_SCRIPT.md and report results. Covers: vehicle switching, analysis dashboard, audit mode UI (3 pages), G-G diagram, corner analysis, delta track map, feedback widget, error handling, and performance.",
+      "status": "planned",
+      "priority": 61,
+      "depends_on": [],
+      "tests": [],
+      "files": ["docs/UAT_SCRIPT.md"],
+      "notes": "UAT script created with 12 sections, ~150 test steps. Estimated time: 30-45 minutes. Focus on audit mode UI (biggest UX change), vehicle switching, and all analysis pages. Not a blocker but required for validation of recent work. User will report back results."
     }
   ],
   "metadata": {
     "created_at": "2025-01-29T01:00:00Z",
     "last_updated": "2026-02-11T23:45:00Z",
-    "total_features": 60,
+    "total_features": 61,
     "passing": 60,
     "failing": 0,
-    "planned": 0
+    "planned": 1
   },
   "categories": {
     "bugfix": "Bug fixes and corrections",
