@@ -1,0 +1,268 @@
+/**
+ * Audit Mode UI Styles
+ *
+ * Styling for the safeguard system's trace display and sanity checks.
+ * Uses existing theme colors for consistency.
+ */
+
+/* Toggle Switch */
+.audit-toggle {
+    display: inline-block;
+    margin-left: 1rem;
+}
+
+.audit-toggle label {
+    margin-bottom: 0;
+    font-weight: 500;
+    color: #e0e0e0;
+    cursor: pointer;
+}
+
+/* Status Dots */
+.audit-dot {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-right: 0.5rem;
+}
+
+.audit-dot-green {
+    background-color: #00b894;
+}
+
+.audit-dot-yellow {
+    background-color: #fdcb6e;
+}
+
+.audit-dot-red {
+    background-color: #e17055;
+}
+
+.audit-summary {
+    font-size: 0.9rem;
+    color: #a0a0a0;
+    margin-left: 0.25rem;
+}
+
+/* Audit Panel */
+.audit-panel {
+    background-color: #2d2d2d;
+    border-left: 4px solid;
+    border-radius: 4px;
+    margin: 1rem 0;
+    overflow: hidden;
+}
+
+.audit-panel-green {
+    border-left-color: #00b894;
+}
+
+.audit-panel-yellow {
+    border-left-color: #fdcb6e;
+}
+
+.audit-panel-red {
+    border-left-color: #e17055;
+}
+
+.audit-panel-header {
+    padding: 1rem;
+    background-color: #333;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    user-select: none;
+}
+
+.audit-panel-header:hover {
+    background-color: #3a3a3a;
+}
+
+.audit-panel-title {
+    font-weight: 600;
+    font-size: 1.1rem;
+    color: #e0e0e0;
+    display: flex;
+    align-items: center;
+}
+
+.audit-panel-arrow {
+    color: #a0a0a0;
+    transition: transform 0.2s;
+    font-size: 0.8rem;
+}
+
+.audit-panel.expanded .audit-panel-arrow {
+    transform: rotate(180deg);
+}
+
+.audit-panel-body {
+    display: none;
+    padding: 1.5rem;
+}
+
+.audit-panel.expanded .audit-panel-body {
+    display: block;
+}
+
+/* Audit Sections */
+.audit-section {
+    margin-bottom: 1.5rem;
+}
+
+.audit-section:last-child {
+    margin-bottom: 0;
+}
+
+.audit-section-title {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #00b894;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 0.75rem;
+    padding-bottom: 0.25rem;
+    border-bottom: 1px solid #404040;
+}
+
+/* Audit Table */
+.audit-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+}
+
+.audit-table tr {
+    border-bottom: 1px solid #404040;
+}
+
+.audit-table tr:last-child {
+    border-bottom: none;
+}
+
+.audit-table td {
+    padding: 0.5rem 0;
+    color: #e0e0e0;
+}
+
+.audit-key {
+    font-weight: 500;
+    color: #a0a0a0;
+    width: 40%;
+    padding-right: 1rem;
+}
+
+.audit-value {
+    font-family: 'Courier New', monospace;
+    color: #e0e0e0;
+}
+
+/* Sanity Check Rows */
+.audit-check-row {
+    padding: 1rem;
+    margin-bottom: 0.75rem;
+    background-color: #252525;
+    border-radius: 4px;
+    border-left: 3px solid;
+}
+
+.audit-check-row:last-child {
+    margin-bottom: 0;
+}
+
+.audit-check-pass {
+    border-left-color: #00b894;
+}
+
+.audit-check-warn {
+    border-left-color: #fdcb6e;
+}
+
+.audit-check-fail {
+    border-left-color: #e17055;
+}
+
+.audit-check-header {
+    display: flex;
+    align-items: center;
+    margin-bottom: 0.5rem;
+}
+
+.audit-check-name {
+    font-weight: 600;
+    color: #e0e0e0;
+    flex: 1;
+}
+
+.audit-check-status {
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 0.25rem 0.5rem;
+    border-radius: 3px;
+}
+
+.audit-check-status-pass {
+    background-color: rgba(0, 184, 148, 0.2);
+    color: #00b894;
+}
+
+.audit-check-status-warn {
+    background-color: rgba(253, 203, 110, 0.2);
+    color: #fdcb6e;
+}
+
+.audit-check-status-fail {
+    background-color: rgba(225, 112, 85, 0.2);
+    color: #e17055;
+}
+
+.audit-check-message {
+    color: #c0c0c0;
+    font-size: 0.9rem;
+    margin-bottom: 0.5rem;
+}
+
+.audit-check-impact {
+    color: #a0a0a0;
+    font-size: 0.85rem;
+    font-style: italic;
+    margin-top: 0.5rem;
+    padding: 0.5rem;
+    background-color: rgba(255, 255, 255, 0.05);
+    border-radius: 3px;
+}
+
+.audit-check-values {
+    display: flex;
+    gap: 1.5rem;
+    font-size: 0.85rem;
+    margin-top: 0.5rem;
+    color: #a0a0a0;
+    font-family: 'Courier New', monospace;
+}
+
+.audit-check-values span {
+    display: inline-block;
+}
+
+/* Warnings List */
+.audit-warnings-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.audit-warnings-list li {
+    padding: 0.5rem;
+    margin-bottom: 0.5rem;
+    background-color: rgba(253, 203, 110, 0.1);
+    border-left: 3px solid #fdcb6e;
+    color: #fdcb6e;
+    font-size: 0.9rem;
+}
+
+.audit-warnings-list li:last-child {
+    margin-bottom: 0;
+}

@@ -341,12 +341,14 @@ class ShiftAnalyzer(BaseAnalyzer):
                 "gear_count_matches_config", "pass",
                 f"Detected {len(gears_detected)} gears, config has {num_config_gears} ratios",
                 expected=f"<= {num_config_gears}", actual=len(gears_detected),
+                impact="Gear detection matches RPM/speed ratios to configured transmission ratios. Extra gears mean some data is assigned to nonexistent gears, corrupting shift RPM statistics.",
             )
         else:
             trace.add_check(
                 "gear_count_matches_config", "warn",
                 f"Detected {len(gears_detected)} gears but config only has {num_config_gears} ratios",
                 expected=f"<= {num_config_gears}", actual=len(gears_detected),
+                impact="Gear detection matches RPM/speed ratios to configured transmission ratios. Extra gears mean some data is assigned to nonexistent gears, corrupting shift RPM statistics.",
             )
 
         # Check 3.2: shift_rpm_below_redline
@@ -358,6 +360,7 @@ class ShiftAnalyzer(BaseAnalyzer):
                 "shift_rpm_below_redline", "pass",
                 f"Max shift RPM {max_shift_rpm:.0f} is below redline ({safe_limit} + 5%)",
                 expected=f"<= {threshold:.0f}", actual=round(max_shift_rpm),
+                impact="A shift above redline indicates sensor noise, wrong gear assignment, or engine over-rev. Shift quality ratings and optimal shift point recommendations become unreliable.",
             )
         else:
             trace.add_check(
@@ -365,6 +368,7 @@ class ShiftAnalyzer(BaseAnalyzer):
                 f"Max shift RPM {max_shift_rpm:.0f} exceeds redline ({safe_limit} + 5% = {threshold:.0f})",
                 expected=f"<= {threshold:.0f}", actual=round(max_shift_rpm),
                 severity="error",
+                impact="A shift above redline indicates sensor noise, wrong gear assignment, or engine over-rev. Shift quality ratings and optimal shift point recommendations become unreliable.",
             )
 
         # Check 3.3: shift_confidence
@@ -378,12 +382,14 @@ class ShiftAnalyzer(BaseAnalyzer):
                 "shift_confidence", "pass",
                 f"{adjacent_pct:.0f}% of shifts are between adjacent gears",
                 expected=">= 50%", actual=f"{adjacent_pct:.0f}%",
+                impact="Non-adjacent shifts suggest unreliable gear detection. Shift timing, quality ratings, and per-gear RPM statistics may be based on incorrect gear assignments.",
             )
         else:
             trace.add_check(
                 "shift_confidence", "warn",
                 f"Only {adjacent_pct:.0f}% of shifts are between adjacent gears, gear detection may be unreliable",
                 expected=">= 50%", actual=f"{adjacent_pct:.0f}%",
+                impact="Non-adjacent shifts suggest unreliable gear detection. Shift timing, quality ratings, and per-gear RPM statistics may be based on incorrect gear assignments.",
             )
 
         # Check 3.4: sufficient_shifts
@@ -392,12 +398,14 @@ class ShiftAnalyzer(BaseAnalyzer):
                 "sufficient_shifts", "pass",
                 f"{report.total_shifts} shifts detected, sufficient for analysis",
                 expected=">= 3", actual=report.total_shifts,
+                impact="Fewer than 3 shifts means insufficient data for meaningful statistical analysis. Shift RPM averages and quality distributions will have high uncertainty.",
             )
         else:
             trace.add_check(
                 "sufficient_shifts", "warn",
                 f"Only {report.total_shifts} shifts detected, analysis may not be meaningful",
                 expected=">= 3", actual=report.total_shifts,
+                impact="Fewer than 3 shifts means insufficient data for meaningful statistical analysis. Shift RPM averages and quality distributions will have high uncertainty.",
             )
 
     def _process_shifts(
@@ -563,12 +571,55 @@ class ShiftAnalyzer(BaseAnalyzer):
     def analyze_from_channels(self, channels, session_id="unknown",
                               include_trace=False, **kwargs):
         """Analyze from pre-loaded SessionChannels."""
-        return self.analyze_session(
+        trace = self._create_trace("ShiftAnalyzer") if include_trace else None
+
+        report = self.analyze_session(
             rpm_data=channels.rpm,
             speed_data=channels.speed_mph,
             time_data=channels.time,
             session_id=session_id,
         )
+
+        if trace:
+            trace.record_input("rpm_channel", "rpm")
+            trace.record_input("speed_channel", "speed_mph")
+            trace.record_input("speed_unit_detected", channels.speed_unit_detected)
+            trace.record_input("sample_count", channels.sample_count)
+            trace.record_input("shift_count", report.total_shifts)
+
+            trace.record_config("transmission_ratios", self.transmission_ratios)
+            trace.record_config("final_drive", self.final_drive)
+            trace.record_config("optimal_shift_rpm_min", self.OPTIMAL_SHIFT_RPM_MIN)
+            trace.record_config("optimal_shift_rpm_max", self.OPTIMAL_SHIFT_RPM_MAX)
+            trace.record_config("early_shift_rpm", self.EARLY_SHIFT_RPM)
+            trace.record_config("over_rev_rpm", self.OVER_REV_RPM)
+
+            # Intermediates
+            gears_detected = set()
+            for s in report.shifts:
+                gears_detected.add(s.from_gear)
+                gears_detected.add(s.to_gear)
+            trace.record_intermediate("gears_detected", sorted(gears_detected))
+
+            shifts_per_gear = {}
+            for s in report.shifts:
+                key = f"{s.from_gear}->{s.to_gear}"
+                shifts_per_gear[key] = shifts_per_gear.get(key, 0) + 1
+            trace.record_intermediate("shifts_per_gear", shifts_per_gear)
+
+            upshifts = [s for s in report.shifts if s.shift_type == "upshift"]
+            optimal = sum(1 for s in upshifts if s.shift_quality == "optimal")
+            early = sum(1 for s in upshifts if s.shift_quality == "early")
+            over_rev = sum(1 for s in upshifts if s.shift_quality == "over-rev")
+            total_up = len(upshifts) if upshifts else 1
+            trace.record_intermediate("pct_optimal", round(optimal / total_up * 100, 1))
+            trace.record_intermediate("pct_early", round(early / total_up * 100, 1))
+            trace.record_intermediate("pct_over_rev", round(over_rev / total_up * 100, 1))
+
+            self._run_sanity_checks(trace, report)
+            report.trace = trace
+
+        return report
 
 
 analyzer_registry.register(ShiftAnalyzer)

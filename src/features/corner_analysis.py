@@ -339,6 +339,7 @@ class CornerAnalyzer(BaseAnalyzer):
                 "gps_quality", "pass",
                 f"GPS data has movement: lat range {lat_range:.4f}, lon range {lon_range:.4f}",
                 expected="lat/lon range > 0.0001", actual=f"lat={lat_range:.4f}, lon={lon_range:.4f}",
+                impact="Corner detection relies on GPS to calculate path radius and identify turns. Without GPS movement, no corners can be detected and all per-corner metrics are unavailable.",
             )
         else:
             trace.add_check(
@@ -346,6 +347,7 @@ class CornerAnalyzer(BaseAnalyzer):
                 f"GPS data shows no movement: lat range {lat_range:.6f}, lon range {lon_range:.6f}",
                 expected="lat/lon range > 0.0001", actual=f"lat={lat_range:.6f}, lon={lon_range:.6f}",
                 severity="error",
+                impact="Corner detection relies on GPS to calculate path radius and identify turns. Without GPS movement, no corners can be detected and all per-corner metrics are unavailable.",
             )
 
         # Check 6.5: corner_count_plausible
@@ -355,18 +357,21 @@ class CornerAnalyzer(BaseAnalyzer):
                 "corner_count_plausible", "pass",
                 f"Detected {n_corners} corners (expected 3-50 for a typical track)",
                 expected="3-50", actual=n_corners,
+                impact="Most road courses have 8-20 corners per lap. A count outside 3-50 suggests detection parameters don't match this track, making corner comparisons unreliable.",
             )
         elif n_corners == 0:
             trace.add_check(
                 "corner_count_plausible", "warn",
                 "No corners detected - data may be from a straight or parking lot",
                 expected="3-50", actual=0,
+                impact="Most road courses have 8-20 corners per lap. A count outside 3-50 suggests detection parameters don't match this track, making corner comparisons unreliable.",
             )
         else:
             trace.add_check(
                 "corner_count_plausible", "warn",
                 f"Detected {n_corners} corners (outside 3-50 range for typical track)",
                 expected="3-50", actual=n_corners,
+                impact="Most road courses have 8-20 corners per lap. A count outside 3-50 suggests detection parameters don't match this track, making corner comparisons unreliable.",
             )
 
         # Check 6.6: corner_speeds_plausible
@@ -382,12 +387,14 @@ class CornerAnalyzer(BaseAnalyzer):
                     "corner_speeds_plausible", "pass",
                     f"Corner speeds range {min_speed:.0f}-{max_speed:.0f} mph (plausible)",
                     expected="5-180 mph", actual=f"{min_speed:.0f}-{max_speed:.0f} mph",
+                    impact="Corner speeds below 5 or above 180 mph are unlikely for production race cars. Implausible values indicate a speed unit error or incorrect corner detection.",
                 )
             else:
                 trace.add_check(
                     "corner_speeds_plausible", "warn",
                     f"Corner speeds range {min_speed:.0f}-{max_speed:.0f} mph (outside plausible range)",
                     expected="5-180 mph", actual=f"{min_speed:.0f}-{max_speed:.0f} mph",
+                    impact="Corner speeds below 5 or above 180 mph are unlikely for production race cars. Implausible values indicate a speed unit error or incorrect corner detection.",
                 )
 
     def analyze_from_arrays(
@@ -794,10 +801,12 @@ class CornerAnalyzer(BaseAnalyzer):
     def analyze_from_channels(self, channels, session_id="unknown",
                               include_trace=False, **kwargs):
         """Analyze from pre-loaded SessionChannels."""
+        trace = self._create_trace("CornerAnalyzer") if include_trace else None
+
         track_name = kwargs.get('track_name', "Unknown Track")
         speed = channels.speed_mph if channels.speed_mph is not None else np.zeros(channels.sample_count)
         throttle = channels.throttle if channels.throttle is not None else np.zeros(channels.sample_count)
-        return self.analyze_from_arrays(
+        result = self.analyze_from_arrays(
             time_data=channels.time,
             lat_data=channels.latitude,
             lon_data=channels.longitude,
@@ -809,6 +818,30 @@ class CornerAnalyzer(BaseAnalyzer):
             session_id=session_id,
             track_name=track_name,
         )
+
+        if trace:
+            trace.record_input("sample_count", channels.sample_count)
+            trace.record_input("speed_unit_detected", channels.speed_unit_detected)
+            trace.record_input("has_radius_data", False)
+            trace.record_input("has_lat_acc_data", channels.lat_acc is not None)
+            trace.record_input("has_throttle_data", channels.throttle is not None)
+
+            trace.record_config("radius_threshold", self.detector.radius_threshold)
+            trace.record_config("lat_acc_threshold", self.detector.lat_acc_threshold)
+            trace.record_config("min_corner_duration", self.detector.min_corner_duration)
+            trace.record_config("track_name", track_name)
+
+            trace.record_intermediate("corners_detected", int(len(result.corner_zones)))
+            trace.record_intermediate("laps_analyzed", int(len(result.laps)))
+            if result.laps and result.laps[0].corners:
+                speeds = [c.entry_speed for c in result.laps[0].corners]
+                trace.record_intermediate("avg_entry_speed", float(np.mean(speeds)))
+                trace.record_intermediate("avg_exit_speed", float(result.laps[0].avg_exit_speed))
+
+            self._run_corner_sanity_checks(trace, result, channels.latitude, channels.longitude, speed)
+            result.trace = trace
+
+        return result
 
 
 analyzer_registry.register(CornerAnalyzer)

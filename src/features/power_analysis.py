@@ -367,17 +367,20 @@ class PowerAnalysis(BaseAnalyzer):
                         "mass_matches_config", "pass",
                         f"Analyzer mass {self.vehicle_mass_kg:.0f} kg matches vehicle config {config_mass_kg:.0f} kg",
                         expected=round(config_mass_kg, 1), actual=self.vehicle_mass_kg,
+                        impact="Vehicle mass is used in the P=mav power equation. A mass error produces a proportional error in all power and acceleration values.",
                     )
                 else:
                     trace.add_check(
                         "mass_matches_config", "warn",
                         f"Analyzer mass {self.vehicle_mass_kg:.0f} kg differs from vehicle config {config_mass_kg:.0f} kg by {pct_diff*100:.0f}%",
                         expected=round(config_mass_kg, 1), actual=self.vehicle_mass_kg,
+                        impact="Vehicle mass is used in the P=mav power equation. A mass error produces a proportional error in all power and acceleration values.",
                     )
         except Exception:
             trace.add_check(
                 "mass_matches_config", "warn",
                 "Could not load active vehicle to compare mass",
+                impact="Vehicle mass is used in the P=mav power equation. A mass error produces a proportional error in all power and acceleration values.",
             )
 
         # Check 2.2: max_power_plausible
@@ -386,6 +389,7 @@ class PowerAnalysis(BaseAnalyzer):
                 "max_power_plausible", "pass",
                 f"Max power {report.max_power_hp:.0f} HP is plausible",
                 expected="< 800", actual=round(report.max_power_hp, 1),
+                impact="Maximum power drives the power curve and acceleration events. An implausible value means speed or mass inputs are likely wrong, making all power metrics unreliable.",
             )
         else:
             trace.add_check(
@@ -393,6 +397,7 @@ class PowerAnalysis(BaseAnalyzer):
                 f"Max power {report.max_power_hp:.0f} HP exceeds 800 HP limit for street cars",
                 expected="< 800", actual=round(report.max_power_hp, 1),
                 severity="error",
+                impact="Maximum power drives the power curve and acceleration events. An implausible value means speed or mass inputs are likely wrong, making all power metrics unreliable.",
             )
 
         # Check 2.3: power_weight_ratio
@@ -403,12 +408,14 @@ class PowerAnalysis(BaseAnalyzer):
                     "power_weight_ratio", "pass",
                     f"Power/weight ratio {pwr:.3f} HP/kg is reasonable",
                     expected="< 0.5", actual=round(pwr, 3),
+                    impact="Power-to-weight ratio is used for performance benchmarking. An unusually high ratio suggests mass is too low or power is overestimated.",
                 )
             else:
                 trace.add_check(
                     "power_weight_ratio", "warn",
                     f"Power/weight ratio {pwr:.3f} HP/kg exceeds supercar territory (0.5 HP/kg)",
                     expected="< 0.5", actual=round(pwr, 3),
+                    impact="Power-to-weight ratio is used for performance benchmarking. An unusually high ratio suggests mass is too low or power is overestimated.",
                 )
 
         # Check 2.4: speed_unit_confidence
@@ -418,12 +425,14 @@ class PowerAnalysis(BaseAnalyzer):
                 "speed_unit_confidence", "warn",
                 f"Max raw speed {speed_max_raw:.1f} is in ambiguous zone (45-110). Could be m/s or mph.",
                 expected="outside 45-110", actual=round(speed_max_raw, 1),
+                impact="Speed unit detection affects every downstream calculation: power, acceleration, braking, and corner speeds. A wrong unit makes all speed-derived values off by ~2.2x.",
             )
         else:
             trace.add_check(
                 "speed_unit_confidence", "pass",
                 f"Max raw speed {speed_max_raw:.1f} is unambiguous",
                 expected="outside 45-110", actual=round(speed_max_raw, 1),
+                impact="Speed unit detection affects every downstream calculation: power, acceleration, braking, and corner speeds. A wrong unit makes all speed-derived values off by ~2.2x.",
             )
 
         # Check 2.5: sufficient_data
@@ -435,6 +444,7 @@ class PowerAnalysis(BaseAnalyzer):
                 "sufficient_data", "pass",
                 f"{sample_count} samples over {duration:.1f}s is sufficient",
                 expected="> 100 samples, > 10s", actual=f"{sample_count} samples, {duration:.1f}s",
+                impact="With too few samples or too short a session, statistical measures have high variance and smoothing filters may produce artifacts.",
             )
         else:
             trace.add_check(
@@ -442,6 +452,7 @@ class PowerAnalysis(BaseAnalyzer):
                 f"Insufficient data: {sample_count} samples, {duration:.1f}s (need >100 samples, >10s)",
                 expected="> 100 samples, > 10s", actual=f"{sample_count} samples, {duration:.1f}s",
                 severity="error",
+                impact="With too few samples or too short a session, statistical measures have high variance and smoothing filters may produce artifacts.",
             )
 
     def _calculate_acceleration(
@@ -784,12 +795,51 @@ class PowerAnalysis(BaseAnalyzer):
     def analyze_from_channels(self, channels, session_id="unknown",
                               include_trace=False, **kwargs):
         """Analyze from pre-loaded SessionChannels."""
-        return self.analyze_from_arrays(
+        trace = self._create_trace("PowerAnalysis") if include_trace else None
+
+        if trace:
+            trace.record_input("speed_channel", "speed_mph")
+            trace.record_input("speed_unit_detected", channels.speed_unit_detected)
+            speed_max_raw = float(channels.speed_mph.max()) if channels.speed_mph is not None else 0
+            trace.record_input("speed_max_raw", speed_max_raw)
+            trace.record_input("rpm_channel", "rpm")
+            trace.record_input("sample_count", channels.sample_count)
+            dt = np.diff(channels.time)
+            trace.record_input("dt_mean", float(np.mean(dt)) if len(dt) > 0 else 0.0)
+
+            from ..config.vehicles import get_engine_specs as _get_engine_specs
+            trace.record_config("vehicle_mass_kg", self.vehicle_mass_kg)
+            trace.record_config("smoothing_window", self.smoothing_window)
+            trace.record_config("smoothing_polyorder", 3)
+            trace.record_config("power_band_min_rpm", _get_engine_specs().get('power_band_min', 5500))
+            trace.record_config("power_band_max_rpm", _get_engine_specs().get('power_band_max', 7000))
+            trace.record_config("safe_rpm_limit", _get_engine_specs().get('safe_rpm_limit', 7000))
+
+        report = self.analyze_from_arrays(
             time_data=channels.time,
             speed_data=channels.speed_mph,
             rpm_data=channels.rpm,
             session_id=session_id,
         )
+
+        if trace:
+            # Record key intermediates
+            trace.record_intermediate("max_raw_power_hp", report.max_power_hp)
+            trace.record_intermediate("max_raw_accel_g", report.max_acceleration_g)
+            trace.record_intermediate("accel_event_count", len(report.acceleration_events))
+            trace.record_intermediate("braking_event_count", len(report.braking_events))
+            if report.rpm_analysis and "pct_in_power_band" in report.rpm_analysis:
+                trace.record_intermediate("pct_in_power_band", report.rpm_analysis["pct_in_power_band"])
+
+            if channels.rpm is None:
+                trace.warnings.append("RPM channel missing, RPM analysis skipped")
+
+            # Run sanity checks
+            self._run_sanity_checks(trace, report)
+
+            report.trace = trace
+
+        return report
 
 
 analyzer_registry.register(PowerAnalysis)

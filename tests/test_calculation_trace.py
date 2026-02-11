@@ -47,6 +47,7 @@ class TestSanityCheck:
             "status": "pass",
             "message": "ok",
             "severity": "warning",
+            "impact": "",
         }
         assert "expected" not in d
         assert "actual" not in d

@@ -223,7 +223,7 @@ class SessionReportGenerator(BaseAnalyzer):
 
         # Run all registered analyzers
         warnings = []
-        sub_reports = self._run_registry_analyzers(channels, session_id, warnings)
+        sub_reports = self._run_registry_analyzers(channels, session_id, warnings, include_trace=False)
 
         # Build metadata
         metadata = SessionMetadata(
@@ -285,7 +285,7 @@ class SessionReportGenerator(BaseAnalyzer):
 
         # Run all registered analyzers
         warnings = []
-        sub_reports = self._run_registry_analyzers(channels, session_id, warnings)
+        sub_reports = self._run_registry_analyzers(channels, session_id, warnings, include_trace=include_trace)
 
         # Build metadata
         metadata = SessionMetadata(
@@ -342,7 +342,7 @@ class SessionReportGenerator(BaseAnalyzer):
 
         return report
 
-    def _run_registry_analyzers(self, channels, session_id, warnings):
+    def _run_registry_analyzers(self, channels, session_id, warnings, include_trace=False):
         """Run all registered analyzers via the registry."""
         sub_reports = {}
         config = {
@@ -360,7 +360,7 @@ class SessionReportGenerator(BaseAnalyzer):
             try:
                 instance = analyzer_registry.create_instance(key, **config)
                 report = instance.analyze_from_channels(
-                    channels, session_id, **config
+                    channels, session_id, include_trace=include_trace, **config
                 )
                 sub_reports[key] = report
             except Exception as e:
@@ -395,6 +395,7 @@ class SessionReportGenerator(BaseAnalyzer):
             "speed_unit_consensus", "pass",
             f"Speed detected as '{speed_unit_detected}', converted to mph for all sub-analyzers",
             expected="consistent", actual=speed_unit_detected,
+            impact="All sub-analyzers receive the same speed data. If the speed unit is wrong, every sub-analysis has proportionally incorrect speed-derived results.",
         )
 
         # Check 7.2: sample_count_consistent — iterate dynamically
@@ -411,18 +412,21 @@ class SessionReportGenerator(BaseAnalyzer):
                     "sample_count_consistent", "pass",
                     f"All sub-analyzers processed ~{sample_count} samples",
                     expected="within 5%", actual=f"{max_diff_pct:.1f}% difference",
+                    impact="Sub-analyzers should process the same dataset. A large difference means some analyzers got differently filtered data, making cross-analysis comparisons unreliable.",
                 )
             else:
                 trace.add_check(
                     "sample_count_consistent", "warn",
                     f"Sub-analyzer sample counts differ by {max_diff_pct:.1f}%",
                     expected="within 5%", actual=f"{max_diff_pct:.1f}% difference",
+                    impact="Sub-analyzers should process the same dataset. A large difference means some analyzers got differently filtered data, making cross-analysis comparisons unreliable.",
                 )
         else:
             trace.add_check(
                 "sample_count_consistent", "warn",
                 "No sub-analyzers produced results to compare",
                 expected="at least 1 sub-analyzer", actual="0",
+                impact="Sub-analyzers should process the same dataset. A large difference means some analyzers got differently filtered data, making cross-analysis comparisons unreliable.",
             )
 
         # Check 7.3: config_consistent — iterate dynamically
@@ -437,6 +441,7 @@ class SessionReportGenerator(BaseAnalyzer):
                 "config_consistent", "pass",
                 f"All sub-analyzers using consistent config (track={self.track_name})",
                 expected="consistent", actual="consistent",
+                impact="Track and vehicle config must be identical across sub-analyzers. A mismatch means some results use wrong reference values, producing internally inconsistent reports.",
             )
         else:
             trace.add_check(
@@ -444,6 +449,7 @@ class SessionReportGenerator(BaseAnalyzer):
                 f"Config mismatch: {', '.join(config_issues)}",
                 expected=f"track={self.track_name}", actual=str(config_issues),
                 severity="error",
+                impact="Track and vehicle config must be identical across sub-analyzers. A mismatch means some results use wrong reference values, producing internally inconsistent reports.",
             )
 
     def analyze_from_parquet(

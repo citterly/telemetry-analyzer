@@ -335,12 +335,14 @@ class GearAnalysis(BaseAnalyzer):
                 "gear_count_matches_config", "pass",
                 f"Detected {len(gears_detected)} gears, config has {num_config_gears} ratios",
                 expected=f"<= {num_config_gears}", actual=len(gears_detected),
+                impact="Gear usage analysis allocates time and RPM to each gear. Extra detected gears mean some data goes to nonexistent gears, corrupting usage percentages and time-in-gear statistics.",
             )
         else:
             trace.add_check(
                 "gear_count_matches_config", "warn",
                 f"Detected {len(gears_detected)} gears but config only has {num_config_gears} ratios",
                 expected=f"<= {num_config_gears}", actual=len(gears_detected),
+                impact="Gear usage analysis allocates time and RPM to each gear. Extra detected gears mean some data goes to nonexistent gears, corrupting usage percentages and time-in-gear statistics.",
             )
 
         # Check 6.2: rpm_data_sufficient
@@ -351,12 +353,14 @@ class GearAnalysis(BaseAnalyzer):
                 "rpm_data_sufficient", "pass",
                 f"{pct_valid:.0f}% of samples have RPM > 1000 (engine running)",
                 expected=">= 50%", actual=f"{pct_valid:.0f}%",
+                impact="RPM below 1000 means engine off or idling. If most samples are idle, gear usage statistics are unrepresentative of actual driving behavior.",
             )
         else:
             trace.add_check(
                 "rpm_data_sufficient", "warn",
                 f"Only {pct_valid:.0f}% of samples have RPM > 1000",
                 expected=">= 50%", actual=f"{pct_valid:.0f}%",
+                impact="RPM below 1000 means engine off or idling. If most samples are idle, gear usage statistics are unrepresentative of actual driving behavior.",
             )
 
         # Check 6.3: gear_usage_balanced
@@ -367,6 +371,7 @@ class GearAnalysis(BaseAnalyzer):
                     "gear_usage_balanced", "pass",
                     f"No single gear exceeds 80% usage (max {max_usage:.0f}%)",
                     expected="< 80%", actual=f"{max_usage:.0f}%",
+                    impact="One gear dominating over 80% suggests highway driving or stuck gear detection. Per-gear RPM analysis lacks statistical significance for under-represented gears.",
                 )
             else:
                 dominant = next(gu for gu in report.gear_usage if gu.usage_percent == max_usage)
@@ -374,6 +379,7 @@ class GearAnalysis(BaseAnalyzer):
                     "gear_usage_balanced", "warn",
                     f"Gear {dominant.gear_number} used {max_usage:.0f}% of time (stuck detection or highway?)",
                     expected="< 80%", actual=f"{max_usage:.0f}%",
+                    impact="One gear dominating over 80% suggests highway driving or stuck gear detection. Per-gear RPM analysis lacks statistical significance for under-represented gears.",
                 )
 
     def _calculate_gear_usage(
@@ -752,7 +758,9 @@ class GearAnalysis(BaseAnalyzer):
     def analyze_from_channels(self, channels, session_id="unknown",
                               include_trace=False, **kwargs):
         """Analyze from pre-loaded SessionChannels."""
-        return self.analyze_from_arrays(
+        trace = self._create_trace("GearAnalysis") if include_trace else None
+
+        report = self.analyze_from_arrays(
             time_data=channels.time,
             rpm_data=channels.rpm,
             speed_data=channels.speed_mph,
@@ -760,6 +768,35 @@ class GearAnalysis(BaseAnalyzer):
             longitude_data=channels.longitude,
             session_id=session_id,
         )
+
+        if trace:
+            trace.record_input("rpm_channel", "rpm")
+            trace.record_input("speed_channel", "speed_mph")
+            trace.record_input("speed_unit_detected", channels.speed_unit_detected)
+            trace.record_input("sample_count", channels.sample_count)
+
+            trace.record_config("transmission_ratios", self.scenario['transmission_ratios'])
+            trace.record_config("final_drive", self.scenario['final_drive'])
+            from ..config.vehicles import get_engine_specs as _get_engine_specs
+            trace.record_config("safe_rpm_limit", _get_engine_specs().get('safe_rpm_limit', 7000))
+            trace.record_config("power_band_min", _get_engine_specs().get('power_band_min', 5500))
+            trace.record_config("power_band_max", _get_engine_specs().get('power_band_max', 7000))
+            trace.record_config("track_name", self.track_name)
+
+            # Intermediates
+            gears_detected = sorted(set(gu.gear_number for gu in report.gear_usage if gu.time_seconds > 0))
+            trace.record_intermediate("gears_detected", gears_detected)
+            pct_over = report.rpm_analysis.get("pct_over_safe_limit", 0)
+            trace.record_intermediate("pct_over_safe_limit", pct_over)
+            pct_in_band = report.rpm_analysis.get("pct_in_power_band", 0)
+            trace.record_intermediate("pct_in_power_band", pct_in_band)
+            total_shifts = report.shift_summary.get("total_shifts", 0)
+            trace.record_intermediate("total_shifts", total_shifts)
+
+            self._run_gear_sanity_checks(trace, report, channels.rpm)
+            report.trace = trace
+
+        return report
 
 
 analyzer_registry.register(GearAnalysis)

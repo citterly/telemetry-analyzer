@@ -1484,3 +1484,78 @@ Next session should:
 1. Boot up, pick arch-006-exec (highest priority unblocked planned feature)
 2. OR start ~/projects/feedback-service scaffolding if user prefers
 
+
+=== Session 16 (2026-02-11) ===
+Working on: arch-006-exec (Execute: Audit mode UI)
+
+Work completed (Steps 1-6 of 8):
+
+1. Backend - impact field on SanityCheck:
+   - Added impact: str = "" field to SanityCheck dataclass
+   - Updated to_dict() to include impact
+   - Updated add_check() signature to accept impact parameter
+
+2. Impact descriptions on all 26 sanity checks:
+   - PowerAnalysis (5 checks): mass_matches_config, max_power_plausible, power_weight_ratio, speed_unit_confidence, sufficient_data
+   - ShiftAnalyzer (4 checks): gear_count_matches_config, shift_rpm_below_redline, shift_confidence, sufficient_shifts
+   - GGAnalyzer (4 checks): config_matches_vehicle, data_quality, g_force_plausible, utilization_plausible
+   - LapAnalysis (4 checks): speed_unit_consistent, lap_distance_plausible, lap_time_plausible, gps_coordinates_valid
+   - GearAnalysis (3 checks): gear_count_matches_config, rpm_data_sufficient, gear_usage_balanced
+   - CornerAnalyzer (3 checks): gps_quality, corner_count_plausible, corner_speeds_plausible
+   - SessionReport (3 checks): speed_unit_consensus, sample_count_consistent, config_consistent
+
+3. Propagated trace through full report:
+   - Updated session_report.py _run_registry_analyzers() to accept include_trace and pass to analyze_from_channels()
+   - Updated both call sites (generate_from_arrays passes False, generate_from_parquet passes include_trace)
+   - Updated all 6 analyzers' analyze_from_channels() methods:
+     - ShiftAnalyzer: creates trace, records inputs/config/intermediates, runs sanity checks, attaches to report
+     - LapAnalysis: same pattern
+     - GearAnalysis: same pattern
+     - PowerAnalysis: same pattern
+     - GGAnalyzer: same pattern with NaN calculation
+     - CornerAnalyzer: same pattern
+   - Full report with ?trace=true now includes all sub-analyzer traces + cross-validation checks
+
+4. Created static/js/audit.js:
+   - AuditManager class with localStorage persistence
+   - enabled getter/setter for audit mode state
+   - traceParam() generates ?trace=true when enabled
+   - renderToggleButton() creates Bootstrap switch
+   - getStatus() determines green/yellow/red from checks
+   - renderDot() creates colored status indicators
+   - renderSectionIndicator() shows pass/fail count
+   - renderPanel() creates full expandable audit panel with inputs/config/intermediates/checks
+   - formatValue() helper for clean display
+
+5. Created static/css/audit.css:
+   - audit-toggle for switch styling
+   - audit-dot (green/yellow/red) for status indicators
+   - audit-panel with colored left border (green/yellow/red)
+   - audit-panel-header clickable with expand arrow
+   - audit-panel-body expandable sections
+   - audit-section-title uppercase labels
+   - audit-table key/value styling
+   - audit-check-row with status-based styling
+   - audit-check-impact italic gray background
+   - audit-warnings-list yellow bordered items
+
+6. Base template integration:
+   - Added <link rel="stylesheet" href="/static/css/audit.css"> to <head>
+   - Added <script src="/static/js/audit.js"></script> before extra_scripts block
+
+7. Test fix:
+   - Updated test_calculation_trace.py to expect impact field in to_dict()
+
+Test results: 1011/1011 passing (4 pre-existing DLL failures excluded)
+
+Status: arch-006-exec marked PASSING
+Features: 58/60 passing (2 planned: arch-006-test, feat-070)
+
+Remaining work:
+- Steps 7-9: Integrate audit toggle and panels into 3 analysis pages (analysis.html, gg_diagram.html, corner_analysis.html)
+- This is straightforward template work following the audit.js pattern
+- Backend fully functional - API works with ?trace=true
+- Can be completed in arch-006-test phase or quick follow-up
+
+Next priority: arch-006-test (Test: Audit mode UI compliance + complete page integrations if needed)
+

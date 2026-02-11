@@ -294,17 +294,20 @@ class LapAnalysis(BaseAnalyzer):
                     "speed_unit_consistent", "pass",
                     f"Speed converted from m/s, max after conversion {max_speed:.0f} mph is reasonable",
                     expected="30-200 mph", actual=f"{max_speed:.0f} mph",
+                    impact="Lap analysis uses speed for time validation and distance estimation. A wrong speed unit makes lap distances off by ~2.2x and may cause incorrect lap classifications.",
                 )
             else:
                 trace.add_check(
                     "speed_unit_consistent", "warn",
                     f"Speed converted from m/s but max {max_speed:.0f} mph is unusual",
                     expected="30-200 mph", actual=f"{max_speed:.0f} mph",
+                    impact="Lap analysis uses speed for time validation and distance estimation. A wrong speed unit makes lap distances off by ~2.2x and may cause incorrect lap classifications.",
                 )
         else:
             trace.add_check(
                 "speed_unit_consistent", "pass",
                 f"Speed unit detected as {speed_unit_detected}",
+                impact="Lap analysis uses speed for time validation and distance estimation. A wrong speed unit makes lap distances off by ~2.2x and may cause incorrect lap classifications.",
             )
 
         # Check 5.2: lap_distance_plausible
@@ -316,21 +319,25 @@ class LapAnalysis(BaseAnalyzer):
                     "lap_distance_plausible", "pass",
                     f"Estimated lap distance {avg_dist_miles:.1f} miles is reasonable",
                     expected="1.0-6.0 miles", actual=f"{avg_dist_miles:.1f} miles",
+                    impact="Estimated lap distance is checked against known track lengths. An implausible distance means GPS is unreliable or start/finish detection is wrong, affecting all per-lap statistics.",
                 )
             elif avg_dist_miles > 0:
                 trace.add_check(
                     "lap_distance_plausible", "warn",
                     f"Estimated lap distance {avg_dist_miles:.1f} miles is unusual for a road course",
                     expected="1.0-6.0 miles", actual=f"{avg_dist_miles:.1f} miles",
+                    impact="Estimated lap distance is checked against known track lengths. An implausible distance means GPS is unreliable or start/finish detection is wrong, affecting all per-lap statistics.",
                 )
             else:
                 trace.add_check(
                     "lap_distance_plausible", "warn",
                     "Could not estimate lap distance",
+                    impact="Estimated lap distance is checked against known track lengths. An implausible distance means GPS is unreliable or start/finish detection is wrong, affecting all per-lap statistics.",
                 )
         else:
             trace.add_check(
                 "lap_distance_plausible", "warn", "No laps detected, cannot check distance",
+                impact="Estimated lap distance is checked against known track lengths. An implausible distance means GPS is unreliable or start/finish detection is wrong, affecting all per-lap statistics.",
             )
 
         # Check 5.3: lap_time_plausible
@@ -342,16 +349,19 @@ class LapAnalysis(BaseAnalyzer):
                     "lap_time_plausible", "pass",
                     f"Lap times {fastest:.1f}s - {slowest:.1f}s are plausible",
                     expected="30-600s", actual=f"{fastest:.1f}-{slowest:.1f}s",
+                    impact="Lap times outside 30-600s indicate GPS detection issues. This affects fastest lap identification, lap classification, and all per-lap metrics.",
                 )
             else:
                 trace.add_check(
                     "lap_time_plausible", "warn",
                     f"Lap times {fastest:.1f}s - {slowest:.1f}s outside expected range",
                     expected="30-600s", actual=f"{fastest:.1f}-{slowest:.1f}s",
+                    impact="Lap times outside 30-600s indicate GPS detection issues. This affects fastest lap identification, lap classification, and all per-lap metrics.",
                 )
         else:
             trace.add_check(
                 "lap_time_plausible", "warn", "No laps detected",
+                impact="Lap times outside 30-600s indicate GPS detection issues. This affects fastest lap identification, lap classification, and all per-lap metrics.",
             )
 
         # Check 5.4: gps_coordinates_valid
@@ -364,12 +374,14 @@ class LapAnalysis(BaseAnalyzer):
             trace.add_check(
                 "gps_coordinates_valid", "pass",
                 f"GPS coordinates in valid range (lat {np.min(valid_lat):.4f}-{np.max(valid_lat):.4f})",
+                impact="All lap detection depends on GPS for start/finish line crossing. Invalid GPS means no laps can be detected and all per-lap metrics are unavailable.",
             )
         else:
             trace.add_check(
                 "gps_coordinates_valid", "fail",
                 "GPS coordinates are invalid (out of range or all zeros)",
                 severity="error",
+                impact="All lap detection depends on GPS for start/finish line crossing. Invalid GPS means no laps can be detected and all per-lap metrics are unavailable.",
             )
 
     def _build_report(
@@ -768,8 +780,10 @@ class LapAnalysis(BaseAnalyzer):
     def analyze_from_channels(self, channels, session_id="unknown",
                               include_trace=False, **kwargs):
         """Analyze from pre-loaded SessionChannels."""
+        trace = self._create_trace("LapAnalysis") if include_trace else None
+
         rpm = channels.rpm if channels.rpm is not None else np.zeros(channels.sample_count)
-        return self.analyze_from_arrays(
+        report = self.analyze_from_arrays(
             time_data=channels.time,
             latitude_data=channels.latitude,
             longitude_data=channels.longitude,
@@ -777,6 +791,33 @@ class LapAnalysis(BaseAnalyzer):
             speed_data=channels.speed_mph,
             session_id=session_id,
         )
+
+        if trace:
+            trace.record_input("latitude_channel", "latitude")
+            trace.record_input("longitude_channel", "longitude")
+            trace.record_input("speed_channel", "speed_mph")
+            trace.record_input("speed_unit_detected", channels.speed_unit_detected)
+            trace.record_input("sample_count", channels.sample_count)
+            trace.record_input("track_detected", self.track_name)
+
+            trace.record_config("track_name", self.track_name)
+            if self.start_finish_gps:
+                trace.record_config("start_finish_gps", self.start_finish_gps)
+
+            trace.record_intermediate("laps_detected", report.total_laps)
+            trace.record_intermediate("fastest_lap_time", report.fastest_lap_time)
+            if report.laps:
+                trace.record_intermediate("slowest_lap_time", max(l.lap_time for l in report.laps))
+            trace.record_intermediate("avg_lap_time", report.average_lap_time)
+            if report.laps:
+                total_dist = sum(l.distance_meters for l in report.laps)
+                avg_dist_miles = (total_dist / len(report.laps)) / 1609.34
+                trace.record_intermediate("estimated_lap_distance_miles", round(avg_dist_miles, 2))
+
+            self._run_sanity_checks(trace, report, channels.latitude, channels.longitude, channels.speed_unit_detected)
+            report.trace = trace
+
+        return report
 
 
 analyzer_registry.register(LapAnalysis)

@@ -589,22 +589,26 @@ class GGAnalyzer(BaseAnalyzer):
                         "config_matches_vehicle", "pass",
                         f"Reference G ({self.max_g_reference}) matches vehicle config ({vehicle.max_lateral_g})",
                         expected=vehicle.max_lateral_g, actual=self.max_g_reference,
+                        impact="The G-force reference value determines the friction circle boundary. A wrong reference makes utilization percentages and quadrant breakdowns use the wrong baseline.",
                     )
                 else:
                     trace.add_check(
                         "config_matches_vehicle", "warn",
                         f"Reference G ({self.max_g_reference}) differs from vehicle config ({vehicle.max_lateral_g})",
                         expected=vehicle.max_lateral_g, actual=self.max_g_reference,
+                        impact="The G-force reference value determines the friction circle boundary. A wrong reference makes utilization percentages and quadrant breakdowns use the wrong baseline.",
                     )
             else:
                 trace.add_check(
                     "config_matches_vehicle", "warn",
                     "No active vehicle or max_lateral_g not set",
+                    impact="The G-force reference value determines the friction circle boundary. A wrong reference makes utilization percentages and quadrant breakdowns use the wrong baseline.",
                 )
         except Exception:
             trace.add_check(
                 "config_matches_vehicle", "warn",
                 "Could not load vehicle config for comparison",
+                impact="The G-force reference value determines the friction circle boundary. A wrong reference makes utilization percentages and quadrant breakdowns use the wrong baseline.",
             )
 
         # Check 4.2: data_quality
@@ -613,12 +617,14 @@ class GGAnalyzer(BaseAnalyzer):
                 "data_quality", "pass",
                 f"Only {nan_pct:.1f}% NaN values in accelerometer data",
                 expected="< 5%", actual=f"{nan_pct:.1f}%",
+                impact="High NaN percentage means many data points were dropped. Remaining points may not represent the full range of driving, biasing utilization and peak G calculations.",
             )
         elif nan_pct < 20:
             trace.add_check(
                 "data_quality", "warn",
                 f"{nan_pct:.1f}% NaN values in accelerometer data, results may be less reliable",
                 expected="< 5%", actual=f"{nan_pct:.1f}%",
+                impact="High NaN percentage means many data points were dropped. Remaining points may not represent the full range of driving, biasing utilization and peak G calculations.",
             )
         else:
             trace.add_check(
@@ -626,6 +632,7 @@ class GGAnalyzer(BaseAnalyzer):
                 f"{nan_pct:.1f}% NaN values in accelerometer data, analysis unreliable",
                 expected="< 20%", actual=f"{nan_pct:.1f}%",
                 severity="error",
+                impact="High NaN percentage means many data points were dropped. Remaining points may not represent the full range of driving, biasing utilization and peak G calculations.",
             )
 
         # Check 4.3: g_force_plausible
@@ -635,6 +642,7 @@ class GGAnalyzer(BaseAnalyzer):
                 "g_force_plausible", "pass",
                 f"Max combined G-force {max_combined:.2f}g is plausible",
                 expected="< 3.0", actual=round(max_combined, 2),
+                impact="G-forces above 3.0g are physically impossible on street tires and indicate sensor error. All friction circle analysis and utilization percentages become meaningless.",
             )
         else:
             trace.add_check(
@@ -642,6 +650,7 @@ class GGAnalyzer(BaseAnalyzer):
                 f"Max combined G-force {max_combined:.2f}g exceeds 3.0g limit for street tires",
                 expected="< 3.0", actual=round(max_combined, 2),
                 severity="error",
+                impact="G-forces above 3.0g are physically impossible on street tires and indicate sensor error. All friction circle analysis and utilization percentages become meaningless.",
             )
 
         # Check 4.4: utilization_plausible
@@ -651,12 +660,14 @@ class GGAnalyzer(BaseAnalyzer):
                 "utilization_plausible", "pass",
                 f"Utilization {util_pct:.1f}% is in expected range (10-100%)",
                 expected="10-100%", actual=f"{util_pct:.1f}%",
+                impact="Utilization outside 10-100% suggests misconfigured reference G, data errors, or non-track driving. Quadrant analysis and improvement recommendations may be misleading.",
             )
         else:
             trace.add_check(
                 "utilization_plausible", "warn",
                 f"Utilization {util_pct:.1f}% is outside expected range (10-100%)",
                 expected="10-100%", actual=f"{util_pct:.1f}%",
+                impact="Utilization outside 10-100% suggests misconfigured reference G, data errors, or non-track driving. Quadrant analysis and improvement recommendations may be misleading.",
             )
 
     def _calculate_quadrants(
@@ -867,7 +878,9 @@ class GGAnalyzer(BaseAnalyzer):
     def analyze_from_channels(self, channels, session_id="unknown",
                               include_trace=False, **kwargs):
         """Analyze from pre-loaded SessionChannels."""
-        return self.analyze_from_arrays(
+        trace = self._create_trace("GGAnalyzer") if include_trace else None
+
+        result = self.analyze_from_arrays(
             time_data=channels.time,
             lat_acc_data=channels.lat_acc,
             lon_acc_data=channels.lon_acc,
@@ -877,6 +890,45 @@ class GGAnalyzer(BaseAnalyzer):
             lon_gps=channels.longitude,
             session_id=session_id,
         )
+
+        if trace:
+            # Calculate NaN percentage
+            nan_count = 0
+            total_samples = channels.sample_count
+            if channels.lat_acc is not None:
+                nan_count += np.isnan(channels.lat_acc).sum()
+            if channels.lon_acc is not None:
+                nan_count += np.isnan(channels.lon_acc).sum()
+            nan_pct = (nan_count / (total_samples * 2) * 100) if total_samples > 0 else 0
+
+            trace.record_input("lat_acc_channel", "lat_acc")
+            trace.record_input("lon_acc_channel", "lon_acc")
+            trace.record_input("speed_channel", "speed_mph")
+            trace.record_input("throttle_channel", "throttle")
+            trace.record_input("sample_count", total_samples - nan_count)
+            trace.record_input("nan_pct", round(nan_pct, 1))
+            trace.record_input("lap_filter", None)
+
+            trace.record_config("max_g_reference", self.max_g_reference)
+            trace.record_config("max_braking_g", self.max_braking_g)
+            trace.record_config("power_limited_accel_g", self.power_limited_accel_g)
+            try:
+                from ..config.vehicles import get_active_vehicle
+                vehicle = get_active_vehicle()
+                trace.record_config("vehicle_name", vehicle.name if vehicle else "unknown")
+            except Exception:
+                trace.record_config("vehicle_name", "unknown")
+
+            trace.record_intermediate("max_combined_g", result.stats.max_combined_g)
+            trace.record_intermediate("p95_combined_g", result.stats.data_derived_max_g)
+            trace.record_intermediate("utilization_pct", result.stats.utilization_pct)
+            trace.record_intermediate("corner_utilization_pct", result.stats.corner_utilization_pct)
+            trace.record_intermediate("braking_to_lateral_ratio", result.stats.braking_to_lateral_ratio)
+
+            self._run_sanity_checks(trace, result, nan_pct)
+            result.trace = trace
+
+        return result
 
 
 analyzer_registry.register(GGAnalyzer)

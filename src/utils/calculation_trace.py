@@ -27,6 +27,7 @@ class SanityCheck:
     expected: Optional[Any] = None
     actual: Optional[Any] = None
     severity: str = "warning"  # "info", "warning", "error"
+    impact: str = ""
 
     def to_dict(self) -> dict:
         result = {
@@ -34,6 +35,7 @@ class SanityCheck:
             "status": self.status,
             "message": self.message,
             "severity": self.severity,
+            "impact": self.impact,
         }
         if self.expected is not None:
             result["expected"] = self.expected
@@ -69,11 +71,11 @@ class CalculationTrace:
 
     def add_check(self, name: str, status: str, message: str,
                   expected: Optional[Any] = None, actual: Optional[Any] = None,
-                  severity: str = "warning") -> None:
+                  severity: str = "warning", impact: str = "") -> None:
         """Append a SanityCheck."""
         self.sanity_checks.append(SanityCheck(
             name=name, status=status, message=message,
-            expected=expected, actual=actual, severity=severity,
+            expected=expected, actual=actual, severity=severity, impact=impact,
         ))
 
     def record_input(self, key: str, value: Any) -> None:
