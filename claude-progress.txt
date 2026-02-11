@@ -1336,3 +1336,30 @@ Features: 52/56 passing (4 planned)
 
 Next priority: arch-004-test (Test tiered storage compliance)
 
+
+=== Session 14 continued (2026-02-10) ===
+Working on: arch-004-test (Test tiered storage compliance)
+
+Work completed:
+
+1. Created tests/test_arch_004_compliance.py with 10 tests:
+   - AC-1: native_rates dict in DataFrame attrs with correct values
+   - AC-2: classify_channels(), ChannelTierConfig, compute_native_rates importable
+   - AC-3: _resample_channel uses scipy.signal.decimate, attenuates 200 Hz signal
+   - AC-4: export_session_tiered with default merged-only and all-tiers
+   - AC-5: raw tier has far more rows than merged, preserves high-freq channels
+   - AC-6: summary tier has mean/min/max/velocity columns for 500 Hz channels
+   - AC-7: merged tier shape and columns match direct _build_dataframe output
+   - AC-8: file naming: .parquet, _summary_50hz.parquet, _raw_500hz.parquet
+   - AC-9: SessionDataLoader tier parameter routes to sidecar with fallback
+   - AC-10: all critical modules import cleanly
+
+Test results: 949/949 passing (10 new, 4 pre-existing DLL failures excluded)
+
+Status: arch-004-test marked PASSING
+Features: 53/56 passing (3 planned)
+
+=== arch-004 COMPLETE (all 3 phases) ===
+
+Next priority: arch-005-plan (Plan API integration test coverage)
+

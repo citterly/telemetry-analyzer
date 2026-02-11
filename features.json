@@ -674,11 +674,11 @@
       "name": "Test: Tiered storage foundation",
       "category": "architecture",
       "description": "Verify arch-004 implementation against acceptance criteria in docs/architecture/arch-004.md. Test native rate preservation, anti-alias filtering, tiered export.",
-      "status": "planned",
+      "status": "passing",
       "priority": 47,
-      "tests": [],
-      "files": [],
-      "notes": "Blocked by: arch-004-exec"
+      "tests": ["pytest tests/test_arch_004_compliance.py (10 tests)"],
+      "files": ["tests/test_arch_004_compliance.py"],
+      "notes": "DONE: 10 compliance tests verifying all 10 acceptance criteria. AC-1: native rates in attrs, AC-2: classify_channels exists, AC-3: anti-alias filter attenuates above Nyquist, AC-4: tiered export API with backward compat, AC-5: raw tier preserves native rate, AC-6: summary tier windowed stats, AC-7: merged tier unchanged, AC-8: file naming convention, AC-9: SessionDataLoader tier-aware with fallback, AC-10: clean imports. 949 tests passing."
     },
     {
       "id": "arch-005-plan",
@@ -718,9 +718,9 @@
     "created_at": "2025-01-29T01:00:00Z",
     "last_updated": "2026-02-10T17:00:00Z",
     "total_features": 56,
-    "passing": 52,
+    "passing": 53,
     "failing": 0,
-    "planned": 4
+    "planned": 3
   },
   "categories": {
     "bugfix": "Bug fixes and corrections",
