@@ -1031,3 +1031,35 @@ Features: 43/56 passing (13 planned)
 
 Next priority: arch-001-test (Test vehicle config unification compliance)
 
+
+=== Session 13 continued (2026-02-10) ===
+Working on: arch-001-test (Test vehicle config unification compliance)
+
+Work completed:
+
+1. Created tests/test_arch_001_compliance.py with 13 tests:
+   - TestAcceptanceCriteria (10 tests):
+     - AC-1: No source file imports vehicle_config
+     - AC-2: vehicle_config.py orphaned (no consumers)
+     - AC-3: Vehicle switching works end-to-end (switch, verify getters update, restore)
+     - AC-4: All existing imports work (meta-check)
+     - AC-5: TRACK_CONFIG comes from tracks.py
+     - AC-6: PROCESSING_CONFIG in vehicles.py with correct keys
+     - AC-7: DEFAULT_SESSION in vehicles.py
+     - AC-8: Speed/RPM utility functions round-trip correctly
+     - AC-9: init.sh has no vehicle_config references
+     - AC-10: No test file imports vehicle_config
+   - TestConfigConsistency (3 tests):
+     - Getter functions match active vehicle object
+     - Analyzers don't have module-level config constants
+     - Processing config values are reasonable
+
+Test results: 831/831 passing (13 new, 4 pre-existing DLL failures excluded)
+
+Status: arch-001-test marked PASSING
+Features: 44/56 passing (12 planned)
+
+=== arch-001 COMPLETE (all 3 phases) ===
+
+Next priority: arch-002-plan (Plan SessionDataLoader service layer)
+
