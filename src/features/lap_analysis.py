@@ -14,6 +14,7 @@ import json
 
 from ..analysis.lap_analyzer import LapAnalyzer, LapInfo, analyze_session_laps
 from .base_analyzer import BaseAnalyzer, BaseAnalysisReport
+from .registry import analyzer_registry
 from ..config.tracks import get_track_config as _get_track_config
 from ..config.vehicles import get_processing_config as _get_processing_config
 from ..session.models import LapClassification
@@ -133,6 +134,12 @@ class LapAnalysis(BaseAnalyzer):
 
     Detects laps, calculates statistics, identifies improvement opportunities.
     """
+
+    # Registry metadata
+    registry_key = "laps"
+    required_channels = ["latitude", "longitude", "speed"]
+    optional_channels = ["rpm"]
+    config_params = ["track_name"]
 
     def __init__(self, track_name: str = None):
         """
@@ -757,6 +764,22 @@ class LapAnalysis(BaseAnalyzer):
             }
             for i, lap in enumerate(sorted_laps[:top_n])
         ]
+
+    def analyze_from_channels(self, channels, session_id="unknown",
+                              include_trace=False, **kwargs):
+        """Analyze from pre-loaded SessionChannels."""
+        rpm = channels.rpm if channels.rpm is not None else np.zeros(channels.sample_count)
+        return self.analyze_from_arrays(
+            time_data=channels.time,
+            latitude_data=channels.latitude,
+            longitude_data=channels.longitude,
+            rpm_data=rpm,
+            speed_data=channels.speed_mph,
+            session_id=session_id,
+        )
+
+
+analyzer_registry.register(LapAnalysis)
 
 
 @dataclass

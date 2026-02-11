@@ -14,6 +14,7 @@ import json
 
 from ..analysis.gear_calculator import GearCalculator, GearInfo
 from .base_analyzer import BaseAnalyzer, BaseAnalysisReport
+from .registry import analyzer_registry
 from ..config.vehicles import get_current_setup as _get_current_setup, get_transmission_scenarios as _get_transmission_scenarios, get_engine_specs as _get_engine_specs
 from ..utils.dataframe_helpers import SPEED_MS_TO_MPH
 
@@ -117,6 +118,12 @@ class ShiftAnalyzer(BaseAnalyzer):
     Detects shift points, calculates statistics, and identifies
     opportunities for improvement.
     """
+
+    # Registry metadata
+    registry_key = "shifts"
+    required_channels = ["rpm", "speed"]
+    optional_channels = []
+    config_params = []
 
     # RPM thresholds for shift quality assessment
     OPTIMAL_SHIFT_RPM_MIN = 6000
@@ -547,3 +554,21 @@ class ShiftAnalyzer(BaseAnalyzer):
                 }
 
         return result
+
+    def analyze_from_arrays(self, rpm_data, speed_data, time_data,
+                            session_id="unknown"):
+        """Alias for analyze_session (BaseAnalyzer-compatible name)."""
+        return self.analyze_session(rpm_data, speed_data, time_data, session_id)
+
+    def analyze_from_channels(self, channels, session_id="unknown",
+                              include_trace=False, **kwargs):
+        """Analyze from pre-loaded SessionChannels."""
+        return self.analyze_session(
+            rpm_data=channels.rpm,
+            speed_data=channels.speed_mph,
+            time_data=channels.time,
+            session_id=session_id,
+        )
+
+
+analyzer_registry.register(ShiftAnalyzer)

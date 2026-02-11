@@ -7,7 +7,7 @@ interfaces across all analysis modules.
 
 from abc import ABC, abstractmethod
 from datetime import datetime, timezone
-from typing import Optional
+from typing import List, Optional
 
 from src.utils.calculation_trace import CalculationTrace
 
@@ -48,7 +48,19 @@ class BaseAnalyzer(ABC):
     All analyzers must support loading from Parquet files.
     Array-based analysis methods vary per analyzer due to different
     required channels, so only analyze_from_parquet is standardized.
+
+    Registry metadata (override in subclasses to enable auto-registration):
+        registry_key: Unique identifier (e.g., "shifts", "laps")
+        required_channels: Channels that must be present (e.g., ["rpm", "speed"])
+        optional_channels: Channels used if available (e.g., ["latitude"])
+        config_params: Constructor kwargs from session config (e.g., ["track_name"])
     """
+
+    # Registry metadata — override in subclasses
+    registry_key: Optional[str] = None
+    required_channels: List[str] = []
+    optional_channels: List[str] = []
+    config_params: List[str] = []
 
     @abstractmethod
     def analyze_from_parquet(
@@ -71,6 +83,23 @@ class BaseAnalyzer(ABC):
             An analysis report object (subclass of BaseAnalysisReport).
         """
         raise NotImplementedError
+
+    def analyze_from_channels(self, channels, session_id="unknown",
+                              include_trace=False, **kwargs):
+        """Analyze from pre-loaded SessionChannels.
+
+        Override in subclass to map SessionChannels fields to
+        analyze_from_arrays() parameters.
+
+        Args:
+            channels: SessionChannels with discovered channel data.
+            session_id: Session identifier.
+            include_trace: If True, attach trace to report.
+            **kwargs: Extra config (e.g., track_name).
+        """
+        raise NotImplementedError(
+            f"{type(self).__name__} does not implement analyze_from_channels"
+        )
 
     def _create_trace(self, analyzer_name: str) -> CalculationTrace:
         """Create a new trace object.

@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 import json
 from scipy import signal
 from .base_analyzer import BaseAnalyzer, BaseAnalysisReport
+from .registry import analyzer_registry
 
 from ..config.vehicles import get_engine_specs as _get_engine_specs
 from ..utils.dataframe_helpers import find_column, SPEED_MS_TO_MPH
@@ -137,6 +138,12 @@ class PowerAnalysis(BaseAnalyzer):
 
     Uses physics-based calculations: P = F * v = m * a * v
     """
+
+    # Registry metadata
+    registry_key = "power"
+    required_channels = ["speed"]
+    optional_channels = ["rpm"]
+    config_params = ["vehicle_mass_kg"]
 
     def __init__(
         self,
@@ -773,3 +780,16 @@ class PowerAnalysis(BaseAnalyzer):
             "peak_power_rpm": rpm_centers[np.argmax(avg_powers)] if avg_powers else 0,
             "peak_power_hp": max(avg_powers) if avg_powers else 0
         }
+
+    def analyze_from_channels(self, channels, session_id="unknown",
+                              include_trace=False, **kwargs):
+        """Analyze from pre-loaded SessionChannels."""
+        return self.analyze_from_arrays(
+            time_data=channels.time,
+            speed_data=channels.speed_mph,
+            rpm_data=channels.rpm,
+            session_id=session_id,
+        )
+
+
+analyzer_registry.register(PowerAnalysis)

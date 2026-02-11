@@ -15,6 +15,7 @@ import json
 
 from ..utils.dataframe_helpers import find_column, SPEED_MS_TO_MPH
 from .base_analyzer import BaseAnalyzer, BaseAnalysisReport
+from .registry import analyzer_registry
 
 
 @dataclass
@@ -193,6 +194,12 @@ class GGAnalyzer(BaseAnalyzer):
     Calculates grip utilization and identifies areas for improvement.
     Enhanced with quadrant breakdown and power-limited detection.
     """
+
+    # Registry metadata
+    registry_key = "gg"
+    required_channels = ["lat_acc", "lon_acc"]
+    optional_channels = ["speed", "throttle", "latitude", "longitude"]
+    config_params = []
 
     # Power-limited detection threshold
     POWER_LIMITED_THROTTLE = 95.0  # % throttle
@@ -856,6 +863,23 @@ class GGAnalyzer(BaseAnalyzer):
                 zone_start = None
 
         return zones[:10]  # Return top 10 zones
+
+    def analyze_from_channels(self, channels, session_id="unknown",
+                              include_trace=False, **kwargs):
+        """Analyze from pre-loaded SessionChannels."""
+        return self.analyze_from_arrays(
+            time_data=channels.time,
+            lat_acc_data=channels.lat_acc,
+            lon_acc_data=channels.lon_acc,
+            speed_data=channels.speed_mph,
+            throttle_data=channels.throttle,
+            lat_gps=channels.latitude,
+            lon_gps=channels.longitude,
+            session_id=session_id,
+        )
+
+
+analyzer_registry.register(GGAnalyzer)
 
 
 def analyze_gg_diagram(parquet_path: str, max_g_reference: float = 1.3) -> GGAnalysisResult:

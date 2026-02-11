@@ -510,11 +510,12 @@ class TestSessionReportTrace:
         report = generator.generate_from_parquet(sample_parquet, include_trace=True)
         intermediates = report.trace.intermediates
         assert "sub_analyzers_run" in intermediates
-        assert intermediates["sub_analyzers_run"] == 4
-        assert "lap_analysis_ok" in intermediates
-        assert "shift_analysis_ok" in intermediates
-        assert "gear_analysis_ok" in intermediates
+        assert intermediates["sub_analyzers_run"] == 5
+        assert "laps_analysis_ok" in intermediates
+        assert "shifts_analysis_ok" in intermediates
+        assert "gears_analysis_ok" in intermediates
         assert "power_analysis_ok" in intermediates
+        assert "corners_analysis_ok" in intermediates
         assert "warnings_count" in intermediates
 
     def test_trace_has_sanity_checks(self, sample_parquet):

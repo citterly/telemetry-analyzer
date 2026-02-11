@@ -16,6 +16,7 @@ import json
 from .corner_detection import CornerDetector, CornerZone, CornerDetectionResult
 from ..utils.dataframe_helpers import find_column, SPEED_MS_TO_MPH
 from .base_analyzer import BaseAnalyzer, BaseAnalysisReport
+from .registry import analyzer_registry
 
 
 @dataclass
@@ -224,6 +225,12 @@ class CornerAnalyzer(BaseAnalyzer):
 
     Provides per-corner metrics and lap-to-lap comparison.
     """
+
+    # Registry metadata
+    registry_key = "corners"
+    required_channels = ["latitude", "longitude", "speed"]
+    optional_channels = ["lat_acc", "lon_acc", "throttle"]
+    config_params = []
 
     # Thresholds for detection
     THROTTLE_PICKUP_THRESHOLD = 10.0    # % throttle to consider "picked up"
@@ -783,6 +790,28 @@ class CornerAnalyzer(BaseAnalyzer):
             )
 
         return recommendations
+
+    def analyze_from_channels(self, channels, session_id="unknown",
+                              include_trace=False, **kwargs):
+        """Analyze from pre-loaded SessionChannels."""
+        track_name = kwargs.get('track_name', "Unknown Track")
+        speed = channels.speed_mph if channels.speed_mph is not None else np.zeros(channels.sample_count)
+        throttle = channels.throttle if channels.throttle is not None else np.zeros(channels.sample_count)
+        return self.analyze_from_arrays(
+            time_data=channels.time,
+            lat_data=channels.latitude,
+            lon_data=channels.longitude,
+            speed_data=speed,
+            radius_data=None,
+            lat_acc_data=channels.lat_acc,
+            lon_acc_data=channels.lon_acc,
+            throttle_data=throttle,
+            session_id=session_id,
+            track_name=track_name,
+        )
+
+
+analyzer_registry.register(CornerAnalyzer)
 
 
 def analyze_corners(parquet_path: str, track_name: str = "Unknown Track") -> CornerAnalysisResult:

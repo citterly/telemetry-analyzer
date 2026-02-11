@@ -14,6 +14,7 @@ import json
 
 from ..analysis.gear_calculator import GearCalculator, GearInfo, analyze_lap_gearing
 from .base_analyzer import BaseAnalyzer, BaseAnalysisReport
+from .registry import analyzer_registry
 from ..config.vehicles import (
     get_current_setup as _get_current_setup,
     get_transmission_scenarios as _get_transmission_scenarios,
@@ -125,6 +126,12 @@ class GearAnalysis(BaseAnalyzer):
     Calculates time in each gear, analyzes usage by track section,
     generates optimization recommendations.
     """
+
+    # Registry metadata
+    registry_key = "gears"
+    required_channels = ["rpm", "speed"]
+    optional_channels = ["latitude", "longitude"]
+    config_params = ["track_name"]
 
     def __init__(
         self,
@@ -741,3 +748,18 @@ class GearAnalysis(BaseAnalyzer):
             "in_power_band": best_gear['in_power_band'],
             "rpm_headroom": best_gear['rpm_headroom']
         }
+
+    def analyze_from_channels(self, channels, session_id="unknown",
+                              include_trace=False, **kwargs):
+        """Analyze from pre-loaded SessionChannels."""
+        return self.analyze_from_arrays(
+            time_data=channels.time,
+            rpm_data=channels.rpm,
+            speed_data=channels.speed_mph,
+            latitude_data=channels.latitude,
+            longitude_data=channels.longitude,
+            session_id=session_id,
+        )
+
+
+analyzer_registry.register(GearAnalysis)

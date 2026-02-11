@@ -9,7 +9,10 @@ from .transmission_comparison import TransmissionComparison, TransmissionCompari
 from .lap_analysis import LapAnalysis, LapAnalysisReport
 from .gear_analysis import GearAnalysis, GearAnalysisReport
 from .power_analysis import PowerAnalysis, PowerAnalysisReport
+from .gg_analysis import GGAnalyzer, GGAnalysisResult
+from .corner_analysis import CornerAnalyzer, CornerAnalysisResult
 from .session_report import SessionReportGenerator, SessionReport
+from .registry import AnalyzerRegistry, AnalyzerRegistration, analyzer_registry
 
 __all__ = [
     'BaseAnalyzer',
@@ -24,6 +27,13 @@ __all__ = [
     'GearAnalysisReport',
     'PowerAnalysis',
     'PowerAnalysisReport',
+    'GGAnalyzer',
+    'GGAnalysisResult',
+    'CornerAnalyzer',
+    'CornerAnalysisResult',
     'SessionReportGenerator',
     'SessionReport',
+    'AnalyzerRegistry',
+    'AnalyzerRegistration',
+    'analyzer_registry',
 ]

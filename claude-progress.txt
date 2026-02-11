@@ -1167,3 +1167,62 @@ Features: 48/56 passing (8 planned)
 
 Next priority: arch-003-exec (Execute analyzer registry/plugin pattern)
 
+
+=== Session 14 (2026-02-10) ===
+Working on: arch-003-exec (Execute analyzer registry/plugin pattern)
+
+Work completed:
+
+1. Created src/features/registry.py:
+   - AnalyzerRegistration dataclass: key, analyzer_class, required_channels,
+     optional_channels, config_params
+   - AnalyzerRegistry class: register(), get(), list_registered(), create_instance(),
+     reset(), __iter__, __len__, __contains__
+   - analyzer_registry singleton instance
+
+2. Updated src/features/base_analyzer.py:
+   - Added registry metadata class attributes: registry_key, required_channels,
+     optional_channels, config_params (all default to None/[])
+   - Added analyze_from_channels() method (raises NotImplementedError by default)
+
+3. Updated all 6 analyzers with registry metadata + analyze_from_channels():
+   - ShiftAnalyzer: key="shifts", channels=[rpm, speed]
+     - Added analyze_from_arrays() alias for analyze_session() (fixes pre-existing bug)
+   - LapAnalysis: key="laps", channels=[latitude, longitude, speed]
+   - GearAnalysis: key="gears", channels=[rpm, speed]
+   - PowerAnalysis: key="power", channels=[speed]
+   - GGAnalyzer: key="gg", channels=[lat_acc, lon_acc]
+   - CornerAnalyzer: key="corners", channels=[latitude, longitude, speed]
+   - Each has analyzer_registry.register(ClassName) at module level
+
+4. Completely rewrote src/features/session_report.py:
+   - SessionReport: sub_reports dict as primary storage, backward-compat typed fields
+     synced via __post_init__, dynamic to_dict() iteration
+   - SessionReportGenerator: _run_registry_analyzers() iterates analyzer_registry,
+     _channels_satisfy() checks channel availability, removed all hardcoded
+     _run_*_analysis() methods
+   - generate_from_parquet() uses SessionDataLoader
+   - Cross-validation checks iterate dynamically over sub_reports
+
+5. Updated src/features/__init__.py:
+   - Added imports for GGAnalyzer, GGAnalysisResult, CornerAnalyzer, CornerAnalysisResult
+   - Added imports for AnalyzerRegistry, AnalyzerRegistration, analyzer_registry
+   - All 6 analyzers now trigger registration at import time
+
+6. Updated tests/test_session_report.py:
+   - Fixed intermediate key names (lap→laps, shift→shifts, gear→gears)
+   - Updated sub_analyzers_run count from 4→5 (corners now runs, shifts bug fixed)
+
+Bug fixes:
+- ShiftAnalyzer.analyze_from_arrays() was being called but didn't exist;
+  session_report.py was silently failing via try/except. Added alias for analyze_session().
+- CornerAnalyzer and GGAnalyzer weren't imported by __init__.py, so their
+  module-level registration calls never fired. Added imports.
+
+Test results: 877/877 passing (4 pre-existing DLL failures excluded)
+
+Status: arch-003-exec marked PASSING
+Features: 49/56 passing (7 planned)
+
+Next priority: arch-003-test (Test analyzer registry/plugin pattern compliance)
+
