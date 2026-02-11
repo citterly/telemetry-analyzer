@@ -858,3 +858,43 @@ Features: 39/41 passing (2 planned: safeguard-007, safeguard-008)
 
 Next priority: safeguard-007 (SessionReport aggregation + API endpoints)
 
+
+=== Session 12 (2026-02-10) ===
+Working on: safeguard-007 (SessionReport aggregation + API endpoints)
+
+Work completed:
+
+1. Updated src/features/session_report.py:
+   - SessionReport.to_dict() uses result pattern with _trace_dict()
+   - generate_from_parquet() gains include_trace=True parameter
+   - Records 7 inputs (sample_count, speed_unit_detected, has_gps, has_rpm,
+     has_speed, speed_column, rpm_column), 3 config values
+     (track_name, vehicle_setup, vehicle_mass_kg), 5 intermediates
+     (sub_analyzers_run, *_analysis_ok, warnings_count)
+   - _run_cross_validation_checks() with 3 checks:
+     - speed_unit_consensus: all sub-analyzers receive same converted speed
+     - sample_count_consistent: sub-analyzer sample counts within 5%
+     - config_consistent: track_name matches across sub-reports
+   - analyze_from_parquet() passes include_trace through
+
+2. Updated src/main/routers/analysis.py:
+   - All 5 endpoints gain trace: bool = False parameter
+   - When trace=True, each calls analyze_from_parquet with include_trace=True
+   - Endpoints: shifts, laps, gears, power, report
+
+3. Updated src/main/routers/visualization.py:
+   - get_gg_diagram: added trace parameter, passes include_trace=trace
+   - get_corner_analysis: added trace parameter, passes include_trace=trace
+
+4. Added 13 tests to tests/test_session_report.py::TestSessionReportTrace:
+   - Trace present/absent, analyzer name, inputs/config/intermediates
+   - All 3 cross-validation checks verified
+   - JSON serialization, analyze_from_parquet alias, backward compatibility
+
+Test results: 818/818 passing (13 new, 4 pre-existing DLL failures excluded)
+
+Status: safeguard-007 marked PASSING
+Features: 40/41 passing (1 planned: safeguard-008)
+
+Next priority: safeguard-008 (Memory update)
+

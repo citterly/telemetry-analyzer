@@ -425,6 +425,160 @@ class TestSaveReport:
             assert os.path.exists(saved['html'])
 
 
+class TestSessionReportTrace:
+    """Tests for safeguard-007: SessionReport trace + cross-validation checks"""
+
+    @pytest.fixture
+    def sample_parquet(self):
+        """Create sample Parquet file for trace testing"""
+        import pandas as pd
+
+        n_samples = 1000
+        time = np.linspace(0, 100, n_samples)
+
+        lat = 43.797875 + 0.005 * np.sin(time / 25)
+        lon = -87.989638 + 0.005 * np.cos(time / 25)
+        rpm = 4000 + 2000 * np.sin(time / 20)
+        speed = 60 + 30 * np.sin(time / 15)
+
+        df = pd.DataFrame({
+            "GPS Latitude": lat,
+            "GPS Longitude": lon,
+            "RPM": rpm,
+            "GPS Speed": speed
+        }, index=time)
+
+        with tempfile.NamedTemporaryFile(suffix=".parquet", delete=False) as f:
+            df.to_parquet(f.name)
+            yield f.name
+
+        try:
+            os.unlink(f.name)
+        except:
+            pass
+
+    def test_trace_not_present_by_default(self, sample_parquet):
+        """Trace should not be included when include_trace=False (default)"""
+        generator = SessionReportGenerator()
+        report = generator.generate_from_parquet(sample_parquet)
+        d = report.to_dict()
+        assert "_trace" not in d
+
+    def test_trace_present_when_enabled(self, sample_parquet):
+        """Trace should be included when include_trace=True"""
+        generator = SessionReportGenerator()
+        report = generator.generate_from_parquet(sample_parquet, include_trace=True)
+        assert report.trace is not None
+        d = report.to_dict()
+        assert "_trace" in d
+
+    def test_trace_analyzer_name(self, sample_parquet):
+        """Trace should identify as SessionReport"""
+        generator = SessionReportGenerator()
+        report = generator.generate_from_parquet(sample_parquet, include_trace=True)
+        assert report.trace.analyzer_name == "SessionReport"
+
+    def test_trace_has_inputs(self, sample_parquet):
+        """Trace should record expected inputs"""
+        generator = SessionReportGenerator()
+        report = generator.generate_from_parquet(sample_parquet, include_trace=True)
+        inputs = report.trace.inputs
+        assert "sample_count" in inputs
+        assert "speed_unit_detected" in inputs
+        assert "has_gps" in inputs
+        assert "has_rpm" in inputs
+        assert "has_speed" in inputs
+        assert "speed_column" in inputs
+        assert "rpm_column" in inputs
+        assert inputs["sample_count"] == 1000
+        assert inputs["has_gps"] is True
+        assert inputs["has_rpm"] is True
+        assert inputs["has_speed"] is True
+
+    def test_trace_has_config(self, sample_parquet):
+        """Trace should record config values"""
+        generator = SessionReportGenerator()
+        report = generator.generate_from_parquet(sample_parquet, include_trace=True)
+        config = report.trace.config
+        assert "track_name" in config
+        assert "vehicle_setup" in config
+        assert "vehicle_mass_kg" in config
+
+    def test_trace_has_intermediates(self, sample_parquet):
+        """Trace should record intermediate values"""
+        generator = SessionReportGenerator()
+        report = generator.generate_from_parquet(sample_parquet, include_trace=True)
+        intermediates = report.trace.intermediates
+        assert "sub_analyzers_run" in intermediates
+        assert intermediates["sub_analyzers_run"] == 4
+        assert "lap_analysis_ok" in intermediates
+        assert "shift_analysis_ok" in intermediates
+        assert "gear_analysis_ok" in intermediates
+        assert "power_analysis_ok" in intermediates
+        assert "warnings_count" in intermediates
+
+    def test_trace_has_sanity_checks(self, sample_parquet):
+        """Trace should have 3 cross-validation checks"""
+        generator = SessionReportGenerator()
+        report = generator.generate_from_parquet(sample_parquet, include_trace=True)
+        checks = report.trace.sanity_checks
+        check_names = [c.name for c in checks]
+        assert "speed_unit_consensus" in check_names
+        assert "sample_count_consistent" in check_names
+        assert "config_consistent" in check_names
+
+    def test_speed_unit_consensus_pass(self, sample_parquet):
+        """speed_unit_consensus should pass for normal data"""
+        generator = SessionReportGenerator()
+        report = generator.generate_from_parquet(sample_parquet, include_trace=True)
+        check = next(c for c in report.trace.sanity_checks if c.name == "speed_unit_consensus")
+        assert check.status == "pass"
+
+    def test_sample_count_consistent_pass(self, sample_parquet):
+        """sample_count_consistent should pass when all sub-analyzers get same data"""
+        generator = SessionReportGenerator()
+        report = generator.generate_from_parquet(sample_parquet, include_trace=True)
+        check = next(c for c in report.trace.sanity_checks if c.name == "sample_count_consistent")
+        assert check.status == "pass"
+
+    def test_config_consistent_pass(self, sample_parquet):
+        """config_consistent should pass when all sub-analyzers use same config"""
+        generator = SessionReportGenerator()
+        report = generator.generate_from_parquet(sample_parquet, include_trace=True)
+        check = next(c for c in report.trace.sanity_checks if c.name == "config_consistent")
+        assert check.status == "pass"
+
+    def test_trace_json_serializable(self, sample_parquet):
+        """Trace portion should be JSON serializable"""
+        generator = SessionReportGenerator()
+        report = generator.generate_from_parquet(sample_parquet, include_trace=True)
+        d = report.to_dict()
+        serialized = json.dumps(d["_trace"])
+        assert serialized is not None
+        parsed = json.loads(serialized)
+        assert parsed["analyzer_name"] == "SessionReport"
+
+    def test_analyze_from_parquet_passes_trace(self, sample_parquet):
+        """analyze_from_parquet alias should pass include_trace to generate_from_parquet"""
+        generator = SessionReportGenerator()
+        report = generator.analyze_from_parquet(sample_parquet, include_trace=True)
+        assert report.trace is not None
+        assert report.trace.analyzer_name == "SessionReport"
+
+    def test_trace_backward_compatibility(self, sample_parquet):
+        """Existing code paths should work without trace parameter"""
+        generator = SessionReportGenerator()
+        report = generator.generate_from_parquet(sample_parquet)
+        d = report.to_dict()
+        # All existing fields still present
+        assert "metadata" in d
+        assert "summary" in d
+        assert "combined_recommendations" in d
+        assert "warnings" in d
+        # No trace
+        assert "_trace" not in d
+
+
 class TestErrorHandling:
     """Tests for error handling"""
 

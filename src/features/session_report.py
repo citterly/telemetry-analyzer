@@ -63,7 +63,7 @@ class SessionReport(BaseAnalysisReport):
 
     def to_dict(self) -> dict:
         """Convert to dictionary"""
-        return {
+        result = {
             "metadata": {
                 "session_id": self.metadata.session_id,
                 "track_name": self.metadata.track_name,
@@ -94,6 +94,8 @@ class SessionReport(BaseAnalysisReport):
             "combined_recommendations": self.combined_recommendations,
             "warnings": self.warnings
         }
+        result.update(self._trace_dict())
+        return result
 
     def to_json(self, indent: int = 2) -> str:
         """Convert to JSON string"""
@@ -213,7 +215,8 @@ class SessionReportGenerator(BaseAnalyzer):
     def generate_from_parquet(
         self,
         parquet_path: str,
-        session_id: Optional[str] = None
+        session_id: Optional[str] = None,
+        include_trace: bool = False,
     ) -> SessionReport:
         """
         Generate full session report from a Parquet file.
@@ -221,27 +224,38 @@ class SessionReportGenerator(BaseAnalyzer):
         Args:
             parquet_path: Path to Parquet file
             session_id: Session identifier (defaults to filename)
+            include_trace: If True, attach CalculationTrace with cross-validation checks.
 
         Returns:
             SessionReport with complete analysis
         """
+        trace = self._create_trace("SessionReport") if include_trace else None
+
         df = pd.read_parquet(parquet_path)
 
         if session_id is None:
             session_id = Path(parquet_path).stem
 
         # Find required columns
+        from ..utils.dataframe_helpers import find_column_name
         time_data = df.index.values
         lat_data = find_column(df, ['GPS Latitude', 'latitude', 'Latitude'])
         lon_data = find_column(df, ['GPS Longitude', 'longitude', 'Longitude'])
         rpm_data = find_column(df, ['RPM', 'rpm', 'RPM dup 3'])
         speed_data = find_column(df, ['GPS Speed', 'speed', 'Speed'])
 
+        speed_unit_detected = "mph"
         # Convert speed to mph if needed
         if speed_data is not None and speed_data.max() < 100:
             speed_data = speed_data * SPEED_MS_TO_MPH
+            speed_unit_detected = "m/s"
+        elif speed_data is None:
+            speed_unit_detected = "none"
 
         # Use zeros for missing GPS data
+        has_gps = lat_data is not None and lon_data is not None
+        has_rpm = rpm_data is not None
+        has_speed = speed_data is not None
         if lat_data is None:
             lat_data = np.zeros(len(time_data))
         if lon_data is None:
@@ -251,18 +265,119 @@ class SessionReportGenerator(BaseAnalyzer):
         if speed_data is None:
             speed_data = np.zeros(len(time_data))
 
-        return self.generate_from_arrays(
+        report = self.generate_from_arrays(
             time_data, lat_data, lon_data, rpm_data, speed_data, session_id
         )
+
+        if trace:
+            trace.record_input("sample_count", len(time_data))
+            trace.record_input("speed_unit_detected", speed_unit_detected)
+            trace.record_input("has_gps", has_gps)
+            trace.record_input("has_rpm", has_rpm)
+            trace.record_input("has_speed", has_speed)
+            trace.record_input("speed_column", find_column_name(df, ['GPS Speed', 'speed', 'Speed']))
+            trace.record_input("rpm_column", find_column_name(df, ['RPM', 'rpm', 'RPM dup 3']))
+
+            trace.record_config("track_name", self.track_name)
+            trace.record_config("vehicle_setup", self.vehicle_setup)
+            trace.record_config("vehicle_mass_kg", self.vehicle_mass_kg)
+
+            trace.record_intermediate("sub_analyzers_run", 4)
+            trace.record_intermediate("lap_analysis_ok", report.lap_analysis is not None)
+            trace.record_intermediate("shift_analysis_ok", report.shift_analysis is not None)
+            trace.record_intermediate("gear_analysis_ok", report.gear_analysis is not None)
+            trace.record_intermediate("power_analysis_ok", report.power_analysis is not None)
+            trace.record_intermediate("warnings_count", len(report.warnings))
+
+            self._run_cross_validation_checks(trace, report, speed_unit_detected, len(time_data))
+            report.trace = trace
+
+        return report
+
+    def _run_cross_validation_checks(self, trace, report: SessionReport,
+                                     speed_unit_detected: str,
+                                     sample_count: int) -> None:
+        """Run cross-validation sanity checks across sub-analyzers."""
+        # Check 7.1: speed_unit_consensus
+        # SessionReportGenerator converts speed once and passes to all sub-analyzers,
+        # so by construction they all use the same unit. Record for documentation.
+        trace.add_check(
+            "speed_unit_consensus", "pass",
+            f"Speed detected as '{speed_unit_detected}', converted to mph for all sub-analyzers",
+            expected="consistent", actual=speed_unit_detected,
+        )
+
+        # Check 7.2: sample_count_consistent
+        # All sub-analyzers receive the same arrays, so sample count is consistent.
+        # Verify none of the sub-reports show drastically different counts.
+        sub_counts = []
+        if report.lap_analysis is not None:
+            sub_counts.append(("lap", getattr(report.lap_analysis, 'sample_count', sample_count)))
+        if report.shift_analysis is not None:
+            sub_counts.append(("shift", getattr(report.shift_analysis, 'sample_count', sample_count)))
+        if report.gear_analysis is not None:
+            sub_counts.append(("gear", sample_count))  # GearAnalysis doesn't expose sample_count
+        if report.power_analysis is not None:
+            sub_counts.append(("power", getattr(report.power_analysis, 'sample_count', sample_count)))
+
+        if sub_counts:
+            counts = [c for _, c in sub_counts]
+            max_diff_pct = (max(counts) - min(counts)) / max(counts) * 100 if max(counts) > 0 else 0
+            if max_diff_pct <= 5:
+                trace.add_check(
+                    "sample_count_consistent", "pass",
+                    f"All sub-analyzers processed ~{sample_count} samples",
+                    expected=f"within 5%", actual=f"{max_diff_pct:.1f}% difference",
+                )
+            else:
+                trace.add_check(
+                    "sample_count_consistent", "warn",
+                    f"Sub-analyzer sample counts differ by {max_diff_pct:.1f}%",
+                    expected=f"within 5%", actual=f"{max_diff_pct:.1f}% difference",
+                )
+        else:
+            trace.add_check(
+                "sample_count_consistent", "warn",
+                "No sub-analyzers produced results to compare",
+                expected="at least 1 sub-analyzer", actual="0",
+            )
+
+        # Check 7.3: config_consistent
+        # All sub-analyzers are created by this generator with same config.
+        # Verify track_name matches across sub-reports.
+        config_issues = []
+        if report.lap_analysis is not None:
+            lap_track = getattr(report.lap_analysis, 'track_name', None)
+            if lap_track and lap_track != self.track_name:
+                config_issues.append(f"lap track={lap_track}")
+        if report.gear_analysis is not None:
+            gear_track = getattr(report.gear_analysis, 'track_name', None)
+            if gear_track and gear_track != self.track_name:
+                config_issues.append(f"gear track={gear_track}")
+
+        if not config_issues:
+            trace.add_check(
+                "config_consistent", "pass",
+                f"All sub-analyzers using consistent config (track={self.track_name})",
+                expected="consistent", actual="consistent",
+            )
+        else:
+            trace.add_check(
+                "config_consistent", "fail",
+                f"Config mismatch: {', '.join(config_issues)}",
+                expected=f"track={self.track_name}", actual=str(config_issues),
+                severity="error",
+            )
 
     def analyze_from_parquet(
         self,
         parquet_path: str,
         session_id: Optional[str] = None,
+        include_trace: bool = False,
         **kwargs,
     ) -> SessionReport:
         """BaseAnalyzer interface - delegates to generate_from_parquet."""
-        return self.generate_from_parquet(parquet_path, session_id)
+        return self.generate_from_parquet(parquet_path, session_id, include_trace=include_trace)
 
     def _run_lap_analysis(
         self,

@@ -208,7 +208,8 @@ async def get_gg_diagram(
     filename: str,
     format: str = "json",
     color_by: str = "speed",
-    lap: str = None
+    lap: str = None,
+    trace: bool = False,
 ):
     """
     Generate G-G diagram data or visualization.
@@ -244,7 +245,7 @@ async def get_gg_diagram(
             max_braking_g=max_braking_g,
             power_limited_accel_g=power_limited_accel_g
         )
-        result = analyzer.analyze_from_parquet(file_path, session_id=filename, lap_filter=lap_filter)
+        result = analyzer.analyze_from_parquet(file_path, session_id=filename, lap_filter=lap_filter, include_trace=trace)
 
         # Get arrays for SVG rendering
         df = pd.read_parquet(file_path)
@@ -324,7 +325,8 @@ async def get_gg_diagram(
 @router.get("/api/corner-analysis/{filename:path}")
 async def get_corner_analysis(
     filename: str,
-    track_name: str = "Unknown Track"
+    track_name: str = "Unknown Track",
+    trace: bool = False,
 ):
     """
     Analyze corners in a session.
@@ -353,7 +355,8 @@ async def get_corner_analysis(
         result = analyzer.analyze_from_parquet(
             str(file_path),
             session_id=Path(filename).stem,
-            track_name=track_name
+            track_name=track_name,
+            include_trace=trace,
         )
 
         return sanitize_for_json(result.to_dict())

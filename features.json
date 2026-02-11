@@ -527,7 +527,7 @@
       "name": "SessionReport aggregation + API endpoints",
       "category": "safeguard",
       "description": "Aggregate traces from sub-analyzers in SessionReportGenerator with 3 cross-validation checks (speed_unit_consensus, sample_count_consistent, config_consistent). Add trace=true query parameter to all 7 analysis API endpoints. See docs/SAFEGUARD_SYSTEM.md Phase 7.",
-      "status": "planned",
+      "status": "passing",
       "priority": 34,
       "tests": ["test_report_trace_aggregation", "test_cross_validation_checks", "test_api_trace_parameter"],
       "files": [
@@ -535,7 +535,7 @@
         "src/main/routers/analysis.py",
         "src/main/routers/visualization.py"
       ],
-      "notes": ""
+      "notes": "DONE: SessionReport.to_dict() includes _trace via _trace_dict(). generate_from_parquet() gains include_trace=True: records 7 inputs, 3 config, 5 intermediates. 3 cross-validation checks: speed_unit_consensus, sample_count_consistent, config_consistent. All 7 API endpoints gain trace=true query parameter (5 in analysis.py, 2 in visualization.py). 13 new tests. 818 tests passing."
     },
     {
       "id": "safeguard-008",
@@ -553,9 +553,9 @@
     "created_at": "2025-01-29T01:00:00Z",
     "last_updated": "2026-02-10T16:00:00Z",
     "total_features": 41,
-    "passing": 39,
+    "passing": 40,
     "failing": 0,
-    "planned": 2
+    "planned": 1
   },
   "categories": {
     "bugfix": "Bug fixes and corrections",

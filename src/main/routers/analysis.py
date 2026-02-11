@@ -24,13 +24,18 @@ router = APIRouter()
 
 
 @router.get("/api/analyze/shifts/{filename:path}")
-async def analyze_shifts(filename: str):
+async def analyze_shifts(filename: str, trace: bool = False):
     """Run shift analysis on a Parquet file"""
     file_path = find_parquet_file(filename)
     if not file_path:
         raise HTTPException(status_code=404, detail=f"Parquet file not found: {filename}")
 
     try:
+        if trace:
+            analyzer = ShiftAnalyzer()
+            report = analyzer.analyze_from_parquet(str(file_path), include_trace=True)
+            return report.to_dict()
+
         df = pd.read_parquet(file_path)
 
         time_data = df.index.values
@@ -76,13 +81,18 @@ async def compare_laps(filename: str, lap_a: int, lap_b: int, segments: int = 10
 
 
 @router.get("/api/analyze/laps/{filename:path}")
-async def analyze_laps(filename: str):
+async def analyze_laps(filename: str, trace: bool = False):
     """Run lap analysis on a Parquet file"""
     file_path = find_parquet_file(filename)
     if not file_path:
         raise HTTPException(status_code=404, detail=f"Parquet file not found: {filename}")
 
     try:
+        if trace:
+            analyzer = LapAnalysis()
+            report = analyzer.analyze_from_parquet(str(file_path), include_trace=True)
+            return report.to_dict()
+
         df = pd.read_parquet(file_path)
 
         time_data = df.index.values
@@ -115,13 +125,18 @@ async def analyze_laps(filename: str):
 
 
 @router.get("/api/analyze/gears/{filename:path}")
-async def analyze_gears(filename: str):
+async def analyze_gears(filename: str, trace: bool = False):
     """Run gear usage analysis on a Parquet file"""
     file_path = find_parquet_file(filename)
     if not file_path:
         raise HTTPException(status_code=404, detail=f"Parquet file not found: {filename}")
 
     try:
+        if trace:
+            analyzer = GearAnalysis()
+            report = analyzer.analyze_from_parquet(str(file_path), include_trace=True)
+            return report.to_dict()
+
         df = pd.read_parquet(file_path)
 
         time_data = df.index.values
@@ -152,13 +167,18 @@ async def analyze_gears(filename: str):
 
 
 @router.get("/api/analyze/power/{filename:path}")
-async def analyze_power(filename: str):
+async def analyze_power(filename: str, trace: bool = False):
     """Run power/acceleration analysis on a Parquet file"""
     file_path = find_parquet_file(filename)
     if not file_path:
         raise HTTPException(status_code=404, detail=f"Parquet file not found: {filename}")
 
     try:
+        if trace:
+            analyzer = PowerAnalysis()
+            report = analyzer.analyze_from_parquet(str(file_path), include_trace=True)
+            return report.to_dict()
+
         df = pd.read_parquet(file_path)
 
         time_data = df.index.values
@@ -183,13 +203,18 @@ async def analyze_power(filename: str):
 
 
 @router.get("/api/analyze/report/{filename:path}")
-async def analyze_full_report(filename: str):
+async def analyze_full_report(filename: str, trace: bool = False):
     """Run full session analysis and return combined report"""
     file_path = find_parquet_file(filename)
     if not file_path:
         raise HTTPException(status_code=404, detail=f"Parquet file not found: {filename}")
 
     try:
+        if trace:
+            generator = SessionReportGenerator()
+            report = generator.generate_from_parquet(str(file_path), include_trace=True)
+            return sanitize_for_json(report.to_dict())
+
         df = pd.read_parquet(file_path)
 
         time_data = df.index.values
