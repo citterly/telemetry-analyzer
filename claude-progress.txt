@@ -1383,3 +1383,38 @@ Features: 54/56 passing (2 planned)
 
 Next priority: arch-005-exec (Execute API integration test coverage)
 
+
+=== Session 14 continued (2026-02-10) ===
+Working on: arch-005-exec (Execute API integration test coverage)
+
+Work completed:
+
+1. Created 5 API integration test files:
+   - tests/test_api_health.py (5 tests): /health, /api/stats
+   - tests/test_api_vehicles.py (8 tests): list, get, set active, invalid cases
+   - tests/test_api_parquet.py (7 tests): list, view, pagination, summary, 404s
+   - tests/test_api_visualization.py (17 tests): track map (SVG/JSON/HTML/color_by),
+     delta map, GG diagram (JSON/trace), corner analysis (JSON/trace), corner track map
+   - tests/test_api_queue.py (12 tests): stats, jobs list/filter/invalid, job detail,
+     retry, retry-all, delete, clear-completed
+
+2. Fixed production bug in src/main/routers/vehicles.py:
+   - PUT /api/vehicles/active was unreachable because PUT /api/vehicles/{vehicle_id}
+     was registered first, matching "active" as a vehicle_id
+   - Fix: moved /active route before /{vehicle_id} route
+
+3. Fixed test assertions to match actual API response structures:
+   - Parquet list: response is {"parquet_files": [...]} not a bare list
+   - Parquet view: data key is "data" not "rows"
+   - Parquet tests: mock config.DATA_DIR (not find_parquet_file) since parquet
+     router resolves files directly via config
+   - Queue tests: ExtractionJob uses .id not .job_id
+   - Queue job detail: response uses "xrk_filename" not "filename"
+
+Test results: 998/998 passing (49 new, 4 pre-existing DLL failures excluded)
+
+Status: arch-005-exec marked PASSING
+Features: 55/56 passing (1 planned)
+
+Next priority: arch-005-test (Test API integration test verification)
+

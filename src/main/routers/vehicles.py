@@ -24,6 +24,26 @@ async def get_vehicles():
     }
 
 
+@router.put("/api/vehicles/active")
+async def set_active_vehicle_endpoint(request: Request):
+    """Set the active vehicle"""
+    data = await request.json()
+    vehicle_id = data.get("vehicle_id")
+
+    if not vehicle_id:
+        raise HTTPException(status_code=400, detail="vehicle_id is required")
+
+    vehicle = get_vehicle(vehicle_id)
+    if vehicle is None:
+        raise HTTPException(status_code=404, detail=f"Vehicle not found: {vehicle_id}")
+
+    try:
+        set_active_vehicle(vehicle_id)
+        return {"status": "ok", "active_vehicle": vehicle_id}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to set active vehicle: {str(e)}")
+
+
 @router.get("/api/vehicles/{vehicle_id}")
 async def get_vehicle_by_id(vehicle_id: str):
     """Get a specific vehicle by ID"""
@@ -49,23 +69,3 @@ async def update_vehicle(vehicle_id: str, request: Request):
         return {"status": "ok", "message": f"Vehicle {vehicle_id} updated"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to update vehicle: {str(e)}")
-
-
-@router.put("/api/vehicles/active")
-async def set_active_vehicle_endpoint(request: Request):
-    """Set the active vehicle"""
-    data = await request.json()
-    vehicle_id = data.get("vehicle_id")
-
-    if not vehicle_id:
-        raise HTTPException(status_code=400, detail="vehicle_id is required")
-
-    vehicle = get_vehicle(vehicle_id)
-    if vehicle is None:
-        raise HTTPException(status_code=404, detail=f"Vehicle not found: {vehicle_id}")
-
-    try:
-        set_active_vehicle(vehicle_id)
-        return {"status": "ok", "active_vehicle": vehicle_id}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to set active vehicle: {str(e)}")

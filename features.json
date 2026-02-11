@@ -696,11 +696,11 @@
       "name": "Execute: API integration test coverage",
       "category": "architecture",
       "description": "Implement API integration tests per docs/architecture/arch-005.md. Create test fixtures with realistic data, test all endpoint paths including error cases.",
-      "status": "planned",
+      "status": "passing",
       "priority": 49,
-      "tests": [],
-      "files": [],
-      "notes": "Blocked by: arch-005-plan"
+      "tests": ["pytest tests/test_api_health.py tests/test_api_vehicles.py tests/test_api_parquet.py tests/test_api_visualization.py tests/test_api_queue.py (49 tests)"],
+      "files": ["tests/test_api_health.py", "tests/test_api_vehicles.py", "tests/test_api_parquet.py", "tests/test_api_visualization.py", "tests/test_api_queue.py", "src/main/routers/vehicles.py"],
+      "notes": "DONE: 5 test files with 49 tests covering health (5), vehicles (8), parquet (7), visualization (17), queue (12). Fixed route ordering bug in vehicles.py (PUT /api/vehicles/active was unreachable due to /{vehicle_id} pattern matching first). Fixed parquet tests to match actual response structure. Fixed queue tests to use .id not .job_id. 998 tests passing."
     },
     {
       "id": "arch-005-test",
@@ -716,11 +716,11 @@
   ],
   "metadata": {
     "created_at": "2025-01-29T01:00:00Z",
-    "last_updated": "2026-02-10T17:00:00Z",
+    "last_updated": "2026-02-10T18:00:00Z",
     "total_features": 56,
-    "passing": 54,
+    "passing": 55,
     "failing": 0,
-    "planned": 2
+    "planned": 1
   },
   "categories": {
     "bugfix": "Bug fixes and corrections",
