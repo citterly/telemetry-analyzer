@@ -1456,3 +1456,31 @@ Architecture queue complete:
 - arch-004: Tiered storage foundation — COMPLETE
 - arch-005: API integration test coverage — COMPLETE
 
+
+=== Session 15 (2026-02-11) ===
+Design session — two new features planned (no code changes)
+
+1. arch-006: Audit Mode UI (3 phases)
+   - Design doc: docs/architecture/arch-006.md
+   - arch-006-plan: PASSING (design doc written)
+   - arch-006-exec: PLANNED — impact field on SanityCheck, 26 impact descriptions,
+     trace propagation through full report, shared audit.js/audit.css module,
+     per-page toggle + traffic light + expandable audit panels on 3 analysis pages
+   - arch-006-test: PLANNED — compliance tests for 10 acceptance criteria
+
+2. Feedback Service (separate project ~/projects/feedback-service)
+   - Design doc: docs/architecture/feedback-service-design.md (reference copy here)
+   - Standalone FastAPI service on port 8100
+   - Embeddable widget (screenshot, annotations, voice via existing Whisper component, auto-context)
+   - Dashboard for review/prioritization across all apps
+   - 12 features in its own pipeline (fb-001 through fb-004, 3 phases each)
+   - feat-070 in telemetry-analyzer: one-line widget integration (blocked until service exists)
+
+3. Restarted server (was stale, missing trace support from safeguard work)
+
+Features: 57/60 passing (3 planned: arch-006-exec, arch-006-test, feat-070)
+
+Next session should:
+1. Boot up, pick arch-006-exec (highest priority unblocked planned feature)
+2. OR start ~/projects/feedback-service scaffolding if user prefers
+

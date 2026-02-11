@@ -712,15 +712,62 @@
       "tests": ["pytest tests/test_arch_005_compliance.py (13 tests)"],
       "files": ["tests/test_arch_005_compliance.py"],
       "notes": "DONE: 13 compliance tests verifying all 10 acceptance criteria. TestAcceptanceCriteria (10 tests): visualization 10+ tests, parquet 5+ tests, queue 7+ tests, vehicles 5+ tests, health 2+ tests, all use TestClient, 404 scenarios covered, response structure validated, no test pollution, all modules importable. TestCoverageMetrics (3 tests): 29+ total tests, trace parameter tested, queue isolation pattern. 1011 tests passing."
+    },
+    {
+      "id": "arch-006-plan",
+      "name": "Plan: Audit mode UI",
+      "category": "architecture",
+      "description": "Design the audit mode UI that surfaces the safeguard system's trace data and sanity checks in the web interface. Per-page toggle, traffic light indicators, expandable audit panels with full trace provenance and impact descriptions. Output: docs/architecture/arch-006.md",
+      "status": "passing",
+      "priority": 51,
+      "tests": [],
+      "files": ["docs/architecture/arch-006.md"],
+      "notes": "DONE: Design doc covers impact field on SanityCheck, 26 impact descriptions, trace propagation through full report, shared audit.js/audit.css module, per-page integration for analysis/GG/corner pages. 10 acceptance criteria."
+    },
+    {
+      "id": "arch-006-exec",
+      "name": "Execute: Audit mode UI",
+      "category": "architecture",
+      "description": "Implement audit mode UI per docs/architecture/arch-006.md. Add impact field to SanityCheck, impact descriptions to all 26 checks, propagate trace through full report sub-analyzers, create shared audit.js/audit.css, integrate toggle and audit panels into analysis.html, gg_diagram.html, and corner_analysis.html.",
+      "status": "planned",
+      "priority": 52,
+      "depends_on": ["arch-006-plan"],
+      "tests": ["pytest tests/ (1011+ existing tests pass)"],
+      "files": ["src/utils/calculation_trace.py", "src/features/power_analysis.py", "src/features/shift_analysis.py", "src/features/gg_analysis.py", "src/features/lap_analysis.py", "src/features/gear_analysis.py", "src/features/corner_analysis.py", "src/features/session_report.py", "static/css/audit.css", "static/js/audit.js", "templates/base.html", "templates/analysis.html", "templates/gg_diagram.html", "templates/corner_analysis.html"],
+      "notes": ""
+    },
+    {
+      "id": "arch-006-test",
+      "name": "Test: Audit mode UI",
+      "category": "architecture",
+      "description": "Verify arch-006 implementation against acceptance criteria in docs/architecture/arch-006.md. Test impact field presence on all 26 checks, trace propagation in full report, audit toggle behavior, and panel rendering.",
+      "status": "planned",
+      "priority": 53,
+      "depends_on": ["arch-006-exec"],
+      "tests": ["pytest tests/test_arch_006_compliance.py"],
+      "files": ["tests/test_arch_006_compliance.py"],
+      "notes": ""
+    },
+    {
+      "id": "feat-070",
+      "name": "Integrate feedback widget",
+      "category": "ui",
+      "description": "Add feedback-widget.js script tag to templates/base.html with data-app='telemetry-analyzer' pointing at the standalone feedback service. One-line integration. Blocked until ~/projects/feedback-service fb-002 (widget) is complete.",
+      "status": "planned",
+      "priority": 60,
+      "depends_on": ["external:feedback-service/fb-002"],
+      "tests": [],
+      "files": ["templates/base.html"],
+      "notes": "Depends on external project ~/projects/feedback-service. See docs/architecture/feedback-service-design.md for full spec."
     }
   ],
   "metadata": {
     "created_at": "2025-01-29T01:00:00Z",
-    "last_updated": "2026-02-10T18:30:00Z",
-    "total_features": 56,
-    "passing": 56,
+    "last_updated": "2026-02-11T12:45:00Z",
+    "total_features": 60,
+    "passing": 57,
     "failing": 0,
-    "planned": 0
+    "planned": 3
   },
   "categories": {
     "bugfix": "Bug fixes and corrections",
