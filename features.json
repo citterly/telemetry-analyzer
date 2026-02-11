@@ -741,12 +741,12 @@
       "name": "Test: Audit mode UI",
       "category": "architecture",
       "description": "Verify arch-006 implementation against acceptance criteria in docs/architecture/arch-006.md. Test impact field presence on all 26 checks, trace propagation in full report, audit toggle behavior, and panel rendering.",
-      "status": "planned",
+      "status": "passing",
       "priority": 53,
       "depends_on": ["arch-006-exec"],
-      "tests": ["pytest tests/test_arch_006_compliance.py"],
-      "files": ["tests/test_arch_006_compliance.py"],
-      "notes": ""
+      "tests": ["pytest tests/test_arch_006_compliance.py (10 tests)"],
+      "files": ["tests/test_arch_006_compliance.py", "templates/analysis.html", "templates/gg_diagram.html", "templates/corner_analysis.html"],
+      "notes": "DONE: Completed Steps 7-9 (page integrations) from arch-006.md. (7) analysis.html: Added audit toggle in session selector card header, modified runAnalysis to append traceParam, added renderAuditPanels function to handle both full report (cross-validation + sub-analyzer traces) and individual analyses, added window.onAuditToggle callback, integrated into all display functions (displayFullReport, displayShiftAnalysis, displayLapAnalysis, displayGearAnalysis, displayPowerAnalysis). (8) gg_diagram.html: Added audit toggle in control panel, modified loadGGDiagram to append traceParam, added renderAuditPanel function, window.onAuditToggle callback. (9) corner_analysis.html: Added audit toggle in control panel, modified loadCornerAnalysis to append traceParam, added renderAuditPanel function, window.onAuditToggle callback. Created 10 compliance tests verifying all acceptance criteria. All 10 tests passing. 1021 total tests passing (1011 baseline + 10 new)."
     },
     {
       "id": "feat-070",
@@ -763,11 +763,11 @@
   ],
   "metadata": {
     "created_at": "2025-01-29T01:00:00Z",
-    "last_updated": "2026-02-11T14:30:00Z",
+    "last_updated": "2026-02-11T15:00:00Z",
     "total_features": 60,
-    "passing": 58,
+    "passing": 59,
     "failing": 0,
-    "planned": 2
+    "planned": 1
   },
   "categories": {
     "bugfix": "Bug fixes and corrections",

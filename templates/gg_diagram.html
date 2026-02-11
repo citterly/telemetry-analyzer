@@ -308,6 +308,15 @@
     </div>
 </div>
 
+<!-- Audit Mode Toggle -->
+<div class="row mb-3">
+    <div class="col-12">
+        <div class="control-panel">
+            <div id="audit-toggle-container"></div>
+        </div>
+    </div>
+</div>
+
 <!-- Loading -->
 <div class="row" id="loading" style="display: none;">
     <div class="col-12 text-center py-5">
@@ -796,7 +805,8 @@
 
         try {
             // Load JSON data
-            const response = await fetch(`/api/gg-diagram/${encodeURIComponent(filename)}?format=json`);
+            const traceParam = window._auditManager ? window._auditManager.traceParam('&') : '';
+            const response = await fetch(`/api/gg-diagram/${encodeURIComponent(filename)}?format=json${traceParam}`);
             if (!response.ok) throw new Error('Failed to load G-G data');
             currentData = await response.json();
             allPoints = currentData.points;
@@ -821,6 +831,11 @@
             await loadSVG(filename);
 
             document.getElementById('results-section').style.display = 'block';
+
+            // Render audit panel if audit mode enabled and trace data exists
+            if (window._auditManager && window._auditManager.enabled && currentData._trace) {
+                renderAuditPanel();
+            }
         } catch (error) {
             alert('Failed to load G-G diagram: ' + error.message);
         } finally {
@@ -2621,5 +2636,47 @@
             }
         });
     }
+
+    // Audit mode integration
+    function renderAuditPanel() {
+        // Find or create audit container
+        let auditContainer = document.getElementById('audit-panel-container');
+        if (!auditContainer) {
+            auditContainer = document.createElement('div');
+            auditContainer.id = 'audit-panel-container';
+            auditContainer.className = 'row mt-4';
+            const resultsSection = document.getElementById('results-section');
+            if (resultsSection) {
+                resultsSection.appendChild(auditContainer);
+            }
+        }
+
+        // Clear previous audit panels
+        auditContainer.innerHTML = '';
+
+        if (currentData && currentData._trace && window._auditManager) {
+            auditContainer.innerHTML = `
+                <div class="col-12">
+                    ${window._auditManager.renderPanel(currentData._trace, 'G-G Analysis')}
+                </div>
+            `;
+        }
+    }
+
+    // Callback when audit toggle changes
+    window.onAuditToggle = function(enabled) {
+        const filename = document.getElementById('file-select').value;
+        if (filename) {
+            loadGGDiagram();
+        }
+    };
+
+    // Initialize audit toggle on page load
+    document.addEventListener('DOMContentLoaded', () => {
+        const toggleContainer = document.getElementById('audit-toggle-container');
+        if (toggleContainer && window._auditManager) {
+            toggleContainer.innerHTML = window._auditManager.renderToggleButton();
+        }
+    });
 </script>
 {% endblock %}
