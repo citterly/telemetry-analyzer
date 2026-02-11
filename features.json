@@ -547,15 +547,180 @@
       "tests": [],
       "files": [],
       "notes": "DONE: Saved safeguard principle, project architecture, testing notes, and environment info to auto-memory MEMORY.md. Includes: trace pattern rule, 26-check coverage summary, router architecture, shared utils, and test commands."
+    },
+    {
+      "id": "arch-001-plan",
+      "name": "Plan: Vehicle config unification",
+      "category": "architecture",
+      "description": "Design the migration from dual config systems (vehicle_config.py module-level dicts vs vehicles.py OOP classes) to a single unified system. 13+ files import from vehicle_config.py. Must identify all consumers, design the migration path, define the target API surface, and ensure backward compatibility during transition. Output: docs/architecture/arch-001.md",
+      "status": "planned",
+      "priority": 36,
+      "tests": [],
+      "files": ["docs/architecture/arch-001.md"],
+      "notes": "No blockers. Foundation for arch-002 and arch-003."
+    },
+    {
+      "id": "arch-001-exec",
+      "name": "Execute: Vehicle config unification",
+      "category": "architecture",
+      "description": "Implement the vehicle config unification per docs/architecture/arch-001.md. Migrate all 13+ consumers from vehicle_config.py dicts to vehicles.py OOP system. Deprecate or remove vehicle_config.py.",
+      "status": "planned",
+      "priority": 37,
+      "tests": [],
+      "files": ["src/config/vehicle_config.py", "src/config/vehicles.py"],
+      "notes": "Blocked by: arch-001-plan"
+    },
+    {
+      "id": "arch-001-test",
+      "name": "Test: Vehicle config unification",
+      "category": "architecture",
+      "description": "Verify arch-001 implementation against acceptance criteria in docs/architecture/arch-001.md. Write compliance tests.",
+      "status": "planned",
+      "priority": 38,
+      "tests": [],
+      "files": [],
+      "notes": "Blocked by: arch-001-exec"
+    },
+    {
+      "id": "arch-002-plan",
+      "name": "Plan: SessionDataLoader service layer",
+      "category": "architecture",
+      "description": "Design a SessionDataLoader class that centralizes parquet loading, column discovery, speed unit conversion, and data validation. Currently every router endpoint repeats this logic. The service layer should also anticipate multiple data sources (parquet, CSV, live CAN) and the tiered storage architecture from CLAUDE.md. Output: docs/architecture/arch-002.md",
+      "status": "planned",
+      "priority": 39,
+      "tests": [],
+      "files": ["docs/architecture/arch-002.md"],
+      "notes": "No blockers. Depends on arch-001-exec for unified vehicle config integration."
+    },
+    {
+      "id": "arch-002-exec",
+      "name": "Execute: SessionDataLoader service layer",
+      "category": "architecture",
+      "description": "Implement SessionDataLoader per docs/architecture/arch-002.md. Refactor router endpoints to use the service instead of inline parquet loading.",
+      "status": "planned",
+      "priority": 40,
+      "tests": [],
+      "files": [],
+      "notes": "Blocked by: arch-002-plan, arch-001-exec"
+    },
+    {
+      "id": "arch-002-test",
+      "name": "Test: SessionDataLoader service layer",
+      "category": "architecture",
+      "description": "Verify arch-002 implementation against acceptance criteria in docs/architecture/arch-002.md. Write compliance tests.",
+      "status": "planned",
+      "priority": 41,
+      "tests": [],
+      "files": [],
+      "notes": "Blocked by: arch-002-exec"
+    },
+    {
+      "id": "arch-003-plan",
+      "name": "Plan: Analyzer registry and plugin pattern",
+      "category": "architecture",
+      "description": "Design an analyzer registry that allows new analyzers to register themselves and be automatically included in session reports, API endpoint discovery, and trace aggregation. Currently SessionReportGenerator hardcodes 4 sub-analyzers. Adding suspension, tire temp, or brake pressure analysis should not require editing session_report.py. Output: docs/architecture/arch-003.md",
+      "status": "planned",
+      "priority": 42,
+      "tests": [],
+      "files": ["docs/architecture/arch-003.md"],
+      "notes": "No blockers. Benefits from arch-001-exec (unified config) and arch-002-exec (data loader)."
+    },
+    {
+      "id": "arch-003-exec",
+      "name": "Execute: Analyzer registry and plugin pattern",
+      "category": "architecture",
+      "description": "Implement analyzer registry per docs/architecture/arch-003.md. Refactor SessionReportGenerator to use registry. Update base_analyzer.py with registration mechanism.",
+      "status": "planned",
+      "priority": 43,
+      "tests": [],
+      "files": [],
+      "notes": "Blocked by: arch-003-plan"
+    },
+    {
+      "id": "arch-003-test",
+      "name": "Test: Analyzer registry and plugin pattern",
+      "category": "architecture",
+      "description": "Verify arch-003 implementation against acceptance criteria in docs/architecture/arch-003.md. Test plugin registration, auto-discovery, and session report integration.",
+      "status": "planned",
+      "priority": 44,
+      "tests": [],
+      "files": [],
+      "notes": "Blocked by: arch-003-exec"
+    },
+    {
+      "id": "arch-004-plan",
+      "name": "Plan: Tiered storage foundation",
+      "category": "architecture",
+      "description": "Design the tiered storage system per CLAUDE.md spec: 500Hz raw → 50Hz summary → 10Hz merged. Must handle native sample rate preservation in session_builder.py, anti-alias filtering for downsampling, sidecar file export for high-frequency channels, and a tiered export API. Output: docs/architecture/arch-004.md",
+      "status": "planned",
+      "priority": 45,
+      "tests": [],
+      "files": ["docs/architecture/arch-004.md"],
+      "notes": "No blockers. Benefits from arch-002-exec (data loader can route to correct tier)."
+    },
+    {
+      "id": "arch-004-exec",
+      "name": "Execute: Tiered storage foundation",
+      "category": "architecture",
+      "description": "Implement tiered storage per docs/architecture/arch-004.md. Update session_builder.py to preserve native rates, add decimation filters, implement tiered export API.",
+      "status": "planned",
+      "priority": 46,
+      "tests": [],
+      "files": [],
+      "notes": "Blocked by: arch-004-plan"
+    },
+    {
+      "id": "arch-004-test",
+      "name": "Test: Tiered storage foundation",
+      "category": "architecture",
+      "description": "Verify arch-004 implementation against acceptance criteria in docs/architecture/arch-004.md. Test native rate preservation, anti-alias filtering, tiered export.",
+      "status": "planned",
+      "priority": 47,
+      "tests": [],
+      "files": [],
+      "notes": "Blocked by: arch-004-exec"
+    },
+    {
+      "id": "arch-005-plan",
+      "name": "Plan: API integration test coverage",
+      "category": "architecture",
+      "description": "Design an API integration test suite using FastAPI TestClient that exercises real endpoints with real (or realistic synthetic) data. Current tests mostly mock the data layer. Goal: catch wiring bugs, serialization issues, and error handling gaps. Cover all 33 API endpoints across 6 routers. Output: docs/architecture/arch-005.md",
+      "status": "planned",
+      "priority": 48,
+      "tests": [],
+      "files": ["docs/architecture/arch-005.md"],
+      "notes": "No blockers. Can run independently of arch-001 through arch-004."
+    },
+    {
+      "id": "arch-005-exec",
+      "name": "Execute: API integration test coverage",
+      "category": "architecture",
+      "description": "Implement API integration tests per docs/architecture/arch-005.md. Create test fixtures with realistic data, test all endpoint paths including error cases.",
+      "status": "planned",
+      "priority": 49,
+      "tests": [],
+      "files": [],
+      "notes": "Blocked by: arch-005-plan"
+    },
+    {
+      "id": "arch-005-test",
+      "name": "Test: API integration test verification",
+      "category": "architecture",
+      "description": "Verify arch-005 implementation against acceptance criteria in docs/architecture/arch-005.md. Ensure coverage targets met, all routers exercised, error paths tested.",
+      "status": "planned",
+      "priority": 50,
+      "tests": [],
+      "files": [],
+      "notes": "Blocked by: arch-005-exec"
     }
   ],
   "metadata": {
     "created_at": "2025-01-29T01:00:00Z",
-    "last_updated": "2026-02-10T16:00:00Z",
-    "total_features": 41,
+    "last_updated": "2026-02-10T17:00:00Z",
+    "total_features": 56,
     "passing": 41,
     "failing": 0,
-    "planned": 0
+    "planned": 15
   },
   "categories": {
     "bugfix": "Bug fixes and corrections",
@@ -565,6 +730,7 @@
     "infra": "Infrastructure and configuration",
     "testing": "Test coverage and quality",
     "cleanup": "Code quality improvements from docs/CLEANUP_AUDIT.md",
-    "safeguard": "Calculation traceability and sanity checks from docs/SAFEGUARD_SYSTEM.md"
+    "safeguard": "Calculation traceability and sanity checks from docs/SAFEGUARD_SYSTEM.md",
+    "architecture": "Structural improvements per docs/PROCESS.md three-phase pipeline"
   }
 }

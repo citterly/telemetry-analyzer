@@ -2,15 +2,50 @@
 ## Autonomous Harness
 
 This project uses the autonomous agent harness pattern.
+See `docs/PROCESS.md` for the full development process specification.
 
 ### Boot-up Ritual
 When starting work or told to "boot up":
 1. Read `features.json` to see project status
 2. Read `claude-progress.txt` for recent history
 3. Run `bash init.sh` to start environment
-4. Pick highest-priority failing feature
-5. Implement it, run tests, update artifacts, commit
-6. Continue to next feature automatically
+4. Pick highest-priority **unblocked** feature (see priority rules below)
+5. Execute it according to its phase type (see phase rules below)
+6. Update features.json and claude-progress.txt, commit
+7. Continue to next feature automatically
+
+### Priority Rules
+Pick work in this order:
+1. **Failing features** — fix regressions first
+2. **Planned features, unblocked, highest priority** — the main work queue
+3. **All passing** — stop and report status
+
+A feature is "unblocked" when all features it depends on are "passing".
+Dependencies follow the three-phase pipeline:
+- `-plan` features have no blockers (always eligible)
+- `-exec` features are blocked until their `-plan` is passing
+- `-test` features are blocked until their `-exec` is passing
+
+### Phase Rules
+Each feature follows one of three phase types:
+
+**Plan phase** (`-plan`):
+- Read all affected files, explore existing patterns
+- Write a design doc in `docs/architecture/{feature-id}.md`
+- NO code changes — only the design doc
+- Commit the doc, mark feature passing
+
+**Execute phase** (`-exec`):
+- Re-read the design doc from the plan phase
+- Implement changes following the spec
+- Run full test suite to verify no regressions
+- Commit code changes, mark feature passing
+
+**Test phase** (`-test`):
+- Re-read acceptance criteria from the design doc
+- Write tests verifying each criterion
+- Run tests, fix any failures
+- Commit tests, mark feature passing
 
 ### Commands
 - "boot up" or "run boot-up ritual" → execute the ritual above
@@ -21,6 +56,9 @@ When starting work or told to "boot up":
 - Work on ONE feature at a time
 - Only stop if: all features pass, or hit unresolvable blocker
 - Always update features.json and claude-progress.txt before committing
+- Plan phases produce design docs, NOT code
+- Exec phases follow design docs, NOT ad-hoc decisions
+- Test phases verify acceptance criteria from design docs
 
 ---
 

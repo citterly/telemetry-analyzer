@@ -930,3 +930,35 @@ Total: 26 sanity checks + 3 cross-validation checks = 29 checks
 Total: 818 tests passing (4 pre-existing DLL failures excluded)
 All 41 project features passing.
 
+
+=== Session 12 continued (2026-02-10) ===
+Working on: Process infrastructure for architecture improvements
+
+Work completed:
+
+1. Created docs/PROCESS.md:
+   - Three-phase pipeline: Plan → Execute → Test
+   - Each phase is a separate features.json entry with dependencies
+   - Plan produces design doc (no code), Exec implements, Test verifies
+   - Feature naming convention: {category}-{number}-{phase}
+   - Dependency rules: exec blocked by plan, test blocked by exec
+
+2. Updated CLAUDE.md boot-up ritual:
+   - Priority rules: failing → planned unblocked → all passing
+   - Phase rules: plan (design doc only), exec (follow spec), test (verify criteria)
+   - References docs/PROCESS.md for full specification
+
+3. Added 15 architecture features to features.json (5 items × 3 phases):
+   - arch-001: Vehicle config unification (priority 36-38)
+   - arch-002: SessionDataLoader service layer (priority 39-41)
+   - arch-003: Analyzer registry/plugin pattern (priority 42-44)
+   - arch-004: Tiered storage foundation (priority 45-47)
+   - arch-005: API integration test coverage (priority 48-50)
+
+4. Created docs/architecture/ directory for design docs
+
+Status: Process infrastructure complete
+Features: 41/56 passing (15 planned architecture features)
+
+Next priority: arch-001-plan (Plan vehicle config unification)
+
