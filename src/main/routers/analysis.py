@@ -5,7 +5,6 @@ Shift, lap, gear, power, and full report analysis endpoints.
 """
 
 import numpy as np
-import pandas as pd
 from fastapi import APIRouter, HTTPException
 
 from src.features import (
@@ -13,12 +12,8 @@ from src.features import (
     PowerAnalysis, SessionReportGenerator
 )
 from src.features.lap_analysis import compare_laps_detailed
-from src.utils.dataframe_helpers import (
-    find_column,
-    sanitize_for_json,
-    SPEED_MS_TO_MPH,
-)
-from ..deps import find_parquet_file
+from src.utils.dataframe_helpers import sanitize_for_json
+from ..deps import find_parquet_file, load_session
 
 router = APIRouter()
 
@@ -26,33 +21,18 @@ router = APIRouter()
 @router.get("/api/analyze/shifts/{filename:path}")
 async def analyze_shifts(filename: str, trace: bool = False):
     """Run shift analysis on a Parquet file"""
-    file_path = find_parquet_file(filename)
-    if not file_path:
-        raise HTTPException(status_code=404, detail=f"Parquet file not found: {filename}")
-
     try:
         if trace:
+            file_path = find_parquet_file(filename)
+            if not file_path:
+                raise HTTPException(status_code=404, detail=f"Parquet file not found: {filename}")
             analyzer = ShiftAnalyzer()
             report = analyzer.analyze_from_parquet(str(file_path), include_trace=True)
             return report.to_dict()
 
-        df = pd.read_parquet(file_path)
-
-        time_data = df.index.values
-        rpm_data = find_column(df, ['RPM', 'rpm'])
-        speed_data = find_column(df, ['GPS Speed', 'speed', 'Speed'])
-
-        if rpm_data is None:
-            raise HTTPException(status_code=400, detail="RPM data not found in file")
-        if speed_data is None:
-            raise HTTPException(status_code=400, detail="Speed data not found in file")
-
-        if speed_data.max() < 100:
-            speed_data = speed_data * SPEED_MS_TO_MPH
-
+        channels = load_session(filename, required=["speed", "rpm"])
         analyzer = ShiftAnalyzer()
-        report = analyzer.analyze_session(rpm_data, speed_data, time_data, filename)
-
+        report = analyzer.analyze_session(channels.rpm, channels.speed_mph, channels.time, filename)
         return report.to_dict()
 
     except HTTPException:
@@ -83,39 +63,23 @@ async def compare_laps(filename: str, lap_a: int, lap_b: int, segments: int = 10
 @router.get("/api/analyze/laps/{filename:path}")
 async def analyze_laps(filename: str, trace: bool = False):
     """Run lap analysis on a Parquet file"""
-    file_path = find_parquet_file(filename)
-    if not file_path:
-        raise HTTPException(status_code=404, detail=f"Parquet file not found: {filename}")
-
     try:
         if trace:
+            file_path = find_parquet_file(filename)
+            if not file_path:
+                raise HTTPException(status_code=404, detail=f"Parquet file not found: {filename}")
             analyzer = LapAnalysis()
             report = analyzer.analyze_from_parquet(str(file_path), include_trace=True)
             return report.to_dict()
 
-        df = pd.read_parquet(file_path)
-
-        time_data = df.index.values
-        lat_data = find_column(df, ['GPS Latitude', 'latitude'])
-        lon_data = find_column(df, ['GPS Longitude', 'longitude'])
-        rpm_data = find_column(df, ['RPM', 'rpm'])
-        speed_data = find_column(df, ['GPS Speed', 'speed', 'Speed'])
-
-        if lat_data is None or lon_data is None:
-            raise HTTPException(status_code=400, detail="GPS data not found in file")
-
-        if speed_data is None:
-            raise HTTPException(status_code=422, detail="Speed data not found in file - required for lap analysis")
-        if speed_data.max() < 100:
-            speed_data = speed_data * SPEED_MS_TO_MPH
-        if rpm_data is None:
-            rpm_data = np.zeros(len(time_data))
+        channels = load_session(filename, required=["speed", "latitude", "longitude"])
+        rpm_data = channels.rpm if channels.rpm is not None else np.zeros(channels.sample_count)
 
         analyzer = LapAnalysis()
         report = analyzer.analyze_from_arrays(
-            time_data, lat_data, lon_data, rpm_data, speed_data, filename
+            channels.time, channels.latitude, channels.longitude,
+            rpm_data, channels.speed_mph, filename
         )
-
         return report.to_dict()
 
     except HTTPException:
@@ -127,37 +91,22 @@ async def analyze_laps(filename: str, trace: bool = False):
 @router.get("/api/analyze/gears/{filename:path}")
 async def analyze_gears(filename: str, trace: bool = False):
     """Run gear usage analysis on a Parquet file"""
-    file_path = find_parquet_file(filename)
-    if not file_path:
-        raise HTTPException(status_code=404, detail=f"Parquet file not found: {filename}")
-
     try:
         if trace:
+            file_path = find_parquet_file(filename)
+            if not file_path:
+                raise HTTPException(status_code=404, detail=f"Parquet file not found: {filename}")
             analyzer = GearAnalysis()
             report = analyzer.analyze_from_parquet(str(file_path), include_trace=True)
             return report.to_dict()
 
-        df = pd.read_parquet(file_path)
-
-        time_data = df.index.values
-        rpm_data = find_column(df, ['RPM', 'rpm'])
-        speed_data = find_column(df, ['GPS Speed', 'speed', 'Speed'])
-        lat_data = find_column(df, ['GPS Latitude', 'latitude'])
-        lon_data = find_column(df, ['GPS Longitude', 'longitude'])
-
-        if rpm_data is None:
-            raise HTTPException(status_code=400, detail="RPM data not found in file")
-        if speed_data is None:
-            raise HTTPException(status_code=400, detail="Speed data not found in file")
-
-        if speed_data.max() < 100:
-            speed_data = speed_data * SPEED_MS_TO_MPH
+        channels = load_session(filename, required=["speed", "rpm"])
 
         analyzer = GearAnalysis()
         report = analyzer.analyze_from_arrays(
-            time_data, rpm_data, speed_data, lat_data, lon_data, filename
+            channels.time, channels.rpm, channels.speed_mph,
+            channels.latitude, channels.longitude, filename
         )
-
         return report.to_dict()
 
     except HTTPException:
@@ -169,31 +118,21 @@ async def analyze_gears(filename: str, trace: bool = False):
 @router.get("/api/analyze/power/{filename:path}")
 async def analyze_power(filename: str, trace: bool = False):
     """Run power/acceleration analysis on a Parquet file"""
-    file_path = find_parquet_file(filename)
-    if not file_path:
-        raise HTTPException(status_code=404, detail=f"Parquet file not found: {filename}")
-
     try:
         if trace:
+            file_path = find_parquet_file(filename)
+            if not file_path:
+                raise HTTPException(status_code=404, detail=f"Parquet file not found: {filename}")
             analyzer = PowerAnalysis()
             report = analyzer.analyze_from_parquet(str(file_path), include_trace=True)
             return report.to_dict()
 
-        df = pd.read_parquet(file_path)
-
-        time_data = df.index.values
-        speed_data = find_column(df, ['GPS Speed', 'speed', 'Speed'])
-        rpm_data = find_column(df, ['RPM', 'rpm'])
-
-        if speed_data is None:
-            raise HTTPException(status_code=400, detail="Speed data not found in file")
-
-        if speed_data.max() < 100:
-            speed_data = speed_data * SPEED_MS_TO_MPH
+        channels = load_session(filename, required=["speed"])
 
         analyzer = PowerAnalysis()
-        report = analyzer.analyze_from_arrays(time_data, speed_data, rpm_data, filename)
-
+        report = analyzer.analyze_from_arrays(
+            channels.time, channels.speed_mph, channels.rpm, filename
+        )
         return report.to_dict()
 
     except HTTPException:
@@ -205,38 +144,23 @@ async def analyze_power(filename: str, trace: bool = False):
 @router.get("/api/analyze/report/{filename:path}")
 async def analyze_full_report(filename: str, trace: bool = False):
     """Run full session analysis and return combined report"""
-    file_path = find_parquet_file(filename)
-    if not file_path:
-        raise HTTPException(status_code=404, detail=f"Parquet file not found: {filename}")
-
     try:
         if trace:
+            file_path = find_parquet_file(filename)
+            if not file_path:
+                raise HTTPException(status_code=404, detail=f"Parquet file not found: {filename}")
             generator = SessionReportGenerator()
             report = generator.generate_from_parquet(str(file_path), include_trace=True)
             return sanitize_for_json(report.to_dict())
 
-        df = pd.read_parquet(file_path)
-
-        time_data = df.index.values
-        lat_data = find_column(df, ['GPS Latitude', 'latitude'])
-        lon_data = find_column(df, ['GPS Longitude', 'longitude'])
-        rpm_data = find_column(df, ['RPM', 'rpm'])
-        speed_data = find_column(df, ['GPS Speed', 'speed', 'Speed'])
-
-        if lat_data is None or lon_data is None:
-            raise HTTPException(status_code=422, detail="GPS data (Latitude/Longitude) not found - required for session report")
-        if speed_data is None:
-            raise HTTPException(status_code=422, detail="Speed data not found - required for session report")
-        if speed_data.max() < 100:
-            speed_data = speed_data * SPEED_MS_TO_MPH
-        if rpm_data is None:
-            rpm_data = np.zeros(len(time_data))
+        channels = load_session(filename, required=["speed", "latitude", "longitude"])
+        rpm_data = channels.rpm if channels.rpm is not None else np.zeros(channels.sample_count)
 
         generator = SessionReportGenerator()
         report = generator.generate_from_arrays(
-            time_data, lat_data, lon_data, rpm_data, speed_data, filename
+            channels.time, channels.latitude, channels.longitude,
+            rpm_data, channels.speed_mph, filename
         )
-
         return sanitize_for_json(report.to_dict())
 
     except HTTPException:

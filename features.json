@@ -597,11 +597,11 @@
       "name": "Execute: SessionDataLoader service layer",
       "category": "architecture",
       "description": "Implement SessionDataLoader per docs/architecture/arch-002.md. Refactor router endpoints to use the service instead of inline parquet loading.",
-      "status": "planned",
+      "status": "passing",
       "priority": 40,
-      "tests": [],
-      "files": [],
-      "notes": "Blocked by: arch-002-plan, arch-001-exec"
+      "tests": ["pytest tests/test_session_data_loader.py (33 tests)"],
+      "files": ["src/services/__init__.py", "src/services/session_data_loader.py", "src/main/deps.py", "src/main/routers/analysis.py", "tests/test_session_data_loader.py", "tests/test_analysis_api.py"],
+      "notes": "DONE: Created SessionDataLoader with SessionChannels dataclass (8 core channels, speed unit detection, column_map). Added load_session() to deps.py. Migrated all 5 analysis.py endpoints to use load_session(). Updated 3 safety test mock targets. 33 new tests. 864 tests passing."
     },
     {
       "id": "arch-002-test",
@@ -718,9 +718,9 @@
     "created_at": "2025-01-29T01:00:00Z",
     "last_updated": "2026-02-10T17:00:00Z",
     "total_features": 56,
-    "passing": 45,
+    "passing": 46,
     "failing": 0,
-    "planned": 11
+    "planned": 10
   },
   "categories": {
     "bugfix": "Bug fixes and corrections",

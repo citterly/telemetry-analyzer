@@ -574,35 +574,36 @@ class TestSafetyCriticalFixes:
         from fastapi.testclient import TestClient
         from unittest.mock import patch
 
-        with patch('src.main.routers.analysis.find_parquet_file', return_value=parquet_no_gps):
+        with patch('src.main.deps.find_parquet_file', return_value=parquet_no_gps):
             client = TestClient(app)
             response = client.get("/api/analyze/report/test.parquet")
             assert response.status_code == 422
-            assert "GPS" in response.json()["detail"]
+            detail = response.json()["detail"].lower()
+            assert "latitude" in detail or "gps" in detail
 
     def test_report_rejects_missing_speed(self, parquet_no_speed):
         """Session report endpoint returns 422 when speed data is missing"""
         from unittest.mock import patch
 
-        with patch('src.main.routers.analysis.find_parquet_file', return_value=parquet_no_speed):
+        with patch('src.main.deps.find_parquet_file', return_value=parquet_no_speed):
             from src.main.app import app
             from fastapi.testclient import TestClient
             client = TestClient(app)
             response = client.get("/api/analyze/report/test.parquet")
             assert response.status_code == 422
-            assert "Speed" in response.json()["detail"]
+            assert "speed" in response.json()["detail"].lower()
 
     def test_laps_rejects_missing_speed(self, parquet_no_speed):
         """Lap analysis endpoint returns 422 when speed data is missing"""
         from unittest.mock import patch
 
-        with patch('src.main.routers.analysis.find_parquet_file', return_value=parquet_no_speed):
+        with patch('src.main.deps.find_parquet_file', return_value=parquet_no_speed):
             from src.main.app import app
             from fastapi.testclient import TestClient
             client = TestClient(app)
             response = client.get("/api/analyze/laps/test.parquet")
             assert response.status_code == 422
-            assert "Speed" in response.json()["detail"]
+            assert "speed" in response.json()["detail"].lower()
 
     def test_dtype_comparison_works_for_numeric(self):
         """dtype.kind check handles float32, int32, float16, etc."""

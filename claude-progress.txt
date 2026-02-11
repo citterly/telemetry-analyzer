@@ -1084,3 +1084,47 @@ Features: 45/56 passing (11 planned)
 
 Next priority: arch-002-exec (Execute SessionDataLoader service layer)
 
+
+=== Session 13 continued (2026-02-10) ===
+Working on: arch-002-exec (Execute SessionDataLoader service layer)
+
+Work completed:
+
+1. Created src/services/ package:
+   - __init__.py: exports SessionDataLoader, SessionChannels
+   - session_data_loader.py: SessionChannels dataclass (8 core channels,
+     speed_unit_detected, column_map, has_gps/has_speed/has_rpm properties)
+   - SessionDataLoader: load() discovers all KNOWN_COLUMNS channels,
+     detects speed units (attrs metadata → heuristic fallback),
+     provides both speed_mph and speed_ms
+   - load_or_raise() validates required channels
+   - to_session_data_dict() for LapAnalyzer backward compat
+
+2. Updated src/main/deps.py:
+   - Added load_session() helper combining find_parquet_file + SessionDataLoader
+   - Returns SessionChannels or raises HTTPException (404/422)
+
+3. Migrated src/main/routers/analysis.py (5 endpoints):
+   - Replaced inline pd.read_parquet + find_column + speed conversion
+   - Now uses load_session(filename, required=[...])
+   - trace=True path still uses analyze_from_parquet directly
+
+4. Updated tests/test_analysis_api.py:
+   - Mock targets changed from routers.analysis.find_parquet_file to deps.find_parquet_file
+   - Assertion strings updated for case-insensitive matching
+
+5. Created tests/test_session_data_loader.py with 33 tests:
+   - TestSessionDataLoader (11): load, time, duration, session_id, channels
+   - TestSpeedUnitDetection (5): m/s, mph, unknown, both units
+   - TestHasProperties (6): has_gps, has_speed, has_rpm, available_channels
+   - TestLoadOrRaise (4): valid, missing_rpm, missing_gps, all_missing
+   - TestToSessionDataDict (4): keys, values, missing channels
+   - TestEdgeCases (3): df preserved, nonexistent file, column_map
+
+Test results: 864/864 passing (33 new, 4 pre-existing DLL failures excluded)
+
+Status: arch-002-exec marked PASSING
+Features: 46/56 passing (10 planned)
+
+Next priority: arch-002-test (Test SessionDataLoader compliance)
+
