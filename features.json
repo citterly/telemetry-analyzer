@@ -619,11 +619,11 @@
       "name": "Plan: Analyzer registry and plugin pattern",
       "category": "architecture",
       "description": "Design an analyzer registry that allows new analyzers to register themselves and be automatically included in session reports, API endpoint discovery, and trace aggregation. Currently SessionReportGenerator hardcodes 4 sub-analyzers. Adding suspension, tire temp, or brake pressure analysis should not require editing session_report.py. Output: docs/architecture/arch-003.md",
-      "status": "planned",
+      "status": "passing",
       "priority": 42,
       "tests": [],
       "files": ["docs/architecture/arch-003.md"],
-      "notes": "No blockers. Benefits from arch-001-exec (unified config) and arch-002-exec (data loader)."
+      "notes": "DONE: Design doc maps 6 analyzers with varying interfaces (required channels, config params). AnalyzerRegistry with auto-registration via class attributes. analyze_from_channels() for uniform SessionChannels interface. 4-phase migration: create registry → add metadata → update SessionReportGenerator → optional router auto-discovery. 10 acceptance criteria defined."
     },
     {
       "id": "arch-003-exec",
@@ -718,9 +718,9 @@
     "created_at": "2025-01-29T01:00:00Z",
     "last_updated": "2026-02-10T17:00:00Z",
     "total_features": 56,
-    "passing": 47,
+    "passing": 48,
     "failing": 0,
-    "planned": 9
+    "planned": 8
   },
   "categories": {
     "bugfix": "Bug fixes and corrections",
