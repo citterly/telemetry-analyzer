@@ -81,9 +81,19 @@
     </div>
     <div class="card-body">
         <div id="detectionResults">
-            <div class="alert alert-info">
-                <strong>Track Detected:</strong> <span id="detectedTrack"></span><br>
-                <strong>Confidence:</strong> <span id="detectedConfidence"></span>
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="alert alert-info">
+                        <strong>Track Detected:</strong> <span id="detectedTrack"></span><br>
+                        <strong>Confidence:</strong> <span id="detectedConfidence"></span>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="alert alert-secondary">
+                        <strong>Duration:</strong> <span id="detectedDuration"></span><br>
+                        <strong>Samples:</strong> <span id="detectedSamples"></span>
+                    </div>
+                </div>
             </div>
 
             <h6>Lap Classifications</h6>
@@ -110,15 +120,20 @@
     </div>
 </div>
 
-<!-- Step 3: Session Details -->
+<!-- Step 3: Session Details (ENHANCED) -->
 <div class="card" id="step3" style="display: none;">
     <div class="card-header">
         <h5 class="mb-0">Step 3: Enter Session Details</h5>
     </div>
     <div class="card-body">
         <form id="sessionDetailsForm">
+            <!-- Basic Info -->
             <div class="row mb-3">
                 <div class="col-md-6">
+                    <label for="sessionDate" class="form-label">Date & Time</label>
+                    <input type="datetime-local" class="form-control" id="sessionDate" required>
+                </div>
+                <div class="col-md-3">
                     <label for="sessionType" class="form-label">Session Type</label>
                     <select class="form-control" id="sessionType" required>
                         <option value="">Select type...</option>
@@ -128,8 +143,90 @@
                         <option value="test">Test</option>
                     </select>
                 </div>
+                <div class="col-md-3">
+                    <label for="runNumber" class="form-label">Run #</label>
+                    <input type="number" class="form-control" id="runNumber" min="1" placeholder="1">
+                </div>
             </div>
 
+            <!-- Driver & Vehicle -->
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label for="driverName" class="form-label">Driver</label>
+                    <input type="text" class="form-control" id="driverName" list="recentDrivers" placeholder="Enter driver name">
+                    <datalist id="recentDrivers"></datalist>
+                    <small class="form-text text-muted">Type to autocomplete from recent drivers</small>
+                </div>
+                <div class="col-md-6">
+                    <label for="vehicleId" class="form-label">Vehicle</label>
+                    <select class="form-control" id="vehicleId">
+                        <option value="">Loading vehicles...</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Conditions -->
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label for="weatherConditions" class="form-label">Weather Conditions</label>
+                    <input type="text" class="form-control" id="weatherConditions" placeholder="e.g., Dry, 75°F, Partly Cloudy">
+                </div>
+                <div class="col-md-6">
+                    <label for="trackConditions" class="form-label">Track Conditions</label>
+                    <select class="form-control" id="trackConditions">
+                        <option value="">Select...</option>
+                        <option value="Green">Green (Cold)</option>
+                        <option value="Rubbered In">Rubbered In</option>
+                        <option value="Damp">Damp</option>
+                        <option value="Wet">Wet</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Setup Info -->
+            <div class="row mb-3">
+                <div class="col-md-12">
+                    <label for="setupId" class="form-label">Setup</label>
+                    <select class="form-control" id="setupId">
+                        <option value="">Loading setups...</option>
+                    </select>
+                    <small class="form-text text-muted">Setup snapshot will be captured from the vehicle configuration</small>
+                </div>
+            </div>
+
+            <!-- Tire Pressures -->
+            <div class="row mb-3">
+                <div class="col-md-12">
+                    <label class="form-label">Tire Pressures (psi)</label>
+                </div>
+                <div class="col-md-3">
+                    <label for="tirePressureFL" class="form-label small">Front Left</label>
+                    <input type="number" class="form-control" id="tirePressureFL" placeholder="32" step="0.5">
+                </div>
+                <div class="col-md-3">
+                    <label for="tirePressureFR" class="form-label small">Front Right</label>
+                    <input type="number" class="form-control" id="tirePressureFR" placeholder="32" step="0.5">
+                </div>
+                <div class="col-md-3">
+                    <label for="tirePressureRL" class="form-label small">Rear Left</label>
+                    <input type="number" class="form-control" id="tirePressureRL" placeholder="28" step="0.5">
+                </div>
+                <div class="col-md-3">
+                    <label for="tirePressureRR" class="form-label small">Rear Right</label>
+                    <input type="number" class="form-control" id="tirePressureRR" placeholder="28" step="0.5">
+                </div>
+            </div>
+
+            <!-- Tags -->
+            <div class="row mb-3">
+                <div class="col-md-12">
+                    <label for="tags" class="form-label">Tags</label>
+                    <input type="text" class="form-control" id="tags" placeholder="baseline, new-dampers, wet-setup">
+                    <small class="form-text text-muted">Separate tags with commas</small>
+                </div>
+            </div>
+
+            <!-- Notes -->
             <div class="mb-3">
                 <label for="sessionNotes" class="form-label">Notes</label>
                 <textarea class="form-control" id="sessionNotes" rows="3" placeholder="Optional notes about this session..."></textarea>
@@ -161,8 +258,35 @@
             <dt class="col-sm-3">Track:</dt>
             <dd class="col-sm-9" id="confirmTrack"></dd>
 
+            <dt class="col-sm-3">Date & Time:</dt>
+            <dd class="col-sm-9" id="confirmDate"></dd>
+
+            <dt class="col-sm-3">Driver:</dt>
+            <dd class="col-sm-9" id="confirmDriver"></dd>
+
+            <dt class="col-sm-3">Run Number:</dt>
+            <dd class="col-sm-9" id="confirmRunNumber"></dd>
+
             <dt class="col-sm-3">Session Type:</dt>
             <dd class="col-sm-9" id="confirmType"></dd>
+
+            <dt class="col-sm-3">Vehicle:</dt>
+            <dd class="col-sm-9" id="confirmVehicle"></dd>
+
+            <dt class="col-sm-3">Setup:</dt>
+            <dd class="col-sm-9" id="confirmSetup"></dd>
+
+            <dt class="col-sm-3">Weather:</dt>
+            <dd class="col-sm-9" id="confirmWeather"></dd>
+
+            <dt class="col-sm-3">Track Condition:</dt>
+            <dd class="col-sm-9" id="confirmTrackCondition"></dd>
+
+            <dt class="col-sm-3">Tire Pressures:</dt>
+            <dd class="col-sm-9" id="confirmTires"></dd>
+
+            <dt class="col-sm-3">Tags:</dt>
+            <dd class="col-sm-9" id="confirmTags"></dd>
 
             <dt class="col-sm-3">Total Laps:</dt>
             <dd class="col-sm-9" id="confirmLaps"></dd>
@@ -173,9 +297,13 @@
 
         <div class="mt-3">
             <button class="btn btn-secondary" onclick="goToStep(3)">Back</button>
-            <button class="btn btn-success" id="confirmButton" onclick="confirmImport()">
-                <span id="confirmButtonText">Confirm Import</span>
+            <button class="btn btn-success" id="confirmButton" onclick="confirmImport(false)">
+                <span id="confirmButtonText">Import Session</span>
                 <span id="confirmButtonSpinner" style="display: none;" class="spinner-border spinner-border-sm ms-2"></span>
+            </button>
+            <button class="btn btn-primary" id="confirmAnalyzeButton" onclick="confirmImport(true)">
+                <span id="confirmAnalyzeButtonText">Import & Analyze</span>
+                <span id="confirmAnalyzeButtonSpinner" style="display: none;" class="spinner-border spinner-border-sm ms-2"></span>
             </button>
         </div>
     </div>
@@ -188,6 +316,8 @@ let currentStep = 1;
 let selectedFile = null;
 let importedSessionId = null;
 let detectionData = null;
+let activeVehicle = null;
+let vehicleSetups = [];
 
 async function loadParquetFiles() {
     try {
@@ -232,6 +362,84 @@ async function loadParquetFiles() {
     }
 }
 
+async function loadVehicles() {
+    try {
+        const response = await apiCall('/api/vehicles');
+        const vehicles = response.vehicles || [];
+        activeVehicle = response.active_vehicle_id;
+
+        const select = document.getElementById('vehicleId');
+        select.innerHTML = '<option value="">Select vehicle...</option>';
+
+        vehicles.forEach(vehicle => {
+            const option = document.createElement('option');
+            option.value = vehicle.id;
+            option.textContent = `${vehicle.year} ${vehicle.make} ${vehicle.model}`;
+            if (vehicle.id === activeVehicle) {
+                option.selected = true;
+            }
+            select.appendChild(option);
+        });
+
+        // Load setups for active vehicle
+        if (activeVehicle) {
+            await loadVehicleSetups(activeVehicle);
+        }
+    } catch (error) {
+        console.error('Failed to load vehicles:', error);
+    }
+}
+
+async function loadVehicleSetups(vehicleId) {
+    try {
+        const response = await apiCall(`/api/vehicles/${vehicleId}`);
+        const vehicle = response;
+
+        const setupSelect = document.getElementById('setupId');
+        setupSelect.innerHTML = '<option value="">Select setup...</option>';
+
+        // Current setup
+        if (vehicle.current_setup) {
+            const option = document.createElement('option');
+            option.value = 'current';
+            option.textContent = vehicle.current_setup.name || 'Current Setup';
+            option.selected = true;
+            setupSelect.appendChild(option);
+        }
+
+        // Alternative setups
+        if (vehicle.alternative_setups) {
+            vehicle.alternative_setups.forEach(setup => {
+                const option = document.createElement('option');
+                option.value = setup.name;
+                option.textContent = setup.name;
+                setupSelect.appendChild(option);
+            });
+        }
+
+        vehicleSetups = vehicle;
+    } catch (error) {
+        console.error('Failed to load setups:', error);
+    }
+}
+
+async function loadRecentDrivers() {
+    try {
+        const response = await apiCall('/api/v2/drivers/recent');
+        const drivers = response.drivers || [];
+
+        const datalist = document.getElementById('recentDrivers');
+        drivers.forEach(driver => {
+            const option = document.createElement('option');
+            option.value = driver;
+            datalist.appendChild(option);
+        });
+    } catch (error) {
+        // Endpoint might not exist yet
+        console.log('Recent drivers endpoint not available');
+    }
+}
+
 async function importFile(path, name) {
     try {
         showAlert('Importing file and detecting track/laps...', 'info');
@@ -255,6 +463,16 @@ async function importFile(path, name) {
             </div>
         `;
 
+        // Show duration and samples if available
+        if (response.total_duration) {
+            const minutes = Math.floor(response.total_duration / 60);
+            const seconds = Math.floor(response.total_duration % 60);
+            document.getElementById('detectedDuration').textContent = `${minutes}m ${seconds}s`;
+        }
+        if (response.sample_count) {
+            document.getElementById('detectedSamples').textContent = response.sample_count.toLocaleString();
+        }
+
         const lapsBody = document.getElementById('detectionLapsBody');
         lapsBody.innerHTML = '';
 
@@ -276,6 +494,11 @@ async function importFile(path, name) {
             lapsBody.appendChild(row);
         });
 
+        // Pre-fill date to now
+        const now = new Date();
+        const localDateTime = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+        document.getElementById('sessionDate').value = localDateTime;
+
         goToStep(2);
         showAlert('Track and laps detected successfully!', 'success');
     } catch (error) {
@@ -288,8 +511,9 @@ function goToStep(step) {
     if (step > currentStep) {
         if (currentStep === 3) {
             const type = document.getElementById('sessionType').value;
-            if (!type) {
-                showAlert('Please select a session type', 'warning');
+            const date = document.getElementById('sessionDate').value;
+            if (!type || !date) {
+                showAlert('Please fill in required fields (Date and Session Type)', 'warning');
                 return;
             }
         }
@@ -315,37 +539,106 @@ function goToStep(step) {
     if (step === 4) {
         document.getElementById('confirmFile').textContent = selectedFile.name;
         document.getElementById('confirmTrack').textContent = detectionData.detected_track || 'Unknown';
+        document.getElementById('confirmDate').textContent = document.getElementById('sessionDate').value || 'Not set';
+        document.getElementById('confirmDriver').textContent = document.getElementById('driverName').value || 'Not specified';
+        document.getElementById('confirmRunNumber').textContent = document.getElementById('runNumber').value || 'N/A';
         document.getElementById('confirmType').textContent = document.getElementById('sessionType').value;
+
+        const vehicleSelect = document.getElementById('vehicleId');
+        const vehicleText = vehicleSelect.options[vehicleSelect.selectedIndex]?.text || 'Default';
+        document.getElementById('confirmVehicle').textContent = vehicleText;
+
+        const setupSelect = document.getElementById('setupId');
+        const setupText = setupSelect.options[setupSelect.selectedIndex]?.text || 'Current Setup';
+        document.getElementById('confirmSetup').textContent = setupText;
+
+        document.getElementById('confirmWeather').textContent = document.getElementById('weatherConditions').value || 'Not specified';
+        document.getElementById('confirmTrackCondition').textContent = document.getElementById('trackConditions').value || 'Not specified';
+
+        const fl = document.getElementById('tirePressureFL').value;
+        const fr = document.getElementById('tirePressureFR').value;
+        const rl = document.getElementById('tirePressureRL').value;
+        const rr = document.getElementById('tirePressureRR').value;
+        const tiresText = (fl || fr || rl || rr) ? `FL: ${fl || '-'}, FR: ${fr || '-'}, RL: ${rl || '-'}, RR: ${rr || '-'}` : 'Not recorded';
+        document.getElementById('confirmTires').textContent = tiresText;
+
+        const tags = document.getElementById('tags').value;
+        document.getElementById('confirmTags').textContent = tags || 'None';
+
         document.getElementById('confirmLaps').textContent = detectionData.lap_count || 0;
         document.getElementById('confirmNotes').textContent = document.getElementById('sessionNotes').value || 'None';
     }
 }
 
-async function confirmImport() {
-    const button = document.getElementById('confirmButton');
-    const buttonText = document.getElementById('confirmButtonText');
-    const spinner = document.getElementById('confirmButtonSpinner');
+async function confirmImport(andAnalyze) {
+    const button = andAnalyze ? document.getElementById('confirmAnalyzeButton') : document.getElementById('confirmButton');
+    const buttonText = andAnalyze ? document.getElementById('confirmAnalyzeButtonText') : document.getElementById('confirmButtonText');
+    const spinner = andAnalyze ? document.getElementById('confirmAnalyzeButtonSpinner') : document.getElementById('confirmButtonSpinner');
 
     try {
         button.disabled = true;
         buttonText.style.display = 'none';
         spinner.style.display = 'inline-block';
 
-        const sessionType = document.getElementById('sessionType').value;
-        const notes = document.getElementById('sessionNotes').value;
+        // Collect all metadata
+        const metadata = {
+            session_type: document.getElementById('sessionType').value,
+            session_date: document.getElementById('sessionDate').value,
+            driver_name: document.getElementById('driverName').value || null,
+            run_number: parseInt(document.getElementById('runNumber').value) || null,
+            vehicle_id: document.getElementById('vehicleId').value || activeVehicle,
+            weather_conditions: document.getElementById('weatherConditions').value || null,
+            track_conditions: document.getElementById('trackConditions').value || null,
+            notes: document.getElementById('sessionNotes').value || '',
+        };
+
+        // Tire pressures
+        const fl = parseFloat(document.getElementById('tirePressureFL').value);
+        const fr = parseFloat(document.getElementById('tirePressureFR').value);
+        const rl = parseFloat(document.getElementById('tirePressureRL').value);
+        const rr = parseFloat(document.getElementById('tirePressureRR').value);
+        if (fl || fr || rl || rr) {
+            metadata.tire_pressures = {
+                FL: fl || null,
+                FR: fr || null,
+                RL: rl || null,
+                RR: rr || null,
+            };
+        }
+
+        // Tags (parse comma-separated)
+        const tagsInput = document.getElementById('tags').value;
+        if (tagsInput) {
+            metadata.tags = tagsInput.split(',').map(t => t.trim()).filter(t => t);
+        }
+
+        // Setup snapshot will be captured server-side from vehicle config
 
         await apiCall(`/api/v2/sessions/${importedSessionId}/confirm`, {
             method: 'PUT',
-            body: JSON.stringify({
-                session_type: sessionType,
-                notes: notes
-            })
+            body: JSON.stringify(metadata)
         });
 
         showAlert('Session imported successfully!', 'success');
-        setTimeout(() => {
-            window.location.href = `/sessions/${importedSessionId}`;
-        }, 1500);
+
+        if (andAnalyze) {
+            // Set analysis context and redirect to analysis
+            await apiCall('/api/context/set', {
+                method: 'POST',
+                body: JSON.stringify({
+                    mode: 'single',
+                    session_ids: [String(importedSessionId)],
+                })
+            });
+
+            setTimeout(() => {
+                window.location.href = `/analysis`;
+            }, 1000);
+        } else {
+            setTimeout(() => {
+                window.location.href = `/sessions/${importedSessionId}`;
+            }, 1500);
+        }
     } catch (error) {
         showAlert(`Failed to confirm import: ${error.message}`, 'danger');
         button.disabled = false;
@@ -366,7 +659,14 @@ function getClassificationBadgeClass(classification) {
     return classes[classification] || 'bg-secondary';
 }
 
-// Load files on page load
+// Load initial data
 loadParquetFiles();
+loadVehicles();
+loadRecentDrivers();
+
+// Update setups when vehicle changes
+document.getElementById('vehicleId')?.addEventListener('change', (e) => {
+    loadVehicleSetups(e.target.value);
+});
 </script>
 {% endblock %}

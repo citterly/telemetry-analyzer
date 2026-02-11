@@ -199,16 +199,53 @@ async def confirm_session_api(session_id: int, request: Request):
 
     data = await request.json()
 
+    # Mark as confirmed
     session.import_status = ImportStatus.CONFIRMED
+
+    # Update basic metadata
     if "session_type" in data:
         try:
             session.session_type = SessionType(data["session_type"])
         except ValueError:
             pass
+    if "session_date" in data:
+        session.session_date = data["session_date"]
     if "notes" in data:
         session.notes = data["notes"]
     if "vehicle_id" in data:
         session.vehicle_id = data["vehicle_id"]
+
+    # Update enhanced metadata (arch-007)
+    if "driver_name" in data:
+        session.driver_name = data["driver_name"]
+    if "run_number" in data:
+        session.run_number = data["run_number"]
+    if "weather_conditions" in data:
+        session.weather_conditions = data["weather_conditions"]
+    if "track_conditions" in data:
+        session.track_conditions = data["track_conditions"]
+    if "tire_pressures" in data:
+        session.tire_pressures = data["tire_pressures"]
+    if "tags" in data:
+        session.tags = data["tags"]
+
+    # Capture setup snapshot from vehicle config
+    if session.vehicle_id:
+        try:
+            from src.config.vehicles import get_vehicle_database
+            vehicle_db = get_vehicle_database()
+            vehicle = vehicle_db.get_vehicle(session.vehicle_id)
+            if vehicle and vehicle.current_setup:
+                session.setup_snapshot = {
+                    "name": vehicle.current_setup.name,
+                    "transmission_ratios": vehicle.current_setup.transmission_ratios,
+                    "final_drive": vehicle.current_setup.final_drive,
+                    "weight_lbs": vehicle.current_setup.weight_lbs,
+                    "tire_circumference_meters": vehicle.tire_circumference_meters,
+                }
+        except Exception as e:
+            # Don't fail import if setup snapshot fails
+            print(f"Warning: Failed to capture setup snapshot: {e}")
 
     db.update_session(session)
     return {"status": "ok", "session": session.to_dict()}
@@ -242,3 +279,22 @@ async def save_session_setup_api(session_id: int, request: Request):
     )
     setup = db.save_setup(setup)
     return {"status": "ok", "setup": setup.to_dict()}
+
+
+@router.get("/api/v2/drivers/recent")
+async def get_recent_drivers_api(limit: int = 10):
+    """Get list of recent driver names for autocomplete"""
+    db = get_session_db()
+
+    # Get all sessions with driver names, ordered by recent
+    sessions = db.list_sessions(limit=100, offset=0)
+
+    # Extract unique driver names
+    drivers = set()
+    for session in sessions:
+        if session.driver_name:
+            drivers.add(session.driver_name)
+            if len(drivers) >= limit:
+                break
+
+    return {"drivers": sorted(list(drivers))}
