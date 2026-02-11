@@ -641,11 +641,11 @@
       "name": "Test: Analyzer registry and plugin pattern",
       "category": "architecture",
       "description": "Verify arch-003 implementation against acceptance criteria in docs/architecture/arch-003.md. Test plugin registration, auto-discovery, and session report integration.",
-      "status": "planned",
+      "status": "passing",
       "priority": 44,
-      "tests": [],
-      "files": [],
-      "notes": "Blocked by: arch-003-exec"
+      "tests": ["pytest tests/test_arch_003_compliance.py (17 tests)"],
+      "files": ["tests/test_arch_003_compliance.py"],
+      "notes": "DONE: 17 compliance tests verifying all 10 acceptance criteria. TestAcceptanceCriteria (10 tests): registry exists, 6 analyzers registered, metadata on each, analyze_from_channels method, registry-based report gen, dynamic sub_reports dict, backward-compat typed fields, trivial new registration, imports clean, dynamic cross-validation. TestRegistryIntegration (7 tests): runs all available analyzers, skips missing channels, create_instance, reset for test isolation, typed field sync, to_dict includes all, trace dynamic intermediates. 894 tests passing."
     },
     {
       "id": "arch-004-plan",
@@ -718,9 +718,9 @@
     "created_at": "2025-01-29T01:00:00Z",
     "last_updated": "2026-02-10T17:00:00Z",
     "total_features": 56,
-    "passing": 49,
+    "passing": 50,
     "failing": 0,
-    "planned": 7
+    "planned": 6
   },
   "categories": {
     "bugfix": "Bug fixes and corrections",
