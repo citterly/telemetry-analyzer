@@ -608,11 +608,11 @@
       "name": "Test: SessionDataLoader service layer",
       "category": "architecture",
       "description": "Verify arch-002 implementation against acceptance criteria in docs/architecture/arch-002.md. Write compliance tests.",
-      "status": "planned",
+      "status": "passing",
       "priority": 41,
-      "tests": [],
-      "files": [],
-      "notes": "Blocked by: arch-002-exec"
+      "tests": ["pytest tests/test_arch_002_compliance.py (13 tests)"],
+      "files": ["tests/test_arch_002_compliance.py"],
+      "notes": "DONE: 13 compliance tests verifying all 10 acceptance criteria. TestAcceptanceCriteria (10): loader exists, SessionChannels fields, KNOWN_COLUMNS usage, speed unit centralized, both speed units, load_session in router, backward compat, session report interface, imports work, test file exists. TestLoadSessionHelper (3): 404, 422, success. 877 tests passing."
     },
     {
       "id": "arch-003-plan",
@@ -718,9 +718,9 @@
     "created_at": "2025-01-29T01:00:00Z",
     "last_updated": "2026-02-10T17:00:00Z",
     "total_features": 56,
-    "passing": 46,
+    "passing": 47,
     "failing": 0,
-    "planned": 10
+    "planned": 9
   },
   "categories": {
     "bugfix": "Bug fixes and corrections",
