@@ -56,7 +56,15 @@ class SessionDatabase:
                     total_duration REAL,
                     notes TEXT DEFAULT '',
                     created_at TEXT NOT NULL,
-                    updated_at TEXT NOT NULL
+                    updated_at TEXT NOT NULL,
+                    driver_name TEXT,
+                    run_number INTEGER,
+                    weather_conditions TEXT,
+                    track_conditions TEXT,
+                    setup_snapshot TEXT,
+                    tire_pressures TEXT,
+                    tags TEXT,
+                    last_accessed TEXT
                 )
             """)
             conn.execute("""
@@ -153,6 +161,12 @@ class SessionDatabase:
 
     def create_session(self, session: Session) -> Session:
         now = datetime.now(timezone.utc).isoformat()
+
+        # Serialize JSON fields
+        setup_snapshot_json = json.dumps(session.setup_snapshot) if session.setup_snapshot else None
+        tire_pressures_json = json.dumps(session.tire_pressures) if session.tire_pressures else None
+        tags_json = json.dumps(session.tags) if session.tags else "[]"
+
         with self._lock:
             with self._get_connection() as conn:
                 cursor = conn.execute("""
@@ -160,8 +174,10 @@ class SessionDatabase:
                     (parquet_path, file_hash, track_id, track_name, track_confidence,
                      vehicle_id, session_date, session_type, import_status,
                      total_laps, best_lap_time, total_duration, notes,
-                     created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     created_at, updated_at,
+                     driver_name, run_number, weather_conditions, track_conditions,
+                     setup_snapshot, tire_pressures, tags, last_accessed)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     session.parquet_path,
                     session.file_hash,
@@ -177,6 +193,15 @@ class SessionDatabase:
                     session.total_duration,
                     session.notes,
                     now, now,
+                    # Enhanced metadata
+                    session.driver_name,
+                    session.run_number,
+                    session.weather_conditions,
+                    session.track_conditions,
+                    setup_snapshot_json,
+                    tire_pressures_json,
+                    tags_json,
+                    session.last_accessed.isoformat() if session.last_accessed else None,
                 ))
                 conn.commit()
                 session.id = cursor.lastrowid
@@ -251,6 +276,12 @@ class SessionDatabase:
 
     def update_session(self, session: Session) -> Session:
         now = datetime.now(timezone.utc).isoformat()
+
+        # Serialize JSON fields
+        setup_snapshot_json = json.dumps(session.setup_snapshot) if session.setup_snapshot else None
+        tire_pressures_json = json.dumps(session.tire_pressures) if session.tire_pressures else None
+        tags_json = json.dumps(session.tags) if session.tags else "[]"
+
         with self._lock:
             with self._get_connection() as conn:
                 conn.execute("""
@@ -260,7 +291,11 @@ class SessionDatabase:
                         vehicle_id = ?, session_date = ?,
                         session_type = ?, import_status = ?,
                         total_laps = ?, best_lap_time = ?, total_duration = ?,
-                        notes = ?, updated_at = ?
+                        notes = ?, updated_at = ?,
+                        driver_name = ?, run_number = ?,
+                        weather_conditions = ?, track_conditions = ?,
+                        setup_snapshot = ?, tire_pressures = ?, tags = ?,
+                        last_accessed = ?
                     WHERE id = ?
                 """, (
                     session.parquet_path, session.file_hash,
@@ -269,6 +304,15 @@ class SessionDatabase:
                     session.session_type.value, session.import_status.value,
                     session.total_laps, session.best_lap_time, session.total_duration,
                     session.notes, now,
+                    # Enhanced metadata
+                    session.driver_name,
+                    session.run_number,
+                    session.weather_conditions,
+                    session.track_conditions,
+                    setup_snapshot_json,
+                    tire_pressures_json,
+                    tags_json,
+                    session.last_accessed.isoformat() if session.last_accessed else None,
                     session.id,
                 ))
                 conn.commit()

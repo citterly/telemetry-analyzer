@@ -17,6 +17,7 @@ from src.io.file_manager import FileManager
 # Import routers
 from src.main.routers import (
     analysis,
+    context,
     parquet,
     queue,
     sessions,
@@ -48,6 +49,7 @@ file_manager = FileManager(config.DATA_DIR)
 
 # Include API routers
 app.include_router(analysis.router)
+app.include_router(context.router)
 app.include_router(parquet.router)
 app.include_router(queue.router)
 app.include_router(sessions.router)

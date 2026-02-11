@@ -61,6 +61,16 @@ class Session:
     created_at: datetime = field(default_factory=_now)
     updated_at: datetime = field(default_factory=_now)
 
+    # Enhanced metadata fields (arch-007)
+    driver_name: Optional[str] = None
+    run_number: Optional[int] = None
+    weather_conditions: Optional[str] = None
+    track_conditions: Optional[str] = None
+    setup_snapshot: Optional[Dict[str, Any]] = None
+    tire_pressures: Optional[Dict[str, float]] = None
+    tags: List[str] = field(default_factory=list)
+    last_accessed: Optional[datetime] = None
+
     def to_dict(self) -> dict:
         return {
             "id": self.id,
@@ -79,6 +89,15 @@ class Session:
             "notes": self.notes,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            # Enhanced metadata
+            "driver_name": self.driver_name,
+            "run_number": self.run_number,
+            "weather_conditions": self.weather_conditions,
+            "track_conditions": self.track_conditions,
+            "setup_snapshot": self.setup_snapshot,
+            "tire_pressures": self.tire_pressures,
+            "tags": self.tags,
+            "last_accessed": self.last_accessed.isoformat() if self.last_accessed else None,
         }
 
     @classmethod
@@ -89,6 +108,24 @@ class Session:
             if isinstance(val, datetime):
                 return val
             return datetime.fromisoformat(val)
+
+        def parse_json_field(val):
+            """Parse JSON fields that may be stored as strings in the database."""
+            if val is None:
+                return None
+            if isinstance(val, str):
+                return json.loads(val)
+            return val
+
+        def parse_tags(val):
+            """Parse tags field (may be JSON array string or list)."""
+            if val is None:
+                return []
+            if isinstance(val, str):
+                return json.loads(val)
+            if isinstance(val, list):
+                return val
+            return []
 
         return cls(
             id=data.get("id"),
@@ -107,6 +144,15 @@ class Session:
             notes=data.get("notes", ""),
             created_at=parse_dt(data.get("created_at")) or _now(),
             updated_at=parse_dt(data.get("updated_at")) or _now(),
+            # Enhanced metadata
+            driver_name=data.get("driver_name"),
+            run_number=data.get("run_number"),
+            weather_conditions=data.get("weather_conditions"),
+            track_conditions=data.get("track_conditions"),
+            setup_snapshot=parse_json_field(data.get("setup_snapshot")),
+            tire_pressures=parse_json_field(data.get("tire_pressures")),
+            tags=parse_tags(data.get("tags")),
+            last_accessed=parse_dt(data.get("last_accessed")),
         )
 
 
