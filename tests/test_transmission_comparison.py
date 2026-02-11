@@ -17,7 +17,8 @@ from src.features.transmission_comparison import (
     GearComparison,
     ScenarioPerformance
 )
-from src.config.vehicle_config import TRANSMISSION_SCENARIOS
+from src.config.vehicles import get_transmission_scenarios
+TRANSMISSION_SCENARIOS = get_transmission_scenarios()
 
 
 class TestGearComparison:

@@ -451,3 +451,76 @@ def get_engine_specs() -> dict:
     if vehicle:
         return vehicle.engine.to_dict()
     return {}
+
+
+def get_tire_circumference() -> float:
+    """Get tire circumference of active vehicle in meters."""
+    vehicle = get_active_vehicle()
+    if vehicle:
+        return vehicle.tire_circumference_meters
+    return 2.026  # Default BMW M3 275/35/18
+
+
+def get_processing_config() -> dict:
+    """Get data processing config (lap time bounds, thresholds, smoothing)."""
+    from .tracks import get_track_database
+    db = get_track_database()
+    track = db.get("road-america")  # default
+    min_lap = track.min_lap_time_seconds if track else 90
+    max_lap = track.max_lap_time_seconds if track else 300
+    return {
+        'min_lap_time_seconds': min_lap,
+        'max_lap_time_seconds': max_lap,
+        'start_finish_threshold': 0.0001,
+        'rpm_interpolation_method': 'linear',
+        'smoothing_window': 5,
+    }
+
+
+# Speed/RPM utility functions (legacy interface, m/s based)
+
+def theoretical_speed_at_rpm(
+    rpm: float,
+    gear_ratio: float,
+    final_drive: float,
+    tire_circumference: float = None,
+) -> float:
+    """Calculate theoretical speed in m/s at given RPM and gear ratios."""
+    if rpm <= 0 or gear_ratio <= 0 or final_drive <= 0:
+        return 0.0
+    if tire_circumference is None:
+        tire_circumference = get_tire_circumference()
+    return (rpm / 60) * tire_circumference / (gear_ratio * final_drive)
+
+
+def theoretical_rpm_at_speed(
+    speed_ms: float,
+    gear_ratio: float,
+    final_drive: float,
+    tire_circumference: float = None,
+) -> float:
+    """Calculate theoretical RPM at given speed (m/s) and gear ratios."""
+    if speed_ms <= 0 or gear_ratio <= 0 or final_drive <= 0:
+        return 0.0
+    if tire_circumference is None:
+        tire_circumference = get_tire_circumference()
+    return (speed_ms * 60 * gear_ratio * final_drive) / tire_circumference
+
+
+def calculate_tire_circumference(tire_size: str) -> float:
+    """Calculate tire circumference from tire size string (e.g. '275/35/18')."""
+    try:
+        parts = tire_size.split('/')
+        width_mm = int(parts[0])
+        aspect_ratio = int(parts[1])
+        wheel_diameter_inches = int(parts[2])
+        sidewall_mm = width_mm * (aspect_ratio / 100)
+        wheel_diameter_mm = wheel_diameter_inches * 25.4
+        tire_diameter_mm = wheel_diameter_mm + (2 * sidewall_mm)
+        return (tire_diameter_mm / 1000) * 3.14159
+    except (ValueError, IndexError):
+        return 2.026
+
+
+# Default session constant (not vehicle-specific)
+DEFAULT_SESSION = "20250712_104619_Road America_a_0394.xrk"

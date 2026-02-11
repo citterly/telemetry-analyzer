@@ -12,17 +12,24 @@ from typing import List, Dict, Optional, Tuple
 from datetime import datetime, timezone
 import json
 
-from ..config.vehicle_config import (
-    TRANSMISSION_SCENARIOS,
-    CURRENT_SETUP,
-    ENGINE_SPECS,
-    TIRE_CIRCUMFERENCE_METERS,
+from ..config.vehicles import (
+    get_transmission_scenarios as _get_transmission_scenarios,
+    get_current_setup as _get_current_setup,
+    get_engine_specs as _get_engine_specs,
+    get_tire_circumference,
     theoretical_speed_at_rpm,
     theoretical_rpm_at_speed,
-    get_scenario_by_name
 )
 from ..analysis.gear_calculator import GearCalculator
 from ..utils.dataframe_helpers import SPEED_MS_TO_MPH
+
+
+def _get_scenario_by_name(name: str) -> dict:
+    """Get transmission scenario by name from active vehicle."""
+    for scenario in _get_transmission_scenarios():
+        if scenario['name'] == name:
+            return scenario
+    return _get_current_setup()
 
 
 @dataclass
@@ -119,27 +126,27 @@ class TransmissionComparison:
 
     def __init__(
         self,
-        tire_circumference: float = TIRE_CIRCUMFERENCE_METERS,
-        safe_rpm: int = ENGINE_SPECS['safe_rpm_limit'],
-        redline_rpm: int = ENGINE_SPECS['max_rpm'],
-        power_band: Tuple[int, int] = (
-            ENGINE_SPECS['power_band_min'],
-            ENGINE_SPECS['power_band_max']
-        )
+        tire_circumference: float = None,
+        safe_rpm: int = None,
+        redline_rpm: int = None,
+        power_band: Tuple[int, int] = None,
     ):
         """
         Initialize the comparison analyzer.
 
         Args:
-            tire_circumference: Tire circumference in meters
-            safe_rpm: Safe operating RPM limit
+            tire_circumference: Tire circumference in meters (default from active vehicle)
+            safe_rpm: Safe operating RPM limit (default from active vehicle)
             redline_rpm: Absolute redline RPM
             power_band: Tuple of (min_rpm, max_rpm) for power band
         """
-        self.tire_circumference = tire_circumference
-        self.safe_rpm = safe_rpm
-        self.redline_rpm = redline_rpm
-        self.power_band = power_band
+        _specs = _get_engine_specs()
+        self.tire_circumference = tire_circumference if tire_circumference is not None else get_tire_circumference()
+        self.safe_rpm = safe_rpm if safe_rpm is not None else _specs.get('safe_rpm_limit', 7000)
+        self.redline_rpm = redline_rpm if redline_rpm is not None else _specs.get('max_rpm', 8000)
+        self.power_band = power_band if power_band is not None else (
+            _specs.get('power_band_min', 5500), _specs.get('power_band_max', 7000)
+        )
 
     def compare(
         self,
@@ -156,8 +163,8 @@ class TransmissionComparison:
         Returns:
             TransmissionComparisonReport with complete analysis
         """
-        current = get_scenario_by_name(current_name)
-        proposed = get_scenario_by_name(proposed_name)
+        current = _get_scenario_by_name(current_name)
+        proposed = _get_scenario_by_name(proposed_name)
 
         # Calculate performance for each scenario
         current_perf = self._calculate_performance(current)
@@ -207,8 +214,8 @@ class TransmissionComparison:
         # Get basic comparison
         report = self.compare(current_name, proposed_name)
 
-        current = get_scenario_by_name(current_name)
-        proposed = get_scenario_by_name(proposed_name)
+        current = _get_scenario_by_name(current_name)
+        proposed = _get_scenario_by_name(proposed_name)
 
         # Create gear calculators
         current_calc = GearCalculator(
@@ -522,8 +529,8 @@ class TransmissionComparison:
 
     def list_available_scenarios(self) -> List[str]:
         """List all available transmission scenarios"""
-        return [s['name'] for s in TRANSMISSION_SCENARIOS]
+        return [s['name'] for s in _get_transmission_scenarios()]
 
     def get_scenario_details(self, name: str) -> Optional[Dict]:
         """Get details of a specific scenario"""
-        return get_scenario_by_name(name)
+        return _get_scenario_by_name(name)

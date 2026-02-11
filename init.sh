@@ -55,8 +55,9 @@ except Exception as e:
     print(f'  Config: FAIL - {e}')
 
 try:
-    from src.config.vehicle_config import TRANSMISSION_SCENARIOS
-    print(f'  Vehicle config: OK ({len(TRANSMISSION_SCENARIOS)} scenarios)')
+    from src.config.vehicles import get_transmission_scenarios
+    scenarios = get_transmission_scenarios()
+    print(f'  Vehicle config: OK ({len(scenarios)} scenarios)')
 except Exception as e:
     print(f'  Vehicle config: FAIL - {e}')
 

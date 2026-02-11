@@ -11,7 +11,7 @@ from typing import Dict, Optional, Tuple
 from pathlib import Path
 
 from src.config.config import DLL_PATH, DEPENDENCY_PATH, SAMPLE_FILES_PATH
-from src.config.vehicle_config import DEFAULT_SESSION
+from src.config.vehicles import DEFAULT_SESSION
 from src.utils.dataframe_helpers import SPEED_MS_TO_MPH
 
 

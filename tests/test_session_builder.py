@@ -5,7 +5,7 @@ from pathlib import Path
 from src.session.session_builder import extract_full_session, export_session,_extract_all_channels
 
 from src.io.file_manager import FileManager
-from src.config.vehicle_config import DEFAULT_SESSION
+from src.config.vehicles import DEFAULT_SESSION
 from src.config.config import EXPORTS_PATH
 
 @pytest.mark.smoke

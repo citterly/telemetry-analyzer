@@ -396,7 +396,8 @@ class TestCrossingsDetection:
 
     def test_find_crossings_minimum_separation(self, analyzer_with_mock_data):
         """Test that crossings must be minimum distance apart"""
-        from src.config.vehicle_config import PROCESSING_CONFIG
+        from src.config.vehicles import get_processing_config
+        PROCESSING_CONFIG = get_processing_config()
 
         distances = np.abs(np.sin(np.linspace(0, 10, 500)))
         threshold = PROCESSING_CONFIG['start_finish_threshold']

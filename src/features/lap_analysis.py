@@ -14,7 +14,8 @@ import json
 
 from ..analysis.lap_analyzer import LapAnalyzer, LapInfo, analyze_session_laps
 from .base_analyzer import BaseAnalyzer, BaseAnalysisReport
-from ..config.vehicle_config import TRACK_CONFIG, PROCESSING_CONFIG
+from ..config.tracks import get_track_config as _get_track_config
+from ..config.vehicles import get_processing_config as _get_processing_config
 from ..session.models import LapClassification
 from ..utils.dataframe_helpers import find_column, SPEED_MS_TO_MPH, safe_float as _safe_float
 
@@ -140,8 +141,9 @@ class LapAnalysis(BaseAnalyzer):
         Args:
             track_name: Name of the track (default from config)
         """
-        self.track_name = track_name or TRACK_CONFIG['name']
-        self.start_finish_gps = TRACK_CONFIG.get('start_finish_gps')
+        _track_cfg = _get_track_config()
+        self.track_name = track_name or _track_cfg['name']
+        self.start_finish_gps = _track_cfg.get('start_finish_gps')
 
     def analyze_from_arrays(
         self,

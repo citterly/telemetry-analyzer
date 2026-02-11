@@ -400,3 +400,8 @@ def get_default_track_config() -> dict:
             'turn_coordinates': track.turn_coordinates
         }
     return {}
+
+
+def get_track_config() -> dict:
+    """Get track config in legacy TRACK_CONFIG dict format. Alias for get_default_track_config."""
+    return get_default_track_config()

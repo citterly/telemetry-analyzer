@@ -564,11 +564,11 @@
       "name": "Execute: Vehicle config unification",
       "category": "architecture",
       "description": "Implement the vehicle config unification per docs/architecture/arch-001.md. Migrate all 13+ consumers from vehicle_config.py dicts to vehicles.py OOP system. Deprecate or remove vehicle_config.py.",
-      "status": "planned",
+      "status": "passing",
       "priority": 37,
-      "tests": [],
-      "files": ["src/config/vehicle_config.py", "src/config/vehicles.py"],
-      "notes": "Blocked by: arch-001-plan"
+      "tests": ["pytest tests/ (818 passing, 4 pre-existing DLL failures)"],
+      "files": ["src/config/vehicles.py", "src/config/tracks.py", "src/features/power_analysis.py", "src/features/session_report.py", "src/features/lap_analysis.py", "src/features/shift_analysis.py", "src/features/gear_analysis.py", "src/features/transmission_comparison.py", "src/features/corner_analysis.py", "src/analysis/gear_calculator.py", "src/analysis/lap_analyzer.py", "src/analysis/__init__.py", "src/extraction/data_loader.py", "init.sh"],
+      "notes": "DONE: Added 6 new functions to vehicles.py (get_tire_circumference, get_processing_config, theoretical_speed_at_rpm, theoretical_rpm_at_speed, calculate_tire_circumference, DEFAULT_SESSION). Added get_track_config() to tracks.py. Migrated all 13 source files + 3 test files from vehicle_config.py imports to vehicles.py/tracks.py getter functions. All module-level constants replaced with lazy function calls for runtime vehicle switching. 818 tests passing."
     },
     {
       "id": "arch-001-test",
@@ -718,9 +718,9 @@
     "created_at": "2025-01-29T01:00:00Z",
     "last_updated": "2026-02-10T17:00:00Z",
     "total_features": 56,
-    "passing": 42,
+    "passing": 43,
     "failing": 0,
-    "planned": 14
+    "planned": 13
   },
   "categories": {
     "bugfix": "Bug fixes and corrections",

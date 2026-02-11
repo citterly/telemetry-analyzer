@@ -14,7 +14,7 @@ import json
 from scipy import signal
 from .base_analyzer import BaseAnalyzer, BaseAnalysisReport
 
-from ..config.vehicle_config import ENGINE_SPECS
+from ..config.vehicles import get_engine_specs as _get_engine_specs
 from ..utils.dataframe_helpers import find_column, SPEED_MS_TO_MPH
 
 
@@ -321,9 +321,9 @@ class PowerAnalysis(BaseAnalyzer):
             trace.record_config("vehicle_mass_kg", self.vehicle_mass_kg)
             trace.record_config("smoothing_window", self.smoothing_window)
             trace.record_config("smoothing_polyorder", 3)
-            trace.record_config("power_band_min_rpm", ENGINE_SPECS.get('power_band_min', 5500))
-            trace.record_config("power_band_max_rpm", ENGINE_SPECS.get('power_band_max', 7000))
-            trace.record_config("safe_rpm_limit", ENGINE_SPECS.get('safe_rpm_limit', 7000))
+            trace.record_config("power_band_min_rpm", _get_engine_specs().get('power_band_min', 5500))
+            trace.record_config("power_band_max_rpm", _get_engine_specs().get('power_band_max', 7000))
+            trace.record_config("safe_rpm_limit", _get_engine_specs().get('safe_rpm_limit', 7000))
 
         report = self.analyze_from_arrays(time_data, speed_data, rpm_data, session_id)
 
@@ -480,8 +480,8 @@ class PowerAnalysis(BaseAnalyzer):
         """Calculate power estimates using P = m * a * v"""
         estimates = []
 
-        power_band_min = ENGINE_SPECS.get('power_band_min', 5500)
-        power_band_max = ENGINE_SPECS.get('power_band_max', 7000)
+        power_band_min = _get_engine_specs().get('power_band_min', 5500)
+        power_band_max = _get_engine_specs().get('power_band_max', 7000)
 
         for i in range(len(time_data)):
             v = speed_ms[i]
@@ -600,9 +600,9 @@ class PowerAnalysis(BaseAnalyzer):
         accel_g: np.ndarray
     ) -> Dict:
         """Analyze RPM usage patterns"""
-        safe_limit = ENGINE_SPECS.get('safe_rpm_limit', 7000)
-        power_band_min = ENGINE_SPECS.get('power_band_min', 5500)
-        power_band_max = ENGINE_SPECS.get('power_band_max', 7000)
+        safe_limit = _get_engine_specs().get('safe_rpm_limit', 7000)
+        power_band_min = _get_engine_specs().get('power_band_min', 5500)
+        power_band_max = _get_engine_specs().get('power_band_max', 7000)
 
         valid_mask = rpm_data > 1000  # Filter out idle/stopped
         valid_rpms = rpm_data[valid_mask]

@@ -14,12 +14,13 @@ import json
 
 from ..analysis.gear_calculator import GearCalculator, GearInfo, analyze_lap_gearing
 from .base_analyzer import BaseAnalyzer, BaseAnalysisReport
-from ..config.vehicle_config import (
-    CURRENT_SETUP,
-    TRANSMISSION_SCENARIOS,
-    TRACK_CONFIG,
-    ENGINE_SPECS
+from ..config.vehicles import (
+    get_current_setup as _get_current_setup,
+    get_transmission_scenarios as _get_transmission_scenarios,
+    get_engine_specs as _get_engine_specs,
+    theoretical_rpm_at_speed,
 )
+from ..config.tracks import get_track_config as _get_track_config
 from ..utils.dataframe_helpers import find_column, SPEED_MS_TO_MPH
 
 
@@ -137,21 +138,22 @@ class GearAnalysis(BaseAnalyzer):
             track_name: Name of the track (default from config)
             scenario_name: Transmission scenario to use
         """
-        self.track_name = track_name or TRACK_CONFIG['name']
+        _track_cfg = _get_track_config()
+        self.track_name = track_name or _track_cfg['name']
         self.scenario_name = scenario_name
         self.scenario = self._get_scenario(scenario_name)
         self.calculator = GearCalculator(
             self.scenario['transmission_ratios'],
             self.scenario['final_drive']
         )
-        self.turn_coordinates = TRACK_CONFIG.get('turn_coordinates', {})
+        self.turn_coordinates = _track_cfg.get('turn_coordinates', {})
 
     def _get_scenario(self, name: str) -> Dict:
         """Get transmission scenario by name"""
-        for scenario in TRANSMISSION_SCENARIOS:
+        for scenario in _get_transmission_scenarios():
             if scenario['name'] == name:
                 return scenario
-        return CURRENT_SETUP
+        return _get_current_setup()
 
     def analyze_from_arrays(
         self,
@@ -295,9 +297,9 @@ class GearAnalysis(BaseAnalyzer):
 
             trace.record_config("transmission_ratios", self.scenario['transmission_ratios'])
             trace.record_config("final_drive", self.scenario['final_drive'])
-            trace.record_config("safe_rpm_limit", ENGINE_SPECS.get('safe_rpm_limit', 7000))
-            trace.record_config("power_band_min", ENGINE_SPECS.get('power_band_min', 5500))
-            trace.record_config("power_band_max", ENGINE_SPECS.get('power_band_max', 7000))
+            trace.record_config("safe_rpm_limit", _get_engine_specs().get('safe_rpm_limit', 7000))
+            trace.record_config("power_band_min", _get_engine_specs().get('power_band_min', 5500))
+            trace.record_config("power_band_max", _get_engine_specs().get('power_band_max', 7000))
             trace.record_config("track_name", self.track_name)
 
             # Intermediates
@@ -514,9 +516,9 @@ class GearAnalysis(BaseAnalyzer):
                 "time_in_power_band_pct": 0
             }
 
-        safe_limit = ENGINE_SPECS['safe_rpm_limit']
-        power_band_min = ENGINE_SPECS['power_band_min']
-        power_band_max = ENGINE_SPECS['power_band_max']
+        safe_limit = _get_engine_specs()['safe_rpm_limit']
+        power_band_min = _get_engine_specs()['power_band_min']
+        power_band_max = _get_engine_specs()['power_band_max']
 
         over_limit = sum(1 for rpm in valid_rpms if rpm > safe_limit)
         in_power_band = sum(1 for rpm in valid_rpms
@@ -576,14 +578,14 @@ class GearAnalysis(BaseAnalyzer):
         if rpm_analysis['time_over_safe_limit_pct'] > 5:
             recommendations.append(
                 f"Spending {rpm_analysis['time_over_safe_limit_pct']:.1f}% of time over "
-                f"{ENGINE_SPECS['safe_rpm_limit']} RPM. Consider earlier upshifts."
+                f"{_get_engine_specs()['safe_rpm_limit']} RPM. Consider earlier upshifts."
             )
 
         # Check power band usage
         if rpm_analysis['time_in_power_band_pct'] < 30:
             recommendations.append(
                 f"Only {rpm_analysis['time_in_power_band_pct']:.1f}% time in power band "
-                f"({ENGINE_SPECS['power_band_min']}-{ENGINE_SPECS['power_band_max']} RPM). "
+                f"({_get_engine_specs()['power_band_min']}-{_get_engine_specs()['power_band_max']} RPM). "
                 "Review gear selection for better power delivery."
             )
 
@@ -697,12 +699,12 @@ class GearAnalysis(BaseAnalyzer):
         Returns:
             Dictionary with recommended gear and RPM info
         """
-        power_band_target = (ENGINE_SPECS['power_band_min'] +
-                            ENGINE_SPECS['power_band_max']) / 2
+        power_band_target = (_get_engine_specs()['power_band_min'] +
+                            _get_engine_specs()['power_band_max']) / 2
 
         # Allow RPM from idle to safe limit for gear selection
         min_usable_rpm = 2000  # Reasonable minimum for driving
-        max_usable_rpm = ENGINE_SPECS['safe_rpm_limit']
+        max_usable_rpm = _get_engine_specs()['safe_rpm_limit']
 
         best_gear = None
         best_rpm_diff = float('inf')
@@ -710,7 +712,6 @@ class GearAnalysis(BaseAnalyzer):
         for gear_num, ratio in enumerate(self.scenario['transmission_ratios'], 1):
             # Calculate RPM at this speed in this gear
             speed_ms = speed_mph / SPEED_MS_TO_MPH
-            from ..config.vehicle_config import theoretical_rpm_at_speed
             rpm = theoretical_rpm_at_speed(
                 speed_ms, ratio, self.scenario['final_drive']
             )
@@ -723,8 +724,8 @@ class GearAnalysis(BaseAnalyzer):
                     best_gear = {
                         'gear': gear_num,
                         'rpm': rpm,
-                        'in_power_band': ENGINE_SPECS['power_band_min'] <= rpm <= ENGINE_SPECS['power_band_max'],
-                        'rpm_headroom': ENGINE_SPECS['safe_rpm_limit'] - rpm
+                        'in_power_band': _get_engine_specs()['power_band_min'] <= rpm <= _get_engine_specs()['power_band_max'],
+                        'rpm_headroom': _get_engine_specs()['safe_rpm_limit'] - rpm
                     }
 
         if best_gear is None:

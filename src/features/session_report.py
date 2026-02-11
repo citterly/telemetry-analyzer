@@ -17,7 +17,8 @@ from .lap_analysis import LapAnalysis, LapAnalysisReport
 from .shift_analysis import ShiftAnalyzer, ShiftReport
 from .gear_analysis import GearAnalysis, GearAnalysisReport
 from .power_analysis import PowerAnalysis, PowerAnalysisReport
-from ..config.vehicle_config import TRACK_CONFIG, CURRENT_SETUP
+from ..config.tracks import get_track_config as _get_track_config
+from ..config.vehicles import get_current_setup as _get_current_setup
 from ..utils.dataframe_helpers import find_column, SPEED_MS_TO_MPH
 from .base_analyzer import BaseAnalyzer, BaseAnalysisReport
 
@@ -128,8 +129,8 @@ class SessionReportGenerator(BaseAnalyzer):
             vehicle_setup: Name of vehicle setup (default from config)
             vehicle_mass_kg: Vehicle mass for power calculations
         """
-        self.track_name = track_name or TRACK_CONFIG['name']
-        self.vehicle_setup = vehicle_setup or CURRENT_SETUP['name']
+        self.track_name = track_name or _get_track_config()['name']
+        self.vehicle_setup = vehicle_setup or _get_current_setup()['name']
         self.vehicle_mass_kg = vehicle_mass_kg
 
         # Initialize analyzers

@@ -7,7 +7,8 @@ import numpy as np
 from typing import Dict, List, Tuple, Optional
 from dataclasses import dataclass
 
-from src.config.vehicle_config import PROCESSING_CONFIG, TRACK_CONFIG
+from src.config.vehicles import get_processing_config as _get_processing_config
+from src.config.tracks import get_track_config as _get_track_config
 from src.config.tracks import Track
 
 @dataclass
@@ -40,26 +41,27 @@ class LapAnalyzer:
 
         Args:
             track: Optional Track object with start/finish GPS coordinates and timing constraints.
-                   If None, falls back to TRACK_CONFIG from vehicle_config.
+                   If None, falls back to default track config from tracks.py.
         """
         lat = self.session_data['latitude']
         lon = self.session_data['longitude']
         time = self.session_data['time']
 
         # Use track-specific or default start/finish coordinates
+        proc_config = _get_processing_config()
         if track is not None:
             start_lat = track.start_finish_lat
             start_lon = track.start_finish_lon
             self._min_lap_time = track.min_lap_time_seconds
             self._max_lap_time = track.max_lap_time_seconds
-            threshold = PROCESSING_CONFIG['start_finish_threshold']
+            threshold = proc_config['start_finish_threshold']
             print(f"Detecting laps using {track.name} start/finish at: {start_lat:.6f}, {start_lon:.6f}")
         else:
-            from ..config.vehicle_config import TRACK_CONFIG
-            start_lat, start_lon = TRACK_CONFIG['start_finish_gps']
-            self._min_lap_time = PROCESSING_CONFIG['min_lap_time_seconds']
-            self._max_lap_time = PROCESSING_CONFIG['max_lap_time_seconds']
-            threshold = PROCESSING_CONFIG['start_finish_threshold']
+            track_config = _get_track_config()
+            start_lat, start_lon = track_config['start_finish_gps']
+            self._min_lap_time = proc_config['min_lap_time_seconds']
+            self._max_lap_time = proc_config['max_lap_time_seconds']
+            threshold = proc_config['start_finish_threshold']
             print(f"Detecting laps using Road America start/finish at: {start_lat:.6f}, {start_lon:.6f}")
 
         # Debug GPS detection
@@ -217,8 +219,9 @@ class LapAnalyzer:
     
     def _is_valid_lap(self, lap_info: LapInfo) -> bool:
         """Check if lap has reasonable characteristics"""
-        min_time = self._min_lap_time if self._min_lap_time is not None else PROCESSING_CONFIG['min_lap_time_seconds']
-        max_time = self._max_lap_time if self._max_lap_time is not None else PROCESSING_CONFIG['max_lap_time_seconds']
+        proc_config = _get_processing_config()
+        min_time = self._min_lap_time if self._min_lap_time is not None else proc_config['min_lap_time_seconds']
+        max_time = self._max_lap_time if self._max_lap_time is not None else proc_config['max_lap_time_seconds']
 
         if lap_info.lap_time < min_time or lap_info.lap_time > max_time:
             print(f"Lap {lap_info.lap_number}: {lap_info.lap_time:.1f}s - outside valid range ({min_time}-{max_time}s)")

@@ -983,3 +983,51 @@ Features: 42/56 passing (14 planned)
 
 Next priority: arch-001-exec (Execute vehicle config unification)
 
+
+=== Session 13 (2026-02-10) ===
+Working on: arch-001-exec (Execute vehicle config unification)
+
+Work completed:
+
+1. Added 6 new functions to src/config/vehicles.py:
+   - get_tire_circumference(): returns active vehicle tire circumference
+   - get_processing_config(): returns min/max lap time, threshold settings
+   - theoretical_speed_at_rpm(): calculate speed from RPM/gear/final drive
+   - theoretical_rpm_at_speed(): calculate RPM from speed/gear/final drive
+   - calculate_tire_circumference(): from tire size string
+   - DEFAULT_SESSION: constant for default parquet filename
+
+2. Added get_track_config() to src/config/tracks.py:
+   - Alias for get_default_track_config()
+
+3. Migrated all 13 source files from vehicle_config.py to vehicles.py/tracks.py:
+   - power_analysis.py: ENGINE_SPECS → _get_engine_specs()
+   - session_report.py: TRACK_CONFIG, CURRENT_SETUP → getter functions
+   - lap_analysis.py: TRACK_CONFIG, PROCESSING_CONFIG → getter functions
+   - shift_analysis.py: CURRENT_SETUP, TRANSMISSION_SCENARIOS → getter functions
+   - gear_analysis.py: ENGINE_SPECS, CURRENT_SETUP, TRACK_CONFIG, etc → getters
+   - transmission_comparison.py: 7 items → getter functions + _get_scenario_by_name()
+   - corner_analysis.py: minor import update
+   - gear_calculator.py: TIRE_CIRCUMFERENCE_METERS, TRANSMISSION_SCENARIOS, etc → getters
+   - lap_analyzer.py: PROCESSING_CONFIG, TRACK_CONFIG → getter functions
+   - analysis/__init__.py: updated imports
+   - extraction/data_loader.py: DEFAULT_SESSION from vehicles
+   - init.sh: smoke test import updated
+
+4. Migrated 3 test files:
+   - test_session_builder.py, test_transmission_comparison.py, test_lap_analyzer.py
+
+5. Fixed 14 test failures during migration:
+   - shift_analysis.py: _get_engine_specs not accessible in _run_sanity_checks (missing import)
+   - transmission_comparison.py: replace_all created __get_scenario_by_name (double underscore
+     from matching within already-renamed function → Python name mangling)
+   - lap_analyzer.py: _is_valid_lap still referenced PROCESSING_CONFIG constant
+     instead of calling _get_processing_config()
+
+Test results: 818/818 passing (4 pre-existing DLL failures excluded)
+
+Status: arch-001-exec marked PASSING
+Features: 43/56 passing (13 planned)
+
+Next priority: arch-001-test (Test vehicle config unification compliance)
+

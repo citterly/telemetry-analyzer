@@ -14,7 +14,7 @@ import json
 
 from ..analysis.gear_calculator import GearCalculator, GearInfo
 from .base_analyzer import BaseAnalyzer, BaseAnalysisReport
-from ..config.vehicle_config import CURRENT_SETUP, TRANSMISSION_SCENARIOS
+from ..config.vehicles import get_current_setup as _get_current_setup, get_transmission_scenarios as _get_transmission_scenarios, get_engine_specs as _get_engine_specs
 from ..utils.dataframe_helpers import SPEED_MS_TO_MPH
 
 
@@ -137,10 +137,12 @@ class ShiftAnalyzer(BaseAnalyzer):
             transmission_ratios: Gear ratios (default from CURRENT_SETUP)
             final_drive: Final drive ratio (default from CURRENT_SETUP)
         """
-        if transmission_ratios is None:
-            transmission_ratios = CURRENT_SETUP['transmission_ratios']
-        if final_drive is None:
-            final_drive = CURRENT_SETUP['final_drive']
+        if transmission_ratios is None or final_drive is None:
+            _setup = _get_current_setup()
+            if transmission_ratios is None:
+                transmission_ratios = _setup['transmission_ratios']
+            if final_drive is None:
+                final_drive = _setup['final_drive']
 
         self.gear_calculator = GearCalculator(transmission_ratios, final_drive)
         self.transmission_ratios = transmission_ratios
@@ -285,7 +287,6 @@ class ShiftAnalyzer(BaseAnalyzer):
             trace.record_input("sample_count", len(time_data))
             trace.record_input("shift_count", report.total_shifts)
 
-            from ..config.vehicle_config import ENGINE_SPECS
             trace.record_config("transmission_ratios", self.transmission_ratios)
             trace.record_config("final_drive", self.final_drive)
             trace.record_config("optimal_shift_rpm_min", self.OPTIMAL_SHIFT_RPM_MIN)
@@ -342,8 +343,7 @@ class ShiftAnalyzer(BaseAnalyzer):
             )
 
         # Check 3.2: shift_rpm_below_redline
-        from ..config.vehicle_config import ENGINE_SPECS
-        safe_limit = ENGINE_SPECS.get('safe_rpm_limit', 7000)
+        safe_limit = _get_engine_specs().get('safe_rpm_limit', 7000)
         max_shift_rpm = max((s.rpm_at_shift for s in report.shifts), default=0)
         threshold = safe_limit * 1.05
         if max_shift_rpm <= threshold:

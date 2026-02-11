@@ -7,12 +7,12 @@ import numpy as np
 from typing import Dict, List, Tuple, Optional
 from dataclasses import dataclass
 
-from ..config.vehicle_config import (
-    TIRE_CIRCUMFERENCE_METERS,
-    CURRENT_SETUP,
-    TRANSMISSION_SCENARIOS,
+from ..config.vehicles import (
+    get_tire_circumference,
+    get_current_setup as _get_current_setup,
+    get_transmission_scenarios as _get_transmission_scenarios,
     theoretical_rpm_at_speed,
-    theoretical_speed_at_rpm
+    theoretical_speed_at_rpm,
 )
 from ..utils.dataframe_helpers import SPEED_MS_TO_MPH
 
@@ -32,7 +32,7 @@ class GearCalculator:
     def __init__(self, transmission_ratios: List[float], final_drive: float):
         self.transmission_ratios = transmission_ratios
         self.final_drive = final_drive
-        self.tire_circumference = TIRE_CIRCUMFERENCE_METERS
+        self.tire_circumference = get_tire_circumference()
         
     def calculate_gear_at_point(self, rpm: float, speed_mph: float) -> GearInfo:
         """Calculate most likely gear at a single RPM/speed point"""
@@ -193,7 +193,7 @@ class GearCalculator:
         """Calculate theoretical top speeds for a transmission scenario"""
         
         scenario = None
-        for s in TRANSMISSION_SCENARIOS:
+        for s in _get_transmission_scenarios():
             if s['name'] == scenario_name:
                 scenario = s
                 break
@@ -229,14 +229,14 @@ def analyze_lap_gearing(lap_data: Dict, scenario_name: str = 'Current Setup') ->
     
     # Get scenario configuration
     scenario = None
-    for s in TRANSMISSION_SCENARIOS:
+    for s in _get_transmission_scenarios():
         if s['name'] == scenario_name:
             scenario = s
             break
-    
+
     if not scenario:
         raise ValueError(f"Scenario '{scenario_name}' not found")
-    
+
     # Create gear calculator
     calculator = GearCalculator(
         scenario['transmission_ratios'],
@@ -359,7 +359,7 @@ def debug_gear_calculations(transmission_ratios: List[float], final_drive: float
     print(f"Theoretical Gear Speed Ranges (Transmission: {transmission_ratios}, Final: {final_drive})")
     print("=" * 70)
     
-    tire_circ = TIRE_CIRCUMFERENCE_METERS
+    tire_circ = get_tire_circumference()
     
     for gear_num, ratio in enumerate(transmission_ratios, 1):
         # Calculate speed range from 1200 to 7200 RPM
@@ -389,7 +389,8 @@ if __name__ == "__main__":
     print("=" * 60)
     
     # First, show theoretical calculations
-    debug_gear_calculations(CURRENT_SETUP['transmission_ratios'], CURRENT_SETUP['final_drive'])
+    _setup = _get_current_setup()
+    debug_gear_calculations(_setup['transmission_ratios'], _setup['final_drive'])
     
     from ..extraction.data_loader import load_session_data
     from .lap_analyzer import analyze_session_laps
