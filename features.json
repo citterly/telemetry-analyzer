@@ -586,11 +586,11 @@
       "name": "Plan: SessionDataLoader service layer",
       "category": "architecture",
       "description": "Design a SessionDataLoader class that centralizes parquet loading, column discovery, speed unit conversion, and data validation. Currently every router endpoint repeats this logic. The service layer should also anticipate multiple data sources (parquet, CSV, live CAN) and the tiered storage architecture from CLAUDE.md. Output: docs/architecture/arch-002.md",
-      "status": "planned",
+      "status": "passing",
       "priority": 39,
       "tests": [],
       "files": ["docs/architecture/arch-002.md"],
-      "notes": "No blockers. Depends on arch-001-exec for unified vehicle config integration."
+      "notes": "DONE: Design doc identifies 30+ duplicated loading patterns across 8 analyzers and 16 router endpoints. SessionDataLoader with SessionChannels dataclass, load()/load_or_raise()/to_session_data_dict() methods. 4-phase migration: create service → migrate routers → migrate analyzers → optimize SessionReportGenerator. 10 acceptance criteria defined."
     },
     {
       "id": "arch-002-exec",
@@ -718,9 +718,9 @@
     "created_at": "2025-01-29T01:00:00Z",
     "last_updated": "2026-02-10T17:00:00Z",
     "total_features": 56,
-    "passing": 44,
+    "passing": 45,
     "failing": 0,
-    "planned": 12
+    "planned": 11
   },
   "categories": {
     "bugfix": "Bug fixes and corrections",
