@@ -707,20 +707,20 @@
       "name": "Test: API integration test verification",
       "category": "architecture",
       "description": "Verify arch-005 implementation against acceptance criteria in docs/architecture/arch-005.md. Ensure coverage targets met, all routers exercised, error paths tested.",
-      "status": "planned",
+      "status": "passing",
       "priority": 50,
-      "tests": [],
-      "files": [],
-      "notes": "Blocked by: arch-005-exec"
+      "tests": ["pytest tests/test_arch_005_compliance.py (13 tests)"],
+      "files": ["tests/test_arch_005_compliance.py"],
+      "notes": "DONE: 13 compliance tests verifying all 10 acceptance criteria. TestAcceptanceCriteria (10 tests): visualization 10+ tests, parquet 5+ tests, queue 7+ tests, vehicles 5+ tests, health 2+ tests, all use TestClient, 404 scenarios covered, response structure validated, no test pollution, all modules importable. TestCoverageMetrics (3 tests): 29+ total tests, trace parameter tested, queue isolation pattern. 1011 tests passing."
     }
   ],
   "metadata": {
     "created_at": "2025-01-29T01:00:00Z",
-    "last_updated": "2026-02-10T18:00:00Z",
+    "last_updated": "2026-02-10T18:30:00Z",
     "total_features": 56,
-    "passing": 55,
+    "passing": 56,
     "failing": 0,
-    "planned": 1
+    "planned": 0
   },
   "categories": {
     "bugfix": "Bug fixes and corrections",
