@@ -567,7 +567,7 @@
       "name": "Analysis tool links pass ignored ?file= query params",
       "category": "bugfix",
       "description": "session_detail.html:189,197,208 analysis links pass ?file={{session.parquet_path}} to /parquet, /gg-diagram, and /corner-analysis. None of these pages read URL query params \u2014 GG diagram and corner analysis use session selector context system, parquet viewer loads its own file list. The ?file= param is silently ignored, so clicking 'G-G Diagram' from session detail does NOT load that session's data. Fix: either set session context before navigating (POST /api/context/set then redirect), or add ?file= reading to target pages.",
-      "status": "planned",
+      "status": "passing",
       "priority": 3,
       "tests": [],
       "files": [
@@ -609,7 +609,7 @@
       "name": "Sessions table vehicle column shows N/A \u2014 API returns vehicle_id not vehicle_name",
       "category": "bugfix",
       "description": "sessions.html:171 uses session.vehicle_name but Session.to_dict() (models.py:82) only returns vehicle_id. Vehicle column always shows 'N/A'. Need to either join vehicle name in API response or look up from VehicleDatabase.",
-      "status": "planned",
+      "status": "passing",
       "priority": 3,
       "tests": [],
       "files": [
@@ -666,7 +666,7 @@
       "name": "ImportResult missing total_duration and sample_count \u2014 Step 2 review incomplete",
       "category": "bugfix",
       "description": "session_import.html:467,472 expects response.total_duration and response.sample_count but ImportResult (importer.py:36-51) doesn't define these fields. Step 2 review can't show session duration or sample count. Fix: add fields to ImportResult dataclass and populate in import flow.",
-      "status": "planned",
+      "status": "passing",
       "priority": 3,
       "tests": [],
       "files": [
@@ -723,7 +723,7 @@
     "created_at": "2025-01-29T01:00:00Z",
     "last_updated": "2026-02-12T00:00:00Z",
     "total_features": 47,
-    "passing": 35,
+    "passing": 38,
     "failing": 0,
     "planned": 21,
     "archive_file": "features-archive.json"

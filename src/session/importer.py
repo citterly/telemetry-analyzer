@@ -49,6 +49,8 @@ class ImportResult:
     best_lap_time: Optional[float] = None
     duplicate: bool = False
     error: Optional[str] = None
+    total_duration: Optional[float] = None
+    sample_count: Optional[int] = None
 
     def to_dict(self) -> dict:
         return {
@@ -129,6 +131,12 @@ class SessionImporter:
         except Exception as e:
             result.error = f"Failed to read Parquet: {e}"
             return result
+
+        # Populate sample count and duration
+        result.sample_count = len(df)
+        if hasattr(df.index, 'values') and len(df.index) > 0:
+            # Duration from index (time in seconds)
+            result.total_duration = float(df.index[-1] - df.index[0])
 
         # Step 4: Detect track from GPS
         detected_track = None

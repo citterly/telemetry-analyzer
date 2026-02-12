@@ -72,6 +72,16 @@ class Session:
     last_accessed: Optional[datetime] = None
 
     def to_dict(self) -> dict:
+        # Get vehicle name from database
+        vehicle_name = None
+        if self.vehicle_id:
+            try:
+                from src.config.vehicles import get_vehicle
+                vehicle = get_vehicle(self.vehicle_id)
+                vehicle_name = vehicle.name if vehicle else None
+            except Exception:
+                pass
+
         return {
             "id": self.id,
             "parquet_path": self.parquet_path,
@@ -80,6 +90,7 @@ class Session:
             "track_name": self.track_name,
             "track_confidence": self.track_confidence,
             "vehicle_id": self.vehicle_id,
+            "vehicle_name": vehicle_name,
             "session_date": self.session_date,
             "session_type": self.session_type.value,
             "import_status": self.import_status.value,

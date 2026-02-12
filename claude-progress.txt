@@ -2011,3 +2011,34 @@ Features: 35 passing, 12 planned, 0 failing
 Next priority: bug-sessiondetail-003 (priority 3) — Analysis links ignored params
 
 Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>
+
+
+=== Session 27 continued (2026-02-11) ===
+Working on: 3 priority-3 bugs from UAT
+
+All 3 priority-3 bugs fixed:
+
+1. bug-sessiondetail-003 (MAJOR): Analysis tool links pass ignored ?file= params
+   - session_detail.html: replaced <a> links with <button> onclick
+   - Added navigateToAnalysis(path) function
+   - Sets session context via POST /api/context/set before navigation
+   - Works for /analysis, /gg-diagram, /corner-analysis
+
+2. bug-sessions-001 (CRITICAL): Sessions table vehicle column shows N/A
+   - models.py Session.to_dict(): added vehicle_name lookup
+   - Calls get_vehicle(vehicle_id) to resolve name
+   - Falls back to None if vehicle not found (graceful)
+
+3. bug-import-001 (CRITICAL): ImportResult missing total_duration and sample_count
+   - importer.py ImportResult: added 2 new fields (total_duration, sample_count)
+   - Populated after df load: sample_count=len(df), duration=index[-1]-index[0]
+   - Step 2 review now shows session duration and sample count
+
+Test results: 1038/1042 passing (4 pre-existing DLL failures excluded)
+
+Status: All 3 bugs marked PASSING
+Features: 38 passing, 9 planned, 0 failing
+
+Next priority: bug-sessiondetail-004 (priority 4) — Confirm session button
+
+Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>
