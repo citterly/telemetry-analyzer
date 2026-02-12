@@ -6,7 +6,7 @@ View and edit vehicle profiles, G-force limits, transmission ratios.
 
 from fastapi import APIRouter, HTTPException, Request
 
-from src.config.vehicles import VehicleDatabase, get_vehicle, set_active_vehicle
+from src.config.vehicles import get_vehicle_database, get_vehicle, set_active_vehicle
 
 router = APIRouter()
 
@@ -14,7 +14,7 @@ router = APIRouter()
 @router.get("/api/vehicles")
 async def get_vehicles():
     """Get all vehicles and active vehicle ID"""
-    db = VehicleDatabase()
+    db = get_vehicle_database()
     vehicles = db.list_vehicles()
     active_id = db.get_active_vehicle_id()
 
@@ -56,7 +56,7 @@ async def get_vehicle_by_id(vehicle_id: str):
 @router.put("/api/vehicles/{vehicle_id}")
 async def update_vehicle(vehicle_id: str, request: Request):
     """Update a vehicle's parameters"""
-    db = VehicleDatabase()
+    db = get_vehicle_database()
 
     vehicle = get_vehicle(vehicle_id)
     if vehicle is None:

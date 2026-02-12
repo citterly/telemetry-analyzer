@@ -640,9 +640,9 @@ class TrackMap:
             # Find which segment this point belongs to
             for seg in segment_deltas:
                 if seg['start_pct'] <= pct < seg['end_pct'] or (seg['end_pct'] == 100 and pct == 100):
-                    # Positive delta means ref lap is slower (time_delta = comparison - reference)
-                    # We want green when ref is faster, so we negate
-                    point_deltas[i] = -seg.get('time_delta', 0)
+                    # Positive delta means ref lap is faster (time_delta = ref - comparison)
+                    # Map positive (ref faster) to green end of color scale
+                    point_deltas[i] = seg.get('time_delta', 0)
                     break
 
         # Build SVG

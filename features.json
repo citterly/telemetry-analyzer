@@ -437,7 +437,7 @@
       "name": "Delta track map colors inverted: green/red meaning swapped vs UI labels and docstrings",
       "category": "bugfix",
       "description": "The delta track map SVG renders Red where Lap A (reference) is faster and Green where Lap B (comparison) is faster. But the UI label in analysis.html line 314 says 'Green = Lap A faster, Red = Lap B faster' \u2014 the exact opposite. The visualization.py docstring (lines 42-45) also says 'Green sections = lap_a faster' which contradicts the actual rendering. Root cause: track_map.py line 645 negates the segment time_delta before mapping to a Red\u2192Yellow\u2192Green color scale. The comment says 'we want green when ref is faster, so we negate' but the negation actually maps ref-faster to negative values which land on the Red end of the scale. The SVG's own legend (track_map.py lines 726-727) is internally consistent with the rendering (Red = ref faster) but contradicts the HTML and docstrings. Fix: remove the negation at line 645 so positive delta (ref faster) maps to Green, matching all labels, comments, and docstrings.",
-      "status": "planned",
+      "status": "passing",
       "priority": 1,
       "tests": [],
       "files": [
@@ -538,7 +538,7 @@
       "name": "Fix saveSetup() payload mismatch \u2014 setup data silently discarded",
       "category": "bugfix",
       "description": "session_detail.html:316 saveSetup() sends flat top-level keys {tire_pressures, fuel_level, temperature, weather, notes} but sessions.py:277 reads data.get('setup_data', {}) which is never present in the payload. Result: PUT /api/v2/sessions/{id}/setup returns 200 OK but stores empty setup_data={}. All tire pressures, fuel, temperature, and weather data silently lost. Fix: either wrap frontend payload in setup_data key, or change backend to read top-level keys.",
-      "status": "planned",
+      "status": "passing",
       "priority": 1,
       "tests": [],
       "files": [
@@ -638,7 +638,7 @@
       "name": "processFile() crashes \u2014 event.target undefined (event not passed via onclick)",
       "category": "bugfix",
       "description": "dashboard.html:174 uses event.target but function called via onclick='processFile(filename)' without passing event. TypeError on every click. Same bug in modal button (line 251). Fix: pass event parameter or use different button reference strategy.",
-      "status": "planned",
+      "status": "passing",
       "priority": 1,
       "tests": [],
       "files": [
@@ -652,7 +652,7 @@
       "name": "Vehicle router creates new VehicleDatabase() instead of using singleton",
       "category": "bugfix",
       "description": "vehicles.py:17 and :59 create new VehicleDatabase() instances instead of calling get_vehicle_database(). Updates via PUT don't propagate to the singleton used by analyzers. After editing vehicle config and running analysis, old config values are used. Fix: replace VehicleDatabase() with get_vehicle_database().",
-      "status": "planned",
+      "status": "passing",
       "priority": 1,
       "tests": [],
       "files": [
@@ -709,7 +709,7 @@
       "name": "Debug mode leaks stack traces in API responses",
       "category": "bugfix",
       "description": "app.py:348-349 appends traceback.format_exc() to error_detail when DEBUG=True. Full stack traces sent to client, exposing file paths, library versions, internal code. Should log to stderr only, never in response. Fix: log traceback server-side, return sanitized message to client.",
-      "status": "planned",
+      "status": "passing",
       "priority": 1,
       "tests": [],
       "files": [
@@ -723,7 +723,7 @@
     "created_at": "2025-01-29T01:00:00Z",
     "last_updated": "2026-02-12T00:00:00Z",
     "total_features": 47,
-    "passing": 26,
+    "passing": 31,
     "failing": 0,
     "planned": 21,
     "archive_file": "features-archive.json"

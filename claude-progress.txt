@@ -1937,3 +1937,43 @@ Highlights:
 - Most Critical bugs are from arch-007 migration (session selector replacing file dropdowns)
 - Vehicle router singleton issue affects all vehicle config edits
 - Error handling layer needs HTTPException + RequestValidationError custom handlers
+
+
+=== Session 27 (2026-02-11) ===
+Working on: 5 priority-1 bugs from UAT
+
+All 5 critical bugs fixed:
+
+1. bug-lapcomparison-001 (CRITICAL): Delta track map colors inverted
+   - track_map.py line 645: removed negation (-seg.get(...) → seg.get(...))
+   - Positive delta (ref faster) now maps to green, matching all UI labels
+   - Comment updated to reflect correct behavior
+
+2. bug-sessiondetail-001 (CRITICAL): saveSetup() payload mismatch
+   - session_detail.html line 318: wrapped fields in setup_data key
+   - Backend expects data.get('setup_data', {}) per sessions.py:277
+   - Setup data now saves correctly (tire pressures, fuel, weather, temp)
+
+3. bug-dashboard-001 (CRITICAL): processFile() crashes on event.target
+   - dashboard.html: added event parameter to processFile(filename, event)
+   - Updated 2 onclick calls to pass event (lines 131, 251)
+   - Added null checks for button before accessing properties
+
+4. bug-vehiclerouter-001 (CRITICAL): Vehicle router not using singleton
+   - vehicles.py: VehicleDatabase() → get_vehicle_database() (lines 17, 59)
+   - Import updated to use get_vehicle_database from vehicles.py
+   - Vehicle config edits now propagate to analyzers
+
+5. bug-error-001 (CRITICAL): Debug mode leaks stack traces
+   - app.py line 349: removed traceback from error_detail
+   - Stack trace logged to stderr only (print to sys.stderr)
+   - Client receives sanitized error message only
+
+Test results: 1038/1042 passing (4 pre-existing DLL failures excluded)
+
+Status: All 5 bugs marked PASSING
+Features: 31 passing, 16 planned, 0 failing
+
+Next priority: bug-sessiondetail-002 (priority 2) — Setup form never loads data
+
+Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>

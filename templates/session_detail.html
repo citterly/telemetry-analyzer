@@ -316,15 +316,17 @@ async function updateClassification(lapNumber, newClassification) {
 async function saveSetup() {
     try {
         const setup = {
-            tire_pressures: {
-                front_left: parseFloat(document.getElementById('tireFrontLeft').value) || null,
-                front_right: parseFloat(document.getElementById('tireFrontRight').value) || null,
-                rear_left: parseFloat(document.getElementById('tireRearLeft').value) || null,
-                rear_right: parseFloat(document.getElementById('tireRearRight').value) || null
+            setup_data: {
+                tire_pressures: {
+                    front_left: parseFloat(document.getElementById('tireFrontLeft').value) || null,
+                    front_right: parseFloat(document.getElementById('tireFrontRight').value) || null,
+                    rear_left: parseFloat(document.getElementById('tireRearLeft').value) || null,
+                    rear_right: parseFloat(document.getElementById('tireRearRight').value) || null
+                },
+                fuel_level: document.getElementById('fuelLevel').value || null,
+                temperature: document.getElementById('temperature').value || null,
+                weather: document.getElementById('weather').value || null
             },
-            fuel_level: document.getElementById('fuelLevel').value || null,
-            temperature: document.getElementById('temperature').value || null,
-            weather: document.getElementById('weather').value || null,
             notes: document.getElementById('setupNotes').value || null
         };
 

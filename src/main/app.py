@@ -346,7 +346,9 @@ async def process_file(filename: str):
     except Exception as e:
         error_detail = f"Processing failed: {str(e)}"
         if config.DEBUG:
-            error_detail += f"\n{traceback.format_exc()}"
+            # Log traceback server-side only, never expose to client
+            import sys
+            print(f"ERROR: {traceback.format_exc()}", file=sys.stderr)
         raise HTTPException(status_code=500, detail=error_detail)
 
 

@@ -128,7 +128,7 @@
                                     
                                     <div class="mt-2">
                                         {% if not file.processed %}
-                                            <button class="btn btn-sm btn-primary" onclick="processFile('{{ file.filename }}')">
+                                            <button class="btn btn-sm btn-primary" onclick="processFile('{{ file.filename }}', event)">
                                                 Process File
                                             </button>
                                         {% endif %}
@@ -170,32 +170,36 @@
 
 {% block extra_scripts %}
 <script>
-async function processFile(filename) {
-    const button = event.target;
-    const originalText = button.innerHTML;
+async function processFile(filename, event) {
+    const button = event ? event.target : null;
+    const originalText = button ? button.innerHTML : '';
     
     try {
-        button.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Processing...';
-        button.disabled = true;
-        
+        if (button) {
+            button.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Processing...';
+            button.disabled = true;
+        }
+
         const result = await apiCall(`/api/process/${filename}`, {
             method: 'POST'
         });
-        
+
         showAlert(`✅ Successfully processed ${filename}!<br>
                    <strong>Laps found:</strong> ${result.total_laps}<br>
-                   ${result.fastest_lap ? `<strong>Fastest lap:</strong> ${formatLapTime(result.fastest_lap.lap_time)}` : ''}`, 
+                   ${result.fastest_lap ? `<strong>Fastest lap:</strong> ${formatLapTime(result.fastest_lap.lap_time)}` : ''}`,
                    'success');
-        
+
         // Refresh the page to show updated stats
         setTimeout(() => {
             window.location.reload();
         }, 2000);
-        
+
     } catch (error) {
         showAlert(`❌ Failed to process ${filename}: ${error.message}`, 'danger');
-        button.innerHTML = originalText;
-        button.disabled = false;
+        if (button) {
+            button.innerHTML = originalText;
+            button.disabled = false;
+        }
     }
 }
 
@@ -248,7 +252,7 @@ async function viewFileDetails(filename) {
                         </div>
                         <div class="modal-footer">
                             ${!details.processed ? `
-                                <button type="button" class="btn btn-primary" onclick="processFile('${details.filename}'); bootstrap.Modal.getInstance(document.getElementById('fileModal')).hide();">
+                                <button type="button" class="btn btn-primary" onclick="processFile('${details.filename}', event); bootstrap.Modal.getInstance(document.getElementById('fileModal')).hide();">
                                     Process File
                                 </button>
                             ` : ''}
