@@ -42,6 +42,7 @@ data/exports/processed/*
 *.pdf
 *.json
 !features.json
+!features-archive.json
 !data/tracks.json
 !data/vehicles.json
 fastest_lap_analysis/

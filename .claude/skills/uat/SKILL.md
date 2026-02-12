@@ -195,6 +195,54 @@ Number each item. Include both happy-path and error-path checks. Order them so t
 
 ---
 
+### Phase 6: Record Bug Features
+
+After producing the UAT report, record all **Critical** and **Major** severity bugs as feature entries in `features.json`. Minor and Cosmetic findings stay in the report only — they do not get feature entries.
+
+For each Critical or Major finding from Phase 5:
+
+1. **Read** the current `features.json`
+2. **Check for existing** `bug-{target}-*` entries to avoid duplicates and to determine the next available NNN sequence number (e.g., if `bug-analysis-001` and `bug-analysis-002` exist, the next is `bug-analysis-003`)
+3. **Build a feature entry** with this exact schema:
+
+```json
+{
+  "id": "bug-{target}-{NNN}",
+  "name": "{Short bug title from the finding}",
+  "category": "bugfix",
+  "description": "{Full finding description including code path, expected vs actual behavior, and suggested fix}",
+  "status": "planned",
+  "priority": 1,
+  "tests": [],
+  "files": ["{affected_file_1.py}", "{affected_file_2.html}"],
+  "notes": "Found during UAT of {target}. Severity: {Critical|Major}",
+  "source_uat": "{target}"
+}
+```
+
+Priority rules:
+- **Critical** bugs get `"priority": 1`
+- **Major** bugs get `"priority": 10`
+
+4. **Add** the new bug entries to the `features` array in `features.json`
+5. **Update metadata counts**: increment `total_features` and `planned` by the number of bugs added
+6. **Write** the updated `features.json`
+7. **Output a summary** after the UAT report:
+
+```
+Recorded N bugs to features.json: bug-{target}-001, bug-{target}-002, ...
+```
+
+If no Critical or Major bugs were found, output:
+
+```
+No Critical/Major bugs found — nothing to record in features.json.
+```
+
+**Important**: If a finding duplicates an existing `bug-{target}-*` entry (same code path and same root cause), skip it and note the duplicate in the summary.
+
+---
+
 ### Quality Standards
 
 - **Be specific.** Include file paths and line numbers for every code reference. "Button doesn't work" is useless. "`Run Analysis` button at `analysis.html:142` calls `runAnalysis()` which builds URL with `selectedFile` but `selectedFile` is null when no file is selected, causing a fetch to `/api/analyze/report/null` which returns 404" is useful.
@@ -202,3 +250,4 @@ Number each item. Include both happy-path and error-path checks. Order them so t
 - **Don't fabricate issues.** Only report problems you can demonstrate exist in the code you read. If you can't tell whether something works without running it (CSS layout, animation timing), say "Unable to verify without runtime testing" and move on.
 - **Prioritize.** Report broken functionality first, then UX concerns, then edge cases.
 - **Be honest about confidence.** Mark findings as "Confirmed" (clear from code), "Likely" (strong evidence but needs runtime check), or "Possible" (edge case that may or may not trigger).
+- **Do NOT fix bugs inline.** UAT is a read-only audit. Record Critical/Major bugs to `features.json` via Phase 6 and move on. The actual fix happens later when the boot-up ritual picks up the bug feature through the normal Plan → Execute → Test pipeline.

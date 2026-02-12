@@ -26,8 +26,8 @@ class TestAnalysisPage:
         # Check for key elements
         html = response.text
         assert "Session Analysis" in html
-        assert "file-select" in html
-        assert "analysis-buttons" in html
+        assert "session_selector" in html
+        assert "runAnalysis" in html
         assert "results-section" in html
 
     def test_analysis_page_has_chart_js(self, client):
@@ -130,10 +130,10 @@ class TestAnalysisPageJavaScript:
         from src.main.app import app
         return TestClient(app)
 
-    def test_page_has_load_file_list_function(self, client):
-        """Test that loadFileList function is defined"""
+    def test_page_has_session_selector(self, client):
+        """Test that session selector component is integrated"""
         response = client.get("/analysis")
-        assert "async function loadFileList()" in response.text
+        assert "session_selector" in response.text
 
     def test_page_has_run_analysis_function(self, client):
         """Test that runAnalysis function is defined"""

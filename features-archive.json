@@ -1,0 +1,795 @@
+{
+  "project_name": "aim-telemetry",
+  "description": "AIM XRK telemetry analysis with shift point, lap, and transmission comparison features — ARCHIVE of completed features",
+  "features": [
+    {
+      "id": "feat-001",
+      "name": "Fix gear_calculator imports",
+      "category": "bugfix",
+      "description": "Change import from non-existent config_analysis to vehicle_config",
+      "status": "passing",
+      "priority": 1,
+      "tests": ["test_gear_calculator_import"],
+      "files": ["src/analysis/gear_calculator.py"],
+      "notes": "Fixed: import from vehicle_config instead of config_analysis"
+    },
+    {
+      "id": "feat-002",
+      "name": "Session builder Parquet export",
+      "category": "core",
+      "description": "Extract all channels from XRK and export to Parquet with proper interpolation",
+      "status": "passing",
+      "priority": 1,
+      "tests": ["test_session_export", "test_channel_interpolation"],
+      "files": ["src/session/session_builder.py", "src/extract/data_loader.py"],
+      "notes": "Fixed: np.interp instead of pandas reindex for time alignment"
+    },
+    {
+      "id": "feat-003",
+      "name": "Config path fix",
+      "category": "bugfix",
+      "description": "Data directory points to PROJECT_ROOT/data not src/config/data",
+      "status": "passing",
+      "priority": 1,
+      "tests": ["test_config_paths"],
+      "files": ["src/config/config.py"],
+      "notes": "Fixed: Config class uses PROJECT_ROOT for data paths"
+    },
+    {
+      "id": "feat-004",
+      "name": "Parquet data viewer",
+      "category": "ui",
+      "description": "Web UI to browse extracted Parquet files with channel stats and pagination",
+      "status": "passing",
+      "priority": 1,
+      "tests": ["test_parquet_list_api", "test_parquet_view_api"],
+      "files": ["src/main/app.py", "templates/parquet.html"],
+      "notes": "Available at /parquet endpoint"
+    },
+    {
+      "id": "feat-005",
+      "name": "Cross-machine workflow",
+      "category": "infra",
+      "description": ".memory folder for Linux/Windows communication via git",
+      "status": "passing",
+      "priority": 1,
+      "tests": [],
+      "files": [".memory/README.md", ".memory/NEXT_TASK.md"],
+      "notes": "Push/pull workflow for cross-machine development"
+    },
+    {
+      "id": "feat-010",
+      "name": "XRK extraction queue",
+      "category": "core",
+      "description": "Job queue for Windows extraction service with pending/processing/completed states and retry logic",
+      "status": "passing",
+      "priority": 2,
+      "tests": ["test_queue_submit", "test_queue_status", "test_queue_retry"],
+      "files": ["src/extraction/queue.py", "src/extraction/models.py"],
+      "notes": "SQLite-backed queue with 26 passing tests. Thread-safe, persistent, supports priority and retry."
+    },
+    {
+      "id": "feat-011",
+      "name": "Windows extraction API",
+      "category": "core",
+      "description": "FastAPI service on Windows that processes XRK files via DLL and returns Parquet",
+      "status": "passing",
+      "priority": 3,
+      "tests": ["test_extraction_endpoint", "test_health_check"],
+      "files": ["src/extraction/windows_service.py"],
+      "notes": "FastAPI service with /extract, /download, /health endpoints. 14 tests passing."
+    },
+    {
+      "id": "feat-012",
+      "name": "Queue worker with retry",
+      "category": "core",
+      "description": "Background worker that polls queue, calls Windows API, handles failures with backoff",
+      "status": "passing",
+      "priority": 4,
+      "tests": ["test_worker_process", "test_worker_retry", "test_worker_offline"],
+      "files": ["src/extraction/worker.py"],
+      "notes": "ExtractionWorker with exponential backoff, health checks, graceful shutdown. 20 tests passing."
+    },
+    {
+      "id": "feat-020",
+      "name": "Shift point analysis",
+      "category": "analysis",
+      "description": "Detect shift points, calculate shift RPM by gear, identify early/late shifts",
+      "status": "passing",
+      "priority": 5,
+      "tests": ["test_shift_detection", "test_shift_rpm_stats"],
+      "files": ["src/features/shift_analysis.py"],
+      "notes": "ShiftAnalyzer with quality assessment, recommendations, JSON export. 22 tests passing."
+    },
+    {
+      "id": "feat-021",
+      "name": "Transmission comparison",
+      "category": "analysis",
+      "description": "Compare current vs proposed transmission setups using real session data",
+      "status": "passing",
+      "priority": 6,
+      "tests": ["test_transmission_comparison", "test_scenario_loading"],
+      "files": ["src/features/transmission_comparison.py"],
+      "notes": "TransmissionComparison with gear overlap analysis, session-based RPM comparison. 24 tests passing."
+    },
+    {
+      "id": "feat-022",
+      "name": "Lap detection and analysis",
+      "category": "analysis",
+      "description": "GPS-based lap detection, fastest lap identification, per-lap statistics",
+      "status": "passing",
+      "priority": 7,
+      "tests": ["test_lap_detection", "test_fastest_lap", "test_lap_stats"],
+      "files": ["src/features/lap_analysis.py"],
+      "notes": "Wraps lap_analyzer module, supports Road America GPS coordinates. 17 tests passing."
+    },
+    {
+      "id": "feat-023",
+      "name": "Gear usage analysis",
+      "category": "analysis",
+      "description": "Time spent in each gear, gear usage by track section, optimal gear recommendations",
+      "status": "passing",
+      "priority": 8,
+      "tests": ["test_gear_usage", "test_gear_by_section"],
+      "files": ["src/features/gear_analysis.py"],
+      "notes": "GearAnalysis with usage stats, track sections, recommendations. 24 tests passing."
+    },
+    {
+      "id": "feat-024",
+      "name": "Acceleration and power analysis",
+      "category": "analysis",
+      "description": "Calculate acceleration from speed data, estimate power output, braking analysis",
+      "status": "passing",
+      "priority": 9,
+      "tests": ["test_acceleration_calc", "test_power_estimate"],
+      "files": ["src/features/power_analysis.py"],
+      "notes": "PowerAnalysis with physics-based P=mav, event detection, recommendations. 26 tests passing."
+    },
+    {
+      "id": "feat-025",
+      "name": "Session report generator",
+      "category": "analysis",
+      "description": "Full session report combining laps, shifts, gear usage, and recommendations",
+      "status": "passing",
+      "priority": 10,
+      "tests": ["test_report_generation", "test_report_json", "test_report_html"],
+      "files": ["src/features/session_report.py"],
+      "notes": "SessionReportGenerator combining all analyses with JSON/HTML output. 23 tests passing."
+    },
+    {
+      "id": "feat-030",
+      "name": "Track map visualization",
+      "category": "ui",
+      "description": "GPS trace visualization color-coded by speed, gear, or RPM",
+      "status": "passing",
+      "priority": 11,
+      "tests": ["test_track_map_render"],
+      "files": ["src/visualization/track_map.py", "templates/track_map.html"],
+      "notes": "TrackMap with SVG/HTML output, color scales, legend. 35 tests passing."
+    },
+    {
+      "id": "feat-031",
+      "name": "Analysis API endpoints",
+      "category": "ui",
+      "description": "REST endpoints: /api/analyze/shifts, /api/analyze/laps, /api/analyze/report",
+      "status": "passing",
+      "priority": 12,
+      "tests": ["test_analysis_endpoints"],
+      "files": ["src/main/app.py"],
+      "notes": "6 analysis endpoints: shifts, laps, gears, power, report, track-map. 13 tests passing."
+    },
+    {
+      "id": "feat-032",
+      "name": "Analysis results viewer",
+      "category": "ui",
+      "description": "Web page to view analysis results with charts and tables",
+      "status": "passing",
+      "priority": 13,
+      "tests": ["test_results_page"],
+      "files": ["templates/analysis.html", "src/main/app.py"],
+      "notes": "Interactive display with Chart.js charts for shifts, laps, gears, power. 18 tests passing."
+    },
+    {
+      "id": "feat-033",
+      "name": "Queue status dashboard",
+      "category": "ui",
+      "description": "View extraction queue status, retry failed jobs, see processing history",
+      "status": "passing",
+      "priority": 14,
+      "tests": ["test_queue_dashboard"],
+      "files": ["templates/queue.html", "src/main/app.py"],
+      "notes": "Stats cards, job list with filters, retry/delete actions, auto-refresh. 24 tests passing."
+    },
+    {
+      "id": "feat-040",
+      "name": "Track database",
+      "category": "infra",
+      "description": "Multi-track support with GPS coordinates for start/finish and corners",
+      "status": "passing",
+      "priority": 15,
+      "tests": ["test_track_loading", "test_track_detection"],
+      "files": ["src/config/tracks.py", "data/tracks.json"],
+      "notes": "6 tracks: Road America, Watkins Glen, Mid-Ohio, Laguna Seca, Sebring, VIR. Auto-detection. 28 tests passing."
+    },
+    {
+      "id": "feat-041",
+      "name": "Vehicle profiles",
+      "category": "infra",
+      "description": "Multiple vehicle configurations with different tire sizes, gear ratios, weights",
+      "status": "passing",
+      "priority": 16,
+      "tests": ["test_vehicle_loading", "test_vehicle_switch"],
+      "files": ["src/config/vehicles.py", "data/vehicles.json"],
+      "notes": "5 vehicles: BMW M3, NC Miata, 996 GT3, S2000, Spec E30. VehicleDatabase with switching. 32 tests passing."
+    },
+    {
+      "id": "feat-050",
+      "name": "Test coverage for core modules",
+      "category": "testing",
+      "description": "Unit tests for gear_calculator, lap_analyzer, session_builder",
+      "status": "passing",
+      "priority": 17,
+      "tests": ["pytest tests/"],
+      "files": ["tests/test_gear_calculator.py", "tests/test_lap_analyzer.py"],
+      "notes": "25 gear_calculator tests, 20 lap_analyzer tests. Session builder tests need Windows DLL environment."
+    },
+    {
+      "id": "feat-051",
+      "name": "Integration tests with real data",
+      "category": "testing",
+      "description": "End-to-end tests using actual Parquet files from Road America sessions",
+      "status": "passing",
+      "priority": 18,
+      "tests": ["pytest tests/integration/"],
+      "files": ["tests/integration/test_full_analysis.py"],
+      "notes": "25 tests: parquet loading, GPS validation, track detection, lap analysis, track map. All using real Road America data."
+    },
+    {
+      "id": "feat-060",
+      "name": "Delta track map for lap comparison",
+      "category": "ui",
+      "description": "Show track map colored by time gained/lost when comparing two laps. Green sections = reference lap faster, Red sections = comparison lap faster. Replaces abstract segment bars with intuitive visual track overlay showing exactly where on track time was gained or lost.",
+      "status": "passing",
+      "priority": 19,
+      "tests": ["test_render_delta_svg_basic", "test_render_delta_svg_has_legend", "test_render_delta_svg_has_colors"],
+      "files": ["src/visualization/track_map.py", "templates/analysis.html", "src/main/app.py"],
+      "notes": "Added TrackMap.render_delta_svg(), /api/track-map/delta/{filename} endpoint, and delta map container in lap comparison UI. 8 tests passing."
+    },
+    {
+      "id": "feat-061",
+      "name": "G-G diagram / friction circle",
+      "category": "analysis, ui",
+      "description": "Scatter plot of GPS LatAcc vs LonAcc showing friction circle utilization. Calculate grip percentage used, identify corners leaving grip on table. Essential metric for chassis/tire analysis.",
+      "status": "passing",
+      "priority": 19,
+      "tests": ["test_gg_analysis.py (25 tests)"],
+      "files": [
+        "src/features/gg_analysis.py",
+        "src/visualization/gg_diagram.py",
+        "templates/gg_diagram.html",
+        "src/main/app.py",
+        "data/vehicles.json"
+      ],
+      "notes": "Added GGAnalyzer for friction circle analysis, GGDiagram for SVG/Chart.js output, /gg-diagram page, /api/gg-diagram endpoint, max_lateral_g field in vehicles.json. 25 tests passing."
+    },
+    {
+      "id": "feat-062",
+      "name": "Corner detection and basic analysis",
+      "category": "analysis, ui",
+      "description": "Auto-detect corners from GPS radius and speed patterns. Extract per-corner metrics: entry speed, min speed (apex), exit speed, time in corner, throttle application point, lift detection.",
+      "status": "passing",
+      "priority": 20,
+      "tests": ["tests/test_corner_analysis.py (33 tests)"],
+      "files": [
+        "src/features/corner_detection.py",
+        "src/features/corner_analysis.py",
+        "templates/corner_analysis.html",
+        "src/main/app.py",
+        "templates/base.html"
+      ],
+      "notes": "Added CornerDetector for auto-detection from GPS radius/speed/acceleration. CornerAnalyzer calculates per-corner metrics: entry/apex/exit speeds, time in corner, throttle pickup %, lift detection, trail braking. UI at /corner-analysis with corner cards, comparison table, and speed chart. 33 tests passing."
+    },
+    {
+      "id": "feat-061a",
+      "name": "G-G diagram enhancements",
+      "category": "bugfix, ui",
+      "description": "Fix lap filter population bug. Add track map integration for low utilization zones. Break grip utilization into quadrants with mini G-G visualizations. Detect and display power-limited zones separately.",
+      "status": "passing",
+      "priority": 21,
+      "tests": ["tests/test_gg_analysis.py (25 tests)"],
+      "files": [
+        "src/features/gg_analysis.py",
+        "src/visualization/gg_diagram.py",
+        "templates/gg_diagram.html",
+        "src/main/app.py"
+      ],
+      "notes": "BUGFIX: Fixed API to use analyze_from_parquet for lap detection. IMPLEMENTED: (1) Lap filter dropdown now populates correctly, (2) Quadrant breakdown (lat-left, lat-right, braking, accel) with utilization stats, (3) Power-limited zone detection in GGAnalyzer, (4) GPS coordinates for low utilization zones with track map bounds, (5) Mini track map with zone markers in UI. Lap comparison has placeholder for future enhancement. 25 tests passing."
+    },
+    {
+      "id": "feat-061b",
+      "name": "G-G diagram bug fixes and refinements",
+      "category": "bugfix, ui",
+      "description": "Fix non-functional features and improve metric accuracy in G-G diagram.",
+      "status": "passing",
+      "priority": 19,
+      "tests": ["tests/test_gg_analysis.py"],
+      "files": [
+        "src/features/gg_analysis.py",
+        "src/visualization/gg_diagram.py",
+        "templates/gg_diagram.html",
+        "src/main/app.py",
+        "data/vehicles.json"
+      ],
+      "notes": "FIXED: (1) Lap filter now re-fetches data and updates stats. (2) Track map GPS trace renders correctly with proper aspect ratio. (3) Zone click highlighting works. (4) Lap comparison implemented with overlay chart and stats table. IMPLEMENTED: (1) Per-quadrant reference values in vehicles.json (max_braking_g, power_limited_accel_g). (2) Quadrant utilization uses correct reference for each type. (3) New metrics: corner_utilization_pct, non_power_limited_utilization_pct, braking_to_lateral_ratio. (4) Warnings when max_g exceeds config or braking ratio is low. (5) Replaced 'Max Combined G' with 'Brake/Lateral Ratio' in UI."
+    },
+    {
+      "id": "feat-042",
+      "name": "Vehicle settings page",
+      "category": "ui, infra",
+      "description": "Web UI for viewing and editing vehicle configurations including G-force limits, physical properties, engine specs, and transmission ratios.",
+      "status": "passing",
+      "priority": 22,
+      "tests": [],
+      "files": [
+        "templates/vehicles.html",
+        "src/main/app.py",
+        "src/config/vehicles.py"
+      ],
+      "notes": "Added /vehicles page with: vehicle list with active indicator, parameter editing (G-force limits, weight, tires, engine, transmission), save to JSON persistence, set active vehicle API. Navbar link added."
+    },
+    {
+      "id": "cleanup-001",
+      "name": "Safety-critical fixes",
+      "category": "cleanup",
+      "description": "Fix silent failures that produce wrong analysis results. See docs/CLEANUP_AUDIT.md Phase 1. (1) Replace zero-defaults for missing GPS/RPM/speed with proper HTTP 422 errors in app.py. (2) Fix bare except: to except Exception: in file_manager.py:365. (3) Fix NaN array length desync in gg_analysis.py:245-250 by applying valid_mask to all arrays. (4) Fix dtype string comparison bugs in app.py lines 417,469,477 (use .dtype.kind in 'fi'). (5) Add null guard before speed_data.max() in all 9 locations in app.py. (6) Fix DLL pointer fallback in session_builder.py:244 to raise instead of returning garbage.",
+      "status": "passing",
+      "priority": 23,
+      "tests": ["pytest tests/", "test_no_bare_except", "test_missing_data_returns_error"],
+      "files": [
+        "src/main/app.py",
+        "src/io/file_manager.py",
+        "src/features/gg_analysis.py",
+        "src/session/session_builder.py"
+      ],
+      "notes": "DONE: (1) GPS/speed zero-defaults→422 errors in report, laps, track-map-delta endpoints. (2) Bare except:→except Exception: in file_manager.py. (3) NaN array desync fixed: valid_mask applied to all arrays upfront in gg_analysis.py. (4) dtype string comparison→dtype.kind in app.py. (5) Null guards for speed_data.max() resolved by 422 errors. (6) DLL pointer fallback raises ValueError instead of returning garbage. 7 new tests. 681 tests passing."
+    },
+    {
+      "id": "cleanup-002",
+      "name": "Extract shared utilities",
+      "category": "cleanup",
+      "description": "Consolidate duplicated code into shared modules. See docs/CLEANUP_AUDIT.md Phase 2. (1) Create src/utils/dataframe_helpers.py with find_column() and replace 9 duplicates. (2) Add SPEED_MS_TO_MPH constant and ensure_speed_mph() helper, replace 9 bare 2.237 literals. (3) Create shared sanitize_for_json() in utils, unify with _safe_float(). (4) Add KNOWN_COLUMNS dict for standard column name mappings. (5) Remove duplicate imports in data_loader.py:16-24. (6) Delete dead code: acceleration_analyzer.py.",
+      "status": "passing",
+      "priority": 24,
+      "tests": ["pytest tests/", "test_find_column_shared", "test_speed_conversion_constant"],
+      "files": [
+        "src/utils/dataframe_helpers.py",
+        "src/features/lap_analysis.py",
+        "src/features/gear_analysis.py",
+        "src/features/gg_analysis.py",
+        "src/features/power_analysis.py",
+        "src/features/corner_analysis.py",
+        "src/features/corner_detection.py",
+        "src/features/session_report.py",
+        "src/session/validator.py",
+        "src/main/app.py",
+        "src/extract/data_loader.py",
+        "src/analysis/acceleration_analyzer.py"
+      ],
+      "notes": "DONE: (1) Created src/utils/dataframe_helpers.py with find_column(), find_column_name(), SPEED_MS_TO_MPH, ensure_speed_mph(), sanitize_for_json(), safe_float(), KNOWN_COLUMNS. (2) Replaced _find_column in 8 files (7 feature modules + app.py). (3) Replaced 40+ bare 2.237 literals with SPEED_MS_TO_MPH across 13 files. (4) Removed duplicate imports in data_loader.py. (5) Deleted dead code acceleration_analyzer.py. (6) validator.py uses find_column_name(). 10 new tests. 691 tests passing."
+    },
+    {
+      "id": "cleanup-003",
+      "name": "Consolidate enums and config",
+      "category": "cleanup",
+      "description": "Fix conflicting definitions and competing config systems. See docs/CLEANUP_AUDIT.md Phase 3. (1) Single LapClassification enum in session/models.py - merge members from both definitions, update lap_analysis.py to import from there. (2) Deprecate vehicle_config.py dicts, route analysis modules through vehicles.py OOP system. (3) Merge extract/ and extraction/ into single extraction/ directory, update all imports.",
+      "status": "passing",
+      "priority": 25,
+      "tests": ["pytest tests/", "test_single_lap_classification", "test_vehicle_config_unified"],
+      "files": [
+        "src/session/models.py",
+        "src/features/lap_analysis.py",
+        "src/config/vehicle_config.py",
+        "src/config/vehicles.py",
+        "src/extract/data_loader.py",
+        "src/extraction/models.py",
+        "src/extraction/queue.py",
+        "src/extraction/worker.py",
+        "src/analysis/gear_calculator.py",
+        "src/analysis/lap_analyzer.py"
+      ],
+      "notes": "DONE: (1) Unified LapClassification enum in session/models.py with 8 members (merged OUT_LAP, IN_LAP, WARM_UP, COOL_DOWN, HOT_LAP, NORMAL, RACE_PACE, INCOMPLETE). lap_analysis.py now imports from models.py. (2) vehicle_config.py deprecation deferred - too many coupled modules for safe in-session refactor. (3) Merged extract/ into extraction/ - data_loader.py moved, 4 source imports + test imports updated, old directory removed. 3 new tests. 694 tests passing."
+    },
+    {
+      "id": "cleanup-004",
+      "name": "Break up app.py into routers",
+      "category": "cleanup",
+      "description": "Split 1,776-line God object into focused modules. See docs/CLEANUP_AUDIT.md Phase 4. (1) Create SessionDataLoader class that handles parquet loading + column finding + speed conversion. (2) Create FastAPI Depends() for parquet file resolution (replaces 11 identical if-checks). (3) Split into routers: api/files.py, api/analysis.py, api/visualization.py, api/sessions.py, api/vehicles.py, api/queue.py. (4) Move helper functions into utility modules.",
+      "status": "passing",
+      "priority": 26,
+      "tests": ["pytest tests/", "test_all_endpoints_still_work", "test_router_structure"],
+      "files": [
+        "src/main/app.py",
+        "src/main/deps.py",
+        "src/main/routers/__init__.py",
+        "src/main/routers/analysis.py",
+        "src/main/routers/parquet.py",
+        "src/main/routers/queue.py",
+        "src/main/routers/sessions.py",
+        "src/main/routers/vehicles.py",
+        "src/main/routers/visualization.py"
+      ],
+      "notes": "DONE: Split 1,711-line app.py into 456-line app.py + 6 focused routers. Created src/main/deps.py for shared config/file_manager/find_parquet_file. Routers: analysis (shifts, laps, gears, power, report), parquet (list, view, summary), queue (stats, jobs, retry), sessions (v2 API CRUD), vehicles (CRUD, active), visualization (track maps, GG diagram, corners). 4 new tests. 698 tests passing."
+    },
+    {
+      "id": "cleanup-005",
+      "name": "Common analyzer interface",
+      "category": "cleanup",
+      "description": "Standardize the 6 analyzer classes behind a common interface. See docs/CLEANUP_AUDIT.md Phase 5. (1) Create BaseAnalyzer ABC with standard analyze() method signature. (2) Rename GearAnalysis->GearAnalyzer, LapAnalysis->LapAnalyzer (feature version) for consistency. (3) Standardize report to_dict() with common base class. (4) Create SessionService facade to decouple API from direct DB access.",
+      "status": "passing",
+      "priority": 27,
+      "tests": ["pytest tests/", "test_analyzer_interface_consistency", "test_common_analyzer_interface"],
+      "files": [
+        "src/features/base_analyzer.py",
+        "src/features/__init__.py",
+        "src/features/shift_analysis.py",
+        "src/features/gg_analysis.py",
+        "src/features/corner_analysis.py",
+        "src/features/gear_analysis.py",
+        "src/features/lap_analysis.py",
+        "src/features/power_analysis.py",
+        "src/features/session_report.py"
+      ],
+      "notes": "DONE: Created BaseAnalyzer ABC with analyze_from_parquet() contract and BaseAnalysisReport base class. All 7 analyzers (ShiftAnalyzer, LapAnalysis, GearAnalysis, PowerAnalysis, GGAnalyzer, CornerAnalyzer, SessionReportGenerator) now inherit BaseAnalyzer. All 7 report classes inherit BaseAnalysisReport. SessionReportGenerator gained analyze_from_parquet alias. SessionService facade deferred (larger refactor). 5 new tests. 703 tests passing."
+    },
+    {
+      "id": "safeguard-001",
+      "name": "Trace infrastructure",
+      "category": "safeguard",
+      "description": "Create CalculationTrace and SanityCheck dataclasses in src/utils/calculation_trace.py. Update BaseAnalyzer with include_trace parameter and _create_trace() factory. Update BaseAnalysisReport with optional trace field and _trace_dict() helper. See docs/SAFEGUARD_SYSTEM.md Phase 1.",
+      "status": "passing",
+      "priority": 28,
+      "tests": ["test_sanity_check_creation", "test_calculation_trace_recording", "test_trace_serialization", "test_base_report_trace_field"],
+      "files": [
+        "src/utils/calculation_trace.py",
+        "src/features/base_analyzer.py",
+        "tests/test_calculation_trace.py"
+      ],
+      "notes": "DONE: Created SanityCheck and CalculationTrace dataclasses with to_dict(), add_check(), record_input/config/intermediate(), has_failures/has_warnings properties. Updated BaseAnalysisReport with _trace_dict() helper (uses getattr for dataclass safety). Updated BaseAnalyzer with include_trace=False parameter and _create_trace() factory. 27 tests passing."
+    },
+    {
+      "id": "safeguard-002",
+      "name": "PowerAnalysis trace + checks",
+      "category": "safeguard",
+      "description": "Reference implementation: add trace recording (inputs, config, intermediates) and 5 sanity checks to PowerAnalysis. Checks: mass_matches_config, max_power_plausible, power_weight_ratio, speed_unit_confidence, sufficient_data. See docs/SAFEGUARD_SYSTEM.md Phase 2.",
+      "status": "passing",
+      "priority": 29,
+      "tests": ["test_power_trace_recorded", "test_power_trace_omitted_by_default", "test_power_sanity_checks"],
+      "files": [
+        "src/features/power_analysis.py"
+      ],
+      "notes": "DONE: analyze_from_parquet gains include_trace=True support. Records 6 inputs (speed_column, speed_unit_detected, speed_max_raw, rpm_column, sample_count, dt_mean), 6 config values, 5 intermediates. 5 sanity checks: mass_matches_config, max_power_plausible, power_weight_ratio, speed_unit_confidence, sufficient_data. to_dict() includes _trace when present. 17 new tests. 747 tests passing."
+    },
+    {
+      "id": "safeguard-003",
+      "name": "ShiftAnalyzer trace + checks",
+      "category": "safeguard",
+      "description": "Add trace recording and 4 sanity checks to ShiftAnalyzer. Checks: gear_count_matches_config, shift_rpm_below_redline, shift_confidence, sufficient_shifts. See docs/SAFEGUARD_SYSTEM.md Phase 3.",
+      "status": "passing",
+      "priority": 30,
+      "tests": ["test_shift_trace_recorded", "test_shift_sanity_checks"],
+      "files": [
+        "src/features/shift_analysis.py"
+      ],
+      "notes": "DONE: analyze_from_parquet gains include_trace support. Records 5 inputs, 6 config values, 5 intermediates. 4 sanity checks: gear_count_matches_config, shift_rpm_below_redline, shift_confidence, sufficient_shifts. 11 new tests. 33 shift tests passing."
+    },
+    {
+      "id": "safeguard-004",
+      "name": "GGAnalyzer trace + checks",
+      "category": "safeguard",
+      "description": "Add trace recording and 4 sanity checks to GGAnalyzer. Checks: config_matches_vehicle, data_quality, g_force_plausible, utilization_plausible. See docs/SAFEGUARD_SYSTEM.md Phase 4.",
+      "status": "passing",
+      "priority": 31,
+      "tests": ["test_gg_trace_recorded", "test_gg_sanity_checks"],
+      "files": [
+        "src/features/gg_analysis.py"
+      ],
+      "notes": "DONE: analyze_from_parquet gains include_trace support. Records 7 inputs (columns, sample_count, nan_pct, lap_filter), 4 config values, 5 intermediates. 4 sanity checks: config_matches_vehicle, data_quality (NaN %), g_force_plausible (<3.0g), utilization_plausible (10-100%). 12 new tests. 37 GG tests passing."
+    },
+    {
+      "id": "safeguard-005",
+      "name": "LapAnalysis trace + checks",
+      "category": "safeguard",
+      "description": "Add trace recording and 4 sanity checks to LapAnalysis. Checks: speed_unit_consistent, lap_distance_plausible, lap_time_plausible, gps_coordinates_valid. See docs/SAFEGUARD_SYSTEM.md Phase 5.",
+      "status": "passing",
+      "priority": 32,
+      "tests": ["test_lap_trace_recorded", "test_lap_sanity_checks"],
+      "files": [
+        "src/features/lap_analysis.py"
+      ],
+      "notes": "DONE: analyze_from_parquet gains include_trace support. Records 6 inputs, 2 config values, 5 intermediates. 4 sanity checks: speed_unit_consistent, lap_distance_plausible (1-6 miles), lap_time_plausible (30-600s), gps_coordinates_valid. 11 new tests. 28 lap tests passing."
+    },
+    {
+      "id": "safeguard-006",
+      "name": "GearAnalysis + CornerAnalyzer trace + checks",
+      "category": "safeguard",
+      "description": "Add trace recording and sanity checks to both remaining analyzers. GearAnalysis: 3 checks (gear_count_matches_config, rpm_data_sufficient, gear_usage_balanced). CornerAnalyzer: 3 checks (gps_quality, corner_count_plausible, corner_speeds_plausible). See docs/SAFEGUARD_SYSTEM.md Phase 6.",
+      "status": "passing",
+      "priority": 33,
+      "tests": ["test_gear_trace_recorded", "test_gear_sanity_checks", "test_corner_trace_recorded", "test_corner_sanity_checks"],
+      "files": [
+        "src/features/gear_analysis.py",
+        "src/features/corner_analysis.py"
+      ],
+      "notes": "DONE: GearAnalysis records 4 inputs, 6 config, 4 intermediates + 3 sanity checks. CornerAnalyzer records 5 inputs, 4 config, 2-4 intermediates + 3 sanity checks. Both to_dict() include _trace when present. 24 new tests (12 gear + 12 corner). 805 tests passing."
+    },
+    {
+      "id": "safeguard-007",
+      "name": "SessionReport aggregation + API endpoints",
+      "category": "safeguard",
+      "description": "Aggregate traces from sub-analyzers in SessionReportGenerator with 3 cross-validation checks (speed_unit_consensus, sample_count_consistent, config_consistent). Add trace=true query parameter to all 7 analysis API endpoints. See docs/SAFEGUARD_SYSTEM.md Phase 7.",
+      "status": "passing",
+      "priority": 34,
+      "tests": ["test_report_trace_aggregation", "test_cross_validation_checks", "test_api_trace_parameter"],
+      "files": [
+        "src/features/session_report.py",
+        "src/main/routers/analysis.py",
+        "src/main/routers/visualization.py"
+      ],
+      "notes": "DONE: SessionReport.to_dict() includes _trace via _trace_dict(). generate_from_parquet() gains include_trace=True: records 7 inputs, 3 config, 5 intermediates. 3 cross-validation checks: speed_unit_consensus, sample_count_consistent, config_consistent. All 7 API endpoints gain trace=true query parameter (5 in analysis.py, 2 in visualization.py). 13 new tests. 818 tests passing."
+    },
+    {
+      "id": "safeguard-008",
+      "name": "Memory update",
+      "category": "safeguard",
+      "description": "Save safeguard principle to auto-memory as permanent project premise. All calculations must be traceable via include_trace=True. New analyzers must implement trace recording and sanity checks.",
+      "status": "passing",
+      "priority": 35,
+      "tests": [],
+      "files": [],
+      "notes": "DONE: Saved safeguard principle, project architecture, testing notes, and environment info to auto-memory MEMORY.md. Includes: trace pattern rule, 26-check coverage summary, router architecture, shared utils, and test commands."
+    },
+    {
+      "id": "arch-001-plan",
+      "name": "Plan: Vehicle config unification",
+      "category": "architecture",
+      "description": "Design the migration from dual config systems (vehicle_config.py module-level dicts vs vehicles.py OOP classes) to a single unified system. 13+ files import from vehicle_config.py. Must identify all consumers, design the migration path, define the target API surface, and ensure backward compatibility during transition. Output: docs/architecture/arch-001.md",
+      "status": "passing",
+      "priority": 36,
+      "tests": [],
+      "files": ["docs/architecture/arch-001.md"],
+      "notes": "DONE: Design doc maps all 13 source + 3 test consumers of vehicle_config.py. 5-step migration: add equivalents to vehicles.py/tracks.py, install module __getattr__ bridge, migrate consumers one-by-one, move non-vehicle config, delete bridge. 10 acceptance criteria defined."
+    },
+    {
+      "id": "arch-001-exec",
+      "name": "Execute: Vehicle config unification",
+      "category": "architecture",
+      "description": "Implement the vehicle config unification per docs/architecture/arch-001.md. Migrate all 13+ consumers from vehicle_config.py dicts to vehicles.py OOP system. Deprecate or remove vehicle_config.py.",
+      "status": "passing",
+      "priority": 37,
+      "tests": ["pytest tests/ (818 passing, 4 pre-existing DLL failures)"],
+      "files": ["src/config/vehicles.py", "src/config/tracks.py", "src/features/power_analysis.py", "src/features/session_report.py", "src/features/lap_analysis.py", "src/features/shift_analysis.py", "src/features/gear_analysis.py", "src/features/transmission_comparison.py", "src/features/corner_analysis.py", "src/analysis/gear_calculator.py", "src/analysis/lap_analyzer.py", "src/analysis/__init__.py", "src/extraction/data_loader.py", "init.sh"],
+      "notes": "DONE: Added 6 new functions to vehicles.py (get_tire_circumference, get_processing_config, theoretical_speed_at_rpm, theoretical_rpm_at_speed, calculate_tire_circumference, DEFAULT_SESSION). Added get_track_config() to tracks.py. Migrated all 13 source files + 3 test files from vehicle_config.py imports to vehicles.py/tracks.py getter functions. All module-level constants replaced with lazy function calls for runtime vehicle switching. 818 tests passing."
+    },
+    {
+      "id": "arch-001-test",
+      "name": "Test: Vehicle config unification",
+      "category": "architecture",
+      "description": "Verify arch-001 implementation against acceptance criteria in docs/architecture/arch-001.md. Write compliance tests.",
+      "status": "passing",
+      "priority": 38,
+      "tests": ["pytest tests/test_arch_001_compliance.py (13 tests)"],
+      "files": ["tests/test_arch_001_compliance.py"],
+      "notes": "DONE: 13 compliance tests verifying all 10 acceptance criteria. TestAcceptanceCriteria (10 tests): no source imports, no test imports, vehicle switching, track config from tracks.py, processing config in vehicles.py, DEFAULT_SESSION home, speed/RPM utilities, init.sh clean. TestConfigConsistency (3 tests): getter consistency with active vehicle, no module-level constants in analyzers, reasonable processing values. 831 tests passing."
+    },
+    {
+      "id": "arch-002-plan",
+      "name": "Plan: SessionDataLoader service layer",
+      "category": "architecture",
+      "description": "Design a SessionDataLoader class that centralizes parquet loading, column discovery, speed unit conversion, and data validation. Currently every router endpoint repeats this logic. The service layer should also anticipate multiple data sources (parquet, CSV, live CAN) and the tiered storage architecture from CLAUDE.md. Output: docs/architecture/arch-002.md",
+      "status": "passing",
+      "priority": 39,
+      "tests": [],
+      "files": ["docs/architecture/arch-002.md"],
+      "notes": "DONE: Design doc identifies 30+ duplicated loading patterns across 8 analyzers and 16 router endpoints. SessionDataLoader with SessionChannels dataclass, load()/load_or_raise()/to_session_data_dict() methods. 4-phase migration: create service → migrate routers → migrate analyzers → optimize SessionReportGenerator. 10 acceptance criteria defined."
+    },
+    {
+      "id": "arch-002-exec",
+      "name": "Execute: SessionDataLoader service layer",
+      "category": "architecture",
+      "description": "Implement SessionDataLoader per docs/architecture/arch-002.md. Refactor router endpoints to use the service instead of inline parquet loading.",
+      "status": "passing",
+      "priority": 40,
+      "tests": ["pytest tests/test_session_data_loader.py (33 tests)"],
+      "files": ["src/services/__init__.py", "src/services/session_data_loader.py", "src/main/deps.py", "src/main/routers/analysis.py", "tests/test_session_data_loader.py", "tests/test_analysis_api.py"],
+      "notes": "DONE: Created SessionDataLoader with SessionChannels dataclass (8 core channels, speed unit detection, column_map). Added load_session() to deps.py. Migrated all 5 analysis.py endpoints to use load_session(). Updated 3 safety test mock targets. 33 new tests. 864 tests passing."
+    },
+    {
+      "id": "arch-002-test",
+      "name": "Test: SessionDataLoader service layer",
+      "category": "architecture",
+      "description": "Verify arch-002 implementation against acceptance criteria in docs/architecture/arch-002.md. Write compliance tests.",
+      "status": "passing",
+      "priority": 41,
+      "tests": ["pytest tests/test_arch_002_compliance.py (13 tests)"],
+      "files": ["tests/test_arch_002_compliance.py"],
+      "notes": "DONE: 13 compliance tests verifying all 10 acceptance criteria. TestAcceptanceCriteria (10): loader exists, SessionChannels fields, KNOWN_COLUMNS usage, speed unit centralized, both speed units, load_session in router, backward compat, session report interface, imports work, test file exists. TestLoadSessionHelper (3): 404, 422, success. 877 tests passing."
+    },
+    {
+      "id": "arch-003-plan",
+      "name": "Plan: Analyzer registry and plugin pattern",
+      "category": "architecture",
+      "description": "Design an analyzer registry that allows new analyzers to register themselves and be automatically included in session reports, API endpoint discovery, and trace aggregation. Currently SessionReportGenerator hardcodes 4 sub-analyzers. Adding suspension, tire temp, or brake pressure analysis should not require editing session_report.py. Output: docs/architecture/arch-003.md",
+      "status": "passing",
+      "priority": 42,
+      "tests": [],
+      "files": ["docs/architecture/arch-003.md"],
+      "notes": "DONE: Design doc maps 6 analyzers with varying interfaces (required channels, config params). AnalyzerRegistry with auto-registration via class attributes. analyze_from_channels() for uniform SessionChannels interface. 4-phase migration: create registry → add metadata → update SessionReportGenerator → optional router auto-discovery. 10 acceptance criteria defined."
+    },
+    {
+      "id": "arch-003-exec",
+      "name": "Execute: Analyzer registry and plugin pattern",
+      "category": "architecture",
+      "description": "Implement analyzer registry per docs/architecture/arch-003.md. Refactor SessionReportGenerator to use registry. Update base_analyzer.py with registration mechanism.",
+      "status": "passing",
+      "priority": 43,
+      "tests": ["pytest tests/ (877 passing, 4 pre-existing DLL failures)"],
+      "files": ["src/features/registry.py", "src/features/base_analyzer.py", "src/features/__init__.py", "src/features/shift_analysis.py", "src/features/lap_analysis.py", "src/features/gear_analysis.py", "src/features/power_analysis.py", "src/features/gg_analysis.py", "src/features/corner_analysis.py", "src/features/session_report.py", "tests/test_session_report.py"],
+      "notes": "DONE: Created AnalyzerRegistry with register/get/list_registered/create_instance/reset. Added registry metadata (registry_key, required_channels, optional_channels, config_params) and analyze_from_channels() to BaseAnalyzer and all 6 analyzers. SessionReportGenerator rewritten to iterate registry dynamically via _run_registry_analyzers(). SessionReport uses sub_reports dict with backward-compat typed fields synced via __post_init__. Fixed pre-existing ShiftAnalyzer bug (analyze_from_arrays alias for analyze_session). All 6 analyzers registered at import time. 877 tests passing."
+    },
+    {
+      "id": "arch-003-test",
+      "name": "Test: Analyzer registry and plugin pattern",
+      "category": "architecture",
+      "description": "Verify arch-003 implementation against acceptance criteria in docs/architecture/arch-003.md. Test plugin registration, auto-discovery, and session report integration.",
+      "status": "passing",
+      "priority": 44,
+      "tests": ["pytest tests/test_arch_003_compliance.py (17 tests)"],
+      "files": ["tests/test_arch_003_compliance.py"],
+      "notes": "DONE: 17 compliance tests verifying all 10 acceptance criteria. TestAcceptanceCriteria (10 tests): registry exists, 6 analyzers registered, metadata on each, analyze_from_channels method, registry-based report gen, dynamic sub_reports dict, backward-compat typed fields, trivial new registration, imports clean, dynamic cross-validation. TestRegistryIntegration (7 tests): runs all available analyzers, skips missing channels, create_instance, reset for test isolation, typed field sync, to_dict includes all, trace dynamic intermediates. 894 tests passing."
+    },
+    {
+      "id": "arch-004-plan",
+      "name": "Plan: Tiered storage foundation",
+      "category": "architecture",
+      "description": "Design the tiered storage system per CLAUDE.md spec: 500Hz raw → 50Hz summary → 10Hz merged. Must handle native sample rate preservation in session_builder.py, anti-alias filtering for downsampling, sidecar file export for high-frequency channels, and a tiered export API. Output: docs/architecture/arch-004.md",
+      "status": "passing",
+      "priority": 45,
+      "tests": [],
+      "files": ["docs/architecture/arch-004.md"],
+      "notes": "DONE: Design doc covers 5-step migration: native rate tracking → channel classification → anti-alias decimation (scipy.signal.decimate) → tiered export API (raw/summary/merged) → summary windowing (mean/min/max/velocity). 10 acceptance criteria. File naming: {session_id}.parquet (merged), _summary_50hz.parquet, _raw_500hz.parquet. SessionDataLoader tier-aware extension."
+    },
+    {
+      "id": "arch-004-exec",
+      "name": "Execute: Tiered storage foundation",
+      "category": "architecture",
+      "description": "Implement tiered storage per docs/architecture/arch-004.md. Update session_builder.py to preserve native rates, add decimation filters, implement tiered export API.",
+      "status": "passing",
+      "priority": 46,
+      "tests": ["pytest tests/test_channel_tiers.py tests/test_tiered_storage.py (45 tests)"],
+      "files": ["src/session/channel_tiers.py", "src/session/session_builder.py", "src/services/session_data_loader.py", "tests/test_channel_tiers.py", "tests/test_tiered_storage.py"],
+      "notes": "DONE: Created channel_tiers.py with classify_channels() and compute_native_rates(). Updated _build_dataframe() to track native rates in attrs and use anti-alias decimation (scipy.signal.decimate) for high-freq channels. Added export_session_tiered() with raw/summary/merged tiers. Raw tier preserves native rate. Summary tier computes windowed stats (mean/min/max/velocity). SessionDataLoader.load() gains tier parameter with sidecar file fallback. 939 tests passing."
+    },
+    {
+      "id": "arch-004-test",
+      "name": "Test: Tiered storage foundation",
+      "category": "architecture",
+      "description": "Verify arch-004 implementation against acceptance criteria in docs/architecture/arch-004.md. Test native rate preservation, anti-alias filtering, tiered export.",
+      "status": "passing",
+      "priority": 47,
+      "tests": ["pytest tests/test_arch_004_compliance.py (10 tests)"],
+      "files": ["tests/test_arch_004_compliance.py"],
+      "notes": "DONE: 10 compliance tests verifying all 10 acceptance criteria. AC-1: native rates in attrs, AC-2: classify_channels exists, AC-3: anti-alias filter attenuates above Nyquist, AC-4: tiered export API with backward compat, AC-5: raw tier preserves native rate, AC-6: summary tier windowed stats, AC-7: merged tier unchanged, AC-8: file naming convention, AC-9: SessionDataLoader tier-aware with fallback, AC-10: clean imports. 949 tests passing."
+    },
+    {
+      "id": "arch-005-plan",
+      "name": "Plan: API integration test coverage",
+      "category": "architecture",
+      "description": "Design an API integration test suite using FastAPI TestClient that exercises real endpoints with real (or realistic synthetic) data. Current tests mostly mock the data layer. Goal: catch wiring bugs, serialization issues, and error handling gaps. Cover all 33 API endpoints across 6 routers. Output: docs/architecture/arch-005.md",
+      "status": "passing",
+      "priority": 48,
+      "tests": [],
+      "files": ["docs/architecture/arch-005.md"],
+      "notes": "DONE: Design doc catalogs 33+ endpoints across 6 routers + app.py. Identifies 28 untested endpoints. 5 new test files planned: visualization (10+), parquet (5+), queue (7+), vehicles (5+), health (2+). TestClient-based with synthetic parquet fixtures. 10 acceptance criteria. Shared fixture strategy for file discovery mocking."
+    },
+    {
+      "id": "arch-005-exec",
+      "name": "Execute: API integration test coverage",
+      "category": "architecture",
+      "description": "Implement API integration tests per docs/architecture/arch-005.md. Create test fixtures with realistic data, test all endpoint paths including error cases.",
+      "status": "passing",
+      "priority": 49,
+      "tests": ["pytest tests/test_api_health.py tests/test_api_vehicles.py tests/test_api_parquet.py tests/test_api_visualization.py tests/test_api_queue.py (49 tests)"],
+      "files": ["tests/test_api_health.py", "tests/test_api_vehicles.py", "tests/test_api_parquet.py", "tests/test_api_visualization.py", "tests/test_api_queue.py", "src/main/routers/vehicles.py"],
+      "notes": "DONE: 5 test files with 49 tests covering health (5), vehicles (8), parquet (7), visualization (17), queue (12). Fixed route ordering bug in vehicles.py (PUT /api/vehicles/active was unreachable due to /{vehicle_id} pattern matching first). Fixed parquet tests to match actual response structure. Fixed queue tests to use .id not .job_id. 998 tests passing."
+    },
+    {
+      "id": "arch-005-test",
+      "name": "Test: API integration test verification",
+      "category": "architecture",
+      "description": "Verify arch-005 implementation against acceptance criteria in docs/architecture/arch-005.md. Ensure coverage targets met, all routers exercised, error paths tested.",
+      "status": "passing",
+      "priority": 50,
+      "tests": ["pytest tests/test_arch_005_compliance.py (13 tests)"],
+      "files": ["tests/test_arch_005_compliance.py"],
+      "notes": "DONE: 13 compliance tests verifying all 10 acceptance criteria. TestAcceptanceCriteria (10 tests): visualization 10+ tests, parquet 5+ tests, queue 7+ tests, vehicles 5+ tests, health 2+ tests, all use TestClient, 404 scenarios covered, response structure validated, no test pollution, all modules importable. TestCoverageMetrics (3 tests): 29+ total tests, trace parameter tested, queue isolation pattern. 1011 tests passing."
+    },
+    {
+      "id": "arch-006-plan",
+      "name": "Plan: Audit mode UI",
+      "category": "architecture",
+      "description": "Design the audit mode UI that surfaces the safeguard system's trace data and sanity checks in the web interface. Per-page toggle, traffic light indicators, expandable audit panels with full trace provenance and impact descriptions. Output: docs/architecture/arch-006.md",
+      "status": "passing",
+      "priority": 51,
+      "tests": [],
+      "files": ["docs/architecture/arch-006.md"],
+      "notes": "DONE: Design doc covers impact field on SanityCheck, 26 impact descriptions, trace propagation through full report, shared audit.js/audit.css module, per-page integration for analysis/GG/corner pages. 10 acceptance criteria."
+    },
+    {
+      "id": "arch-006-exec",
+      "name": "Execute: Audit mode UI",
+      "category": "architecture",
+      "description": "Implement audit mode UI per docs/architecture/arch-006.md. Add impact field to SanityCheck, impact descriptions to all 26 checks, propagate trace through full report sub-analyzers, create shared audit.js/audit.css, integrate toggle and audit panels into analysis.html, gg_diagram.html, and corner_analysis.html.",
+      "status": "passing",
+      "priority": 52,
+      "depends_on": ["arch-006-plan"],
+      "tests": ["pytest tests/ (1011 passing, 4 pre-existing DLL failures)"],
+      "files": ["src/utils/calculation_trace.py", "src/features/power_analysis.py", "src/features/shift_analysis.py", "src/features/gg_analysis.py", "src/features/lap_analysis.py", "src/features/gear_analysis.py", "src/features/corner_analysis.py", "src/features/session_report.py", "static/css/audit.css", "static/js/audit.js", "templates/base.html", "tests/test_calculation_trace.py"],
+      "notes": "DONE: Steps 1-6 complete. (1) Added impact field to SanityCheck + to_dict(). (2) Added 26 impact descriptions to all checks across 7 analyzers. (3) Fixed session_report.py _run_registry_analyzers to pass include_trace to all 6 sub-analyzers via analyze_from_channels - updated ShiftAnalyzer, LapAnalysis, GearAnalysis, PowerAnalysis, GGAnalyzer, CornerAnalyzer to create trace, record inputs/config/intermediates, run sanity checks, attach to report. (4) Created static/js/audit.js with AuditManager class. (5) Created static/css/audit.css. (6) Integrated CSS+JS into base.html. Updated test to expect impact field. Backend fully functional - API trace support working with ?trace=true. Frontend infrastructure ready. Steps 7-9 (page integrations) are straightforward template work using audit.js - deferred to arch-006-test or quick follow-up."
+    },
+    {
+      "id": "arch-006-test",
+      "name": "Test: Audit mode UI",
+      "category": "architecture",
+      "description": "Verify arch-006 implementation against acceptance criteria in docs/architecture/arch-006.md. Test impact field presence on all 26 checks, trace propagation in full report, audit toggle behavior, and panel rendering.",
+      "status": "passing",
+      "priority": 53,
+      "depends_on": ["arch-006-exec"],
+      "tests": ["pytest tests/test_arch_006_compliance.py (10 tests)"],
+      "files": ["tests/test_arch_006_compliance.py", "templates/analysis.html", "templates/gg_diagram.html", "templates/corner_analysis.html"],
+      "notes": "DONE: Completed Steps 7-9 (page integrations) from arch-006.md. (7) analysis.html: Added audit toggle in session selector card header, modified runAnalysis to append traceParam, added renderAuditPanels function to handle both full report (cross-validation + sub-analyzer traces) and individual analyses, added window.onAuditToggle callback, integrated into all display functions (displayFullReport, displayShiftAnalysis, displayLapAnalysis, displayGearAnalysis, displayPowerAnalysis). (8) gg_diagram.html: Added audit toggle in control panel, modified loadGGDiagram to append traceParam, added renderAuditPanel function, window.onAuditToggle callback. (9) corner_analysis.html: Added audit toggle in control panel, modified loadCornerAnalysis to append traceParam, added renderAuditPanel function, window.onAuditToggle callback. Created 10 compliance tests verifying all acceptance criteria. All 10 tests passing. 1021 total tests passing (1011 baseline + 10 new)."
+    },
+    {
+      "id": "arch-007-plan",
+      "name": "Plan: Session-centric analysis UX",
+      "category": "architecture",
+      "description": "Design the UX transformation from file-centric (pick file on every page) to session-centric (select once, analyze anywhere). Enhanced session metadata (driver, weather, setup snapshot, tags), session selector component, analysis context persistence, comparison mode, URL state, cross-session queries. Output: docs/architecture/arch-007.md",
+      "status": "passing",
+      "priority": 54,
+      "tests": [],
+      "files": ["docs/architecture/arch-007.md"],
+      "notes": "DONE: Design doc covers 7 major components: analysis context system, enhanced session metadata (12 new fields including setup snapshot), session-centric import wizard, session selector component (replaces all file dropdowns), analysis pages refactor, URL state for sharing, quick access features, cross-session analysis. 6 implementation phases planned. Complete replacement strategy - no side-by-side with old file-centric UI. Dependencies: arch-001 (vehicle config), arch-002 (SessionDataLoader), arch-004 (tiered storage)."
+    },
+    {
+      "id": "feat-070",
+      "name": "Integrate feedback widget",
+      "category": "ui",
+      "description": "Add feedback-widget.js script tag to templates/base.html with data-app='telemetry-analyzer' pointing at the standalone feedback service. One-line integration. Blocked until ~/projects/feedback-service fb-002 (widget) is complete.",
+      "status": "passing",
+      "priority": 60,
+      "depends_on": ["external:feedback-service/fb-002"],
+      "tests": [],
+      "files": ["templates/base.html"],
+      "notes": "DONE: Added script tag to base.html pointing at http://localhost:8100/static/feedback-widget.js with data-app='telemetry-analyzer'. External dependency (feedback-service) complete with all 12 features passing. Widget ready for use on all pages."
+    }
+  ],
+  "metadata": {
+    "created_at": "2025-01-29T01:00:00Z",
+    "last_updated": "2026-02-11T23:50:00Z",
+    "total_features": 61,
+    "passing": 61,
+    "failing": 0,
+    "planned": 0
+  },
+  "categories": {
+    "bugfix": "Bug fixes and corrections",
+    "core": "Data extraction and processing pipeline",
+    "analysis": "Telemetry analysis features",
+    "ui": "Web interface and visualization",
+    "infra": "Infrastructure and configuration",
+    "testing": "Test coverage and quality",
+    "cleanup": "Code quality improvements from docs/CLEANUP_AUDIT.md",
+    "safeguard": "Calculation traceability and sanity checks from docs/SAFEGUARD_SYSTEM.md",
+    "architecture": "Structural improvements per docs/PROCESS.md three-phase pipeline",
+    "uat": "Code-trace user acceptance testing via /uat skill — trace UI interactions through full stack, find and fix bugs"
+  }
+}
