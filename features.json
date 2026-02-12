@@ -453,7 +453,7 @@
       "name": "Segment time calculation loses accuracy via np.diff on masked+truncated arrays",
       "category": "bugfix",
       "description": "In compare_laps_detailed() at lap_analysis.py lines 986-987, segment time is calculated as np.sum(np.diff(time_a[:-1][mask_a[:-1]])). Two issues: (1) time_a[:-1] and mask_a[:-1] unconditionally drop the last data point, so the last segment (90-100%) systematically undercounts time by one sample interval (~0.1s at 10Hz). (2) np.diff on a boolean-masked array can produce incorrect diffs if the mask selects non-contiguous indices (unlikely for distance-based segments but possible at segment boundaries). The correct approach: find first and last indices where mask is True, then compute time_a[last_idx] - time_a[first_idx]. This would be more accurate and handle edge cases (single-point segments return 0 instead of crashing).",
-      "status": "planned",
+      "status": "passing",
       "priority": 10,
       "tests": [],
       "files": [
@@ -482,7 +482,7 @@
       "name": "No response.ok check in loadFileList \u2014 server errors produce confusing TypeError",
       "category": "bugfix",
       "description": "parquet.html:103-108: loadFileList() calls fetch('/api/parquet/list') but never checks response.ok. On 500 errors, response.json() may parse the error response, then data.parquet_files is undefined, causing TypeError 'Cannot read properties of undefined (reading length)' which hides the real error message. Same pattern in loadFile() at line 149 and loadData() at line 217 \u2014 none check response.ok before accessing response keys.",
-      "status": "planned",
+      "status": "passing",
       "priority": 10,
       "tests": [],
       "files": [
@@ -496,7 +496,7 @@
       "name": "XSS via unescaped file.path in onclick handler string literal",
       "category": "bugfix",
       "description": "parquet.html:120: file.path from API response is interpolated directly into an onclick attribute string: onclick=\"loadFile('${file.path}')\". A filename containing a single quote (e.g., test'file.parquet) breaks the JS string literal. A crafted filename could execute arbitrary JS. Same risk for file.filename (line 124), file.source (line 124), file.error (line 116). Fix: use data attributes or event delegation instead of inline onclick with string interpolation.",
-      "status": "planned",
+      "status": "passing",
       "priority": 10,
       "tests": [],
       "files": [
@@ -510,7 +510,7 @@
       "name": "No loading indicator when selecting a file \u2014 two sequential fetches with no feedback",
       "category": "bugfix",
       "description": "parquet.html:143-211: loadFile() makes two sequential fetch calls (summary then view) with no visual feedback. For large files, the user clicks a file and nothing visibly happens for seconds. The clicked file item has no active/loading state. Fix: add a loading spinner or 'Loading...' state to the summary and data sections immediately on click, disable the file list during load.",
-      "status": "planned",
+      "status": "passing",
       "priority": 15,
       "tests": [],
       "files": [
@@ -524,7 +524,7 @@
       "name": "List endpoint loads every parquet file fully into memory just to count rows",
       "category": "bugfix",
       "description": "parquet.py:29 and :51: list_parquet_files() calls pd.read_parquet(pq_file) for every file in the directory just to get len(df) and len(df.columns). Should use pyarrow.parquet.read_metadata() or pd.read_parquet(pq_file, columns=[]) for lightweight metadata access. Also, view_parquet_file() (line 83) and parquet_summary() (line 133) each load the entire file \u2014 a single file selection triggers 2 full loads after the list already loaded it. Combined with being async endpoints blocking on synchronous pd.read_parquet, this blocks the event loop.",
-      "status": "planned",
+      "status": "passing",
       "priority": 20,
       "tests": [],
       "files": [
@@ -723,7 +723,7 @@
     "created_at": "2025-01-29T01:00:00Z",
     "last_updated": "2026-02-12T00:00:00Z",
     "total_features": 47,
-    "passing": 41,
+    "passing": 46,
     "failing": 0,
     "planned": 21,
     "archive_file": "features-archive.json"

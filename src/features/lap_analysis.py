@@ -983,8 +983,18 @@ def compare_laps_detailed(
         mask_a = (dist_a_pct >= seg_start) & (dist_a_pct < seg_end)
         mask_b = (dist_b_pct >= seg_start) & (dist_b_pct < seg_end)
 
-        time_in_seg_a = np.sum(np.diff(time_a[:-1][mask_a[:-1]])) if np.any(mask_a) else 0
-        time_in_seg_b = np.sum(np.diff(time_b[:-1][mask_b[:-1]])) if np.any(mask_b) else 0
+        # Calculate time using first/last indices (more accurate than np.diff on masked arrays)
+        if np.any(mask_a):
+            indices_a = np.where(mask_a)[0]
+            time_in_seg_a = float(time_a[indices_a[-1]] - time_a[indices_a[0]])
+        else:
+            time_in_seg_a = 0
+
+        if np.any(mask_b):
+            indices_b = np.where(mask_b)[0]
+            time_in_seg_b = float(time_b[indices_b[-1]] - time_b[indices_b[0]])
+        else:
+            time_in_seg_b = 0
 
         # Average speed in segment
         avg_speed_a = float(np.mean(speed_a[mask_a])) if np.any(mask_a) else 0

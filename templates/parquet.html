@@ -101,6 +101,9 @@
     async function loadFileList() {
         try {
             const response = await fetch('/api/parquet/list');
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
             const data = await response.json();
 
             const container = document.getElementById('file-list');
@@ -115,13 +118,18 @@
                 if (file.error) {
                     html += `<div class="list-group-item list-group-item-danger">${file.filename}: ${file.error}</div>`;
                 } else {
+                    // Escape attributes to prevent XSS
+                    const escapedPath = file.path.replace(/'/g, "\\'");
+                    const escapedFilename = file.filename.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                    const escapedSource = file.source.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
                     html += `
                         <a href="#" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
-                           onclick="loadFile('${file.path}'); return false;"
+                           onclick="loadFile('${escapedPath}'); return false;"
                            style="background-color: #353535; border-color: #404040;">
                             <div>
-                                <strong>${file.filename}</strong>
-                                <small class="text-muted d-block">${file.source}</small>
+                                <strong>${escapedFilename}</strong>
+                                <small class="text-muted d-block">${escapedSource}</small>
                             </div>
                             <div class="text-end">
                                 <span class="badge bg-info">${file.rows.toLocaleString()} rows</span>
@@ -144,12 +152,25 @@
         currentFile = path;
         currentOffset = 0;
 
+        // Show loading indicator
+        const summarySection = document.getElementById('summary-section');
+        const dataSection = document.getElementById('data-section');
+        summarySection.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div><p class="mt-2">Loading file...</p></div>';
+        dataSection.style.display = 'none';
+
         // Load summary
         try {
             const summaryRes = await fetch(`/api/parquet/summary/${encodeURIComponent(path)}`);
+            if (!summaryRes.ok) {
+                throw new Error(`HTTP ${summaryRes.status}: ${summaryRes.statusText}`);
+            }
             const summary = await summaryRes.json();
 
-            document.getElementById('summary-title').textContent = `Session: ${summary.filename}`;
+            // Rebuild summary section structure
+            summarySection.innerHTML = `
+                <h5 id="summary-title">Session: ${summary.filename}</h5>
+                <div class="row mt-3" id="summary-stats"></div>
+            `;
 
             document.getElementById('summary-stats').innerHTML = `
                 <div class="col-md-3">
@@ -215,6 +236,9 @@
 
         try {
             const response = await fetch(`/api/parquet/view/${encodeURIComponent(currentFile)}?offset=${currentOffset}&limit=${pageSize}`);
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
             const data = await response.json();
 
             // Header

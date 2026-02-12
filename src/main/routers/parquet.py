@@ -7,6 +7,7 @@ List, view, and summarize Parquet data files.
 from pathlib import Path
 
 import pandas as pd
+import pyarrow.parquet as pq
 from fastapi import APIRouter, HTTPException
 
 from ..deps import config
@@ -26,13 +27,17 @@ async def list_parquet_files():
     if exports_dir.exists():
         for pq_file in exports_dir.rglob("*.parquet"):
             try:
-                df = pd.read_parquet(pq_file)
+                # Use pyarrow to read metadata only (much faster than loading full file)
+                parquet_file = pq.ParquetFile(pq_file)
+                num_rows = parquet_file.metadata.num_rows
+                num_columns = parquet_file.metadata.num_columns
+
                 parquet_files.append({
                     "filename": pq_file.name,
                     "path": str(pq_file.relative_to(Path(config.DATA_DIR))),
                     "full_path": str(pq_file),
-                    "rows": len(df),
-                    "columns": len(df.columns),
+                    "rows": num_rows,
+                    "columns": num_columns,
                     "size_mb": round(pq_file.stat().st_size / (1024 * 1024), 2),
                     "source": "exports"
                 })
@@ -48,13 +53,17 @@ async def list_parquet_files():
     if uploads_dir.exists():
         for pq_file in uploads_dir.glob("*.parquet"):
             try:
-                df = pd.read_parquet(pq_file)
+                # Use pyarrow to read metadata only (much faster than loading full file)
+                parquet_file = pq.ParquetFile(pq_file)
+                num_rows = parquet_file.metadata.num_rows
+                num_columns = parquet_file.metadata.num_columns
+
                 parquet_files.append({
                     "filename": pq_file.name,
                     "path": str(pq_file.relative_to(Path(config.DATA_DIR))),
                     "full_path": str(pq_file),
-                    "rows": len(df),
-                    "columns": len(df.columns),
+                    "rows": num_rows,
+                    "columns": num_columns,
                     "size_mb": round(pq_file.stat().st_size / (1024 * 1024), 2),
                     "source": "uploads"
                 })
