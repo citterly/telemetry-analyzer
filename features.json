@@ -782,15 +782,256 @@
       "tests": [],
       "files": ["docs/UAT_SCRIPT.md"],
       "notes": "UAT script created with 12 sections, ~150 test steps. Estimated time: 30-45 minutes. Focus on audit mode UI (biggest UX change), vehicle switching, and all analysis pages. Not a blocker but required for validation of recent work. User will report back results."
+    },
+
+    {
+      "id": "uat-010",
+      "name": "UAT: Analysis page",
+      "category": "uat",
+      "description": "Run /uat analysis — trace every interaction on the main analysis dashboard. This is the most complex page: session selector, 5 analysis type buttons (Full Report, Shifts, Laps, Gears, Power), track map rendering, lap table with classification filters, lap comparison with delta map, audit toggle + panel, Chart.js visualizations. Trace each button click through JS → API → router → analyzer → response → DOM rendering. Check error paths (no session selected, missing GPS, server error). Fix any bugs found.",
+      "status": "planned",
+      "priority": 62,
+      "depends_on": [],
+      "tests": [],
+      "files": ["templates/analysis.html", "src/main/routers/analysis.py", "static/js/session_selector.js", "static/js/audit.js"],
+      "notes": ""
+    },
+    {
+      "id": "uat-011",
+      "name": "UAT: G-G diagram page",
+      "category": "uat",
+      "description": "Run /uat gg-diagram — trace every interaction on the friction circle page. Interactions: session selector, lap filter dropdown (onChange re-fetches), color-by dropdown (speed/throttle/lap), audit toggle, quadrant breakdown cards, mini track map with zone markers, lap comparison overlay. Check: does lap filter actually re-fetch data? Do zone clicks highlight correctly? Does color-by mode change the scatter plot? What happens with no session selected? Fix any bugs found.",
+      "status": "planned",
+      "priority": 63,
+      "depends_on": [],
+      "tests": [],
+      "files": ["templates/gg_diagram.html", "src/main/routers/visualization.py", "src/features/gg_analysis.py"],
+      "notes": ""
+    },
+    {
+      "id": "uat-012",
+      "name": "UAT: Corner analysis page",
+      "category": "uat",
+      "description": "Run /uat corner-analysis — trace every interaction on the turn-by-turn analysis page. Interactions: session selector, track map with numbered corner overlays, corner card list (entry/apex/exit speeds, time, throttle), comparison table, speed chart with corner markers, audit toggle + panel. Check: does corner detection produce sane results? Are corner numbers consistent between map and cards? What happens with no GPS data? Fix any bugs found.",
+      "status": "planned",
+      "priority": 64,
+      "depends_on": [],
+      "tests": [],
+      "files": ["templates/corner_analysis.html", "src/main/routers/visualization.py", "src/features/corner_analysis.py"],
+      "notes": ""
+    },
+    {
+      "id": "uat-013",
+      "name": "UAT: Track map page",
+      "category": "uat",
+      "description": "Run /uat track-map — trace the GPS track visualization page. Interactions: file/session selector, color-by dropdown (speed/rpm/gear), format options (SVG/HTML/JSON), embedded SVG rendering, legend, zoom/pan behavior. Check: does the SVG render with correct aspect ratio? Does color-by switch work without re-fetching? What happens with missing GPS columns? Fix any bugs found.",
+      "status": "planned",
+      "priority": 65,
+      "depends_on": [],
+      "tests": [],
+      "files": ["templates/track_map.html", "src/main/routers/visualization.py", "src/visualization/track_map.py"],
+      "notes": ""
+    },
+    {
+      "id": "uat-020",
+      "name": "UAT: Sessions page",
+      "category": "uat",
+      "description": "Run /uat sessions — trace every interaction on the session browser. Interactions: filter bar (track dropdown, session type, import status), session table (columns: date, track, vehicle, laps, best time, type, status), row actions (view detail, analyze, edit), import button link, pagination or scrolling. Check: do filters actually call API with correct query params? Do row actions navigate correctly? What does the table show when 0 sessions match filters? Fix any bugs found.",
+      "status": "planned",
+      "priority": 66,
+      "depends_on": [],
+      "tests": [],
+      "files": ["templates/sessions.html", "src/main/routers/sessions.py"],
+      "notes": ""
+    },
+    {
+      "id": "uat-021",
+      "name": "UAT: Session import wizard",
+      "category": "uat",
+      "description": "Run /uat session-import — trace the full import wizard flow. Interactions: parquet file picker, track selection (auto-detect or override), vehicle dropdown, session type selector (practice/qualifying/race/test), driver name with autocomplete from /api/v2/drivers/recent, weather and track conditions, tire pressures (4 fields), notes textarea, setup snapshot capture, submit button. Check: does auto-detect actually call the right API? Does autocomplete debounce? Are all fields included in the POST body? What validation exists? What happens on submit failure? Fix any bugs found.",
+      "status": "planned",
+      "priority": 67,
+      "depends_on": [],
+      "tests": [],
+      "files": ["templates/session_import.html", "src/main/routers/sessions.py"],
+      "notes": ""
+    },
+    {
+      "id": "uat-022",
+      "name": "UAT: Session detail page",
+      "category": "uat",
+      "description": "Run /uat session-detail — trace every interaction on the individual session view. Interactions: session metadata display, stint breakdown, lap table with gap-to-best, lap classification override (PUT /api/v2/sessions/{id}/laps/{lap}/classify), setup comparison (pre/post), confirm session button, edit metadata, navigate to analysis. Check: does lap classify actually call the API? Does confirm update status? Are setup snapshots displayed correctly? Fix any bugs found.",
+      "status": "planned",
+      "priority": 68,
+      "depends_on": [],
+      "tests": [],
+      "files": ["templates/session_detail.html", "src/main/routers/sessions.py"],
+      "notes": ""
+    },
+    {
+      "id": "uat-030",
+      "name": "UAT: Vehicles page",
+      "category": "uat",
+      "description": "Run /uat vehicles — trace every interaction on the vehicle config editor. Interactions: vehicle list/selector with active indicator, 'Set Active' button (PUT /api/vehicles/active), G-force limit fields (lateral, braking, power-limited accel), physical properties (weight, tire circumference, final drive), engine specs (redline, max power), transmission ratio fields (1st-6th), save button (PUT /api/vehicles/{id}). Check: does save actually send all fields? Are field values loaded from the correct vehicle? Does switching active vehicle update the indicator? What validation prevents bad input (negative weight, 0 ratios)? Fix any bugs found.",
+      "status": "planned",
+      "priority": 69,
+      "depends_on": [],
+      "tests": [],
+      "files": ["templates/vehicles.html", "src/main/routers/vehicles.py", "src/config/vehicles.py"],
+      "notes": ""
+    },
+    {
+      "id": "uat-040",
+      "name": "UAT: Dashboard page",
+      "category": "uat",
+      "description": "Run /uat dashboard — trace the home page. Interactions: stats cards (total sessions, recent analyses, active vehicle, etc.), navigation links, any quick-action buttons, page load data fetching. Check: are stats fetched from real APIs or hardcoded? Do navigation links go to the right pages? What shows when there are 0 sessions? Fix any bugs found.",
+      "status": "planned",
+      "priority": 70,
+      "depends_on": [],
+      "tests": [],
+      "files": ["templates/dashboard.html", "src/main/app.py"],
+      "notes": ""
+    },
+    {
+      "id": "uat-041",
+      "name": "UAT: Parquet data viewer",
+      "category": "uat",
+      "description": "Run /uat parquet — trace the data viewer page. Interactions: file list/selector, data table with pagination (limit/offset via /api/parquet/view), channel stats display (min/max/mean from /api/parquet/summary), column sorting, row count display. Check: does pagination actually pass offset/limit params? Does file selection load the correct data? What happens with a very large file (10k+ rows)? Is the table rendered efficiently? Fix any bugs found.",
+      "status": "planned",
+      "priority": 71,
+      "depends_on": [],
+      "tests": [],
+      "files": ["templates/parquet.html", "src/main/routers/parquet.py"],
+      "notes": ""
+    },
+    {
+      "id": "uat-042",
+      "name": "UAT: Queue page",
+      "category": "uat",
+      "description": "Run /uat queue — trace the extraction job queue page. Interactions: stats cards (pending/processing/completed counts from /api/queue/stats), job list with status filters, retry button per job, delete button per job, auto-refresh polling (if any setInterval). Check: do retry/delete buttons call the correct API? Does the job list update after retry? Is auto-refresh implemented and does it avoid stacking requests? What happens when queue is empty? Fix any bugs found.",
+      "status": "planned",
+      "priority": 72,
+      "depends_on": [],
+      "tests": [],
+      "files": ["templates/queue.html", "src/main/routers/queue.py"],
+      "notes": ""
+    },
+    {
+      "id": "uat-043",
+      "name": "UAT: Files page",
+      "category": "uat",
+      "description": "Run /uat files — trace the file browser page. Interactions: file list display, file size/date columns, click-to-view or click-to-analyze actions, any upload link. Check: is the file list fetched from an API or built server-side? Do action links navigate correctly? What happens when data directory is empty? Fix any bugs found.",
+      "status": "planned",
+      "priority": 73,
+      "depends_on": [],
+      "tests": [],
+      "files": ["templates/files.html", "src/main/app.py"],
+      "notes": ""
+    },
+    {
+      "id": "uat-044",
+      "name": "UAT: Upload page",
+      "category": "uat",
+      "description": "Run /uat upload — trace the XRK file upload page. Interactions: file input or drag-and-drop zone, upload button, progress indicator, success/error feedback, redirect after upload. Check: does the form POST to the correct endpoint? Is file validation present (extension check, size limit)? What feedback does the user get during upload? What happens on server error? Fix any bugs found.",
+      "status": "planned",
+      "priority": 74,
+      "depends_on": [],
+      "tests": [],
+      "files": ["templates/upload.html", "src/main/app.py"],
+      "notes": ""
+    },
+    {
+      "id": "uat-050",
+      "name": "UAT Flow: Session selection + context persistence",
+      "category": "uat",
+      "description": "Run /uat session-selection — trace the cross-page session context flow. This flow spans multiple pages: (1) Select session on analysis page via session selector component, (2) Verify context is set via POST /api/context/set, (3) Navigate to gg-diagram — verify same session is loaded via GET /api/context/current, (4) Navigate to corner-analysis — verify again, (5) Clear context and verify all pages handle it gracefully. Trace session_selector.js lifecycle: loadSessions(), loadCurrentContext(), setContext(), scope indicator rendering. Check: is context stored server-side or client-side? What happens if context API fails? Fix any bugs found.",
+      "status": "planned",
+      "priority": 75,
+      "depends_on": [],
+      "tests": [],
+      "files": ["static/js/session_selector.js", "src/main/routers/context.py", "templates/analysis.html", "templates/gg_diagram.html", "templates/corner_analysis.html"],
+      "notes": ""
+    },
+    {
+      "id": "uat-051",
+      "name": "UAT Flow: Audit mode toggle + trace propagation",
+      "category": "uat",
+      "description": "Run /uat audit-mode — trace the audit mode flow across all 3 pages that support it. (1) Toggle audit mode ON on analysis page, (2) Verify all API calls append ?trace=true, (3) Verify audit panel renders with sanity checks (color-coded pass/warn/fail), (4) Verify trace data shows inputs/config/intermediates, (5) Verify impact descriptions are present, (6) Toggle OFF and verify trace param removed, (7) Navigate to gg-diagram — verify audit state persists (localStorage), (8) Repeat on corner-analysis. Check: does AuditManager.traceParam() correctly append '?' vs '&'? Are all display functions calling renderAuditPanels? What happens if trace data is missing from response? Fix any bugs found.",
+      "status": "planned",
+      "priority": 76,
+      "depends_on": [],
+      "tests": [],
+      "files": ["static/js/audit.js", "static/css/audit.css", "templates/analysis.html", "templates/gg_diagram.html", "templates/corner_analysis.html", "src/main/routers/analysis.py", "src/main/routers/visualization.py"],
+      "notes": ""
+    },
+    {
+      "id": "uat-052",
+      "name": "UAT Flow: Vehicle switching + analysis refresh",
+      "category": "uat",
+      "description": "Run /uat vehicle-switching — trace the vehicle switching flow end-to-end. (1) On vehicles page, select different vehicle and click 'Set Active', (2) Verify PUT /api/vehicles/active is called, (3) Navigate to analysis page, run analysis, (4) Verify analysis uses new vehicle's config (mass, gear ratios, G limits), (5) Check: does the session selector show the active vehicle? Does the analysis response reflect the switched config? (6) Switch back and re-run — verify results change. Check: is vehicle state server-side only or also cached client-side? Could stale vehicle config produce wrong results? Fix any bugs found.",
+      "status": "planned",
+      "priority": 77,
+      "depends_on": [],
+      "tests": [],
+      "files": ["templates/vehicles.html", "src/main/routers/vehicles.py", "src/config/vehicles.py", "templates/analysis.html", "src/main/routers/analysis.py"],
+      "notes": ""
+    },
+    {
+      "id": "uat-053",
+      "name": "UAT Flow: Lap comparison + delta map",
+      "category": "uat",
+      "description": "Run /uat lap-comparison — trace the lap comparison flow on the analysis page. (1) Run lap analysis, (2) Select two laps for comparison from the lap table/dropdowns, (3) Verify /api/analyze/laps/compare/{filename}?lap_a=X&lap_b=Y is called with correct params, (4) Verify /api/track-map/delta/{filename} is called for the delta map SVG, (5) Verify comparison results render (segment bars, delta time, speed traces), (6) Verify delta map SVG renders with green/red coloring. Check: what if both laps are the same? What if a lap has incomplete GPS? Are lap numbers 0-indexed or 1-indexed in the API vs UI? Fix any bugs found.",
+      "status": "planned",
+      "priority": 78,
+      "depends_on": [],
+      "tests": [],
+      "files": ["templates/analysis.html", "src/main/routers/analysis.py", "src/main/routers/visualization.py", "src/visualization/track_map.py"],
+      "notes": ""
+    },
+    {
+      "id": "uat-054",
+      "name": "UAT Flow: Full import-to-analysis workflow",
+      "category": "uat",
+      "description": "Run /uat import-flow — trace the complete user workflow from upload to analysis. (1) Upload page: submit XRK file, (2) Queue page: verify job appears with correct status, (3) Files page: verify parquet appears after extraction, (4) Session import: fill metadata form and submit POST /api/v2/sessions/import, (5) Sessions page: verify new session appears in list, (6) Set as analysis context, (7) Analysis page: run full report. This is the end-to-end golden path. Check: are there any gaps where the user has to guess what to do next? Is navigation between steps clear? Fix any bugs found.",
+      "status": "planned",
+      "priority": 79,
+      "depends_on": [],
+      "tests": [],
+      "files": ["templates/upload.html", "templates/queue.html", "templates/files.html", "templates/session_import.html", "templates/sessions.html", "templates/analysis.html"],
+      "notes": ""
+    },
+    {
+      "id": "uat-060",
+      "name": "UAT: Base template + navigation",
+      "category": "uat",
+      "description": "Run /uat on templates/base.html — trace the shared shell that wraps every page. Interactions: navbar links (Home, Upload, Files, Data Viewer, Sessions, Analysis, G-G Diagram, Corners, Queue, Vehicles), active link highlighting, showAlert() toast notifications, apiCall() shared fetch wrapper (error handling, JSON parsing), dark theme CSS variables, mobile responsive hamburger menu, feedback widget script tag, audit CSS/JS includes. Check: do all nav links point to valid routes? Does showAlert() handle all severity levels? Does apiCall() properly throw on non-OK responses? Is the feedback widget script tag correct? Fix any bugs found.",
+      "status": "planned",
+      "priority": 80,
+      "depends_on": [],
+      "tests": [],
+      "files": ["templates/base.html", "src/main/app.py", "static/js/audit.js", "static/css/audit.css"],
+      "notes": ""
+    },
+    {
+      "id": "uat-061",
+      "name": "UAT: Error page + HTTP error handling",
+      "category": "uat",
+      "description": "Run /uat on the error handling layer. Trace: (1) templates/error.html — what does it display? (2) FastAPI exception handlers in app.py — HTTPException, RequestValidationError, generic 500. (3) All router endpoints that return 400/404/422 — are error messages user-friendly or raw stack traces? (4) Frontend apiCall() — does it display errors via showAlert()? Check: is there a consistent error UX across all pages? Do API errors include actionable messages? What happens on an unhandled server exception? Fix any bugs found.",
+      "status": "planned",
+      "priority": 81,
+      "depends_on": [],
+      "tests": [],
+      "files": ["templates/error.html", "src/main/app.py", "src/main/deps.py"],
+      "notes": ""
     }
   ],
   "metadata": {
     "created_at": "2025-01-29T01:00:00Z",
     "last_updated": "2026-02-11T23:50:00Z",
-    "total_features": 62,
+    "total_features": 81,
     "passing": 61,
     "failing": 0,
-    "planned": 1
+    "planned": 20
   },
   "categories": {
     "bugfix": "Bug fixes and corrections",
@@ -801,6 +1042,7 @@
     "testing": "Test coverage and quality",
     "cleanup": "Code quality improvements from docs/CLEANUP_AUDIT.md",
     "safeguard": "Calculation traceability and sanity checks from docs/SAFEGUARD_SYSTEM.md",
-    "architecture": "Structural improvements per docs/PROCESS.md three-phase pipeline"
+    "architecture": "Structural improvements per docs/PROCESS.md three-phase pipeline",
+    "uat": "Code-trace user acceptance testing via /uat skill — trace UI interactions through full stack, find and fix bugs"
   }
 }
