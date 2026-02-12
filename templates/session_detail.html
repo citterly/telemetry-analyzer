@@ -269,7 +269,7 @@ async function loadStints() {
                     <td>Laps ${stint.start_lap}-${stint.end_lap}</td>
                     <td>${formatLapTime(stint.best_lap_time)}</td>
                     <td>${formatLapTime(stint.avg_lap_time)}</td>
-                    <td>${formatLapTime(stint.total_time)}</td>
+                    <td>${formatLapTime(stint.total_time || (stint.end_time && stint.start_time ? stint.end_time - stint.start_time : null))}</td>
                 `;
                 tbody.appendChild(row);
             });

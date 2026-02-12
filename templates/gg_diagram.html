@@ -382,7 +382,7 @@
                 <div class="card">
                     <div class="card-header">
                         <strong>Detailed Comparison</strong>
-                        <small class="text-muted ms-2">Current lap vs Reference lap (best lap)</small>
+                        <small class="text-warning ms-2">Estimated targets (not from actual best lap data)</small>
                     </div>
                     <div class="card-body">
                         <div class="row text-center">
@@ -2368,17 +2368,17 @@
     }
 
     function getBestLapForZone(zone) {
-        // For now, simulate reference lap data
-        // In production, this would fetch actual best lap data from backend
-
-        // Reference lap should be slightly better - simulate this
-        const improvementFactor = 1.15; // Reference is 15% better
+        // DISCLAIMER: These are estimated targets, NOT actual best lap data.
+        // Values are derived from the current zone's data with a fixed improvement factor.
+        // TODO: Replace with real best-lap lookup from backend API.
+        const improvementFactor = 1.15;
 
         return {
+            estimated: true,
             entry_speed_mph: zone.avg_total_g > 0 ? (zone.avg_total_g * 25 * improvementFactor) : 65,
-            brake_point_ft: 200, // Distance before apex
+            brake_point_ft: 200,
             peak_g: zone.avg_total_g * improvementFactor,
-            duration_sec: zone.duration * 0.92, // Reference is 8% faster
+            duration_sec: zone.duration * 0.92,
             avg_lat_g: zone.avg_lat_g * improvementFactor,
             avg_lon_g: zone.avg_lon_g * improvementFactor
         };
@@ -2617,7 +2617,7 @@
             data: {
                 datasets: [
                     {
-                        label: 'Reference Lap',
+                        label: 'Estimated Target',
                         data: referencePoints,
                         backgroundColor: 'rgba(52, 152, 219, 0.6)',
                         pointRadius: 4,

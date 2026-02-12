@@ -279,15 +279,6 @@ async function viewFileDetails(filename) {
     }
 }
 
-// Auto-refresh dashboard stats every 30 seconds
-setInterval(async () => {
-    try {
-        const stats = await apiCall('/api/stats');
-        // Update stats cards with new data
-        // This could be enhanced to update specific elements without full page reload
-    } catch (error) {
-        console.log('Failed to refresh stats:', error);
-    }
-}, 30000);
+// Auto-refresh removed: was fetching /api/stats every 30s without updating DOM
 </script>
 {% endblock %}

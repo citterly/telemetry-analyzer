@@ -431,8 +431,9 @@ function processFileFromModal(filename) {
     // Find the process button for this file and click it
     const buttons = document.querySelectorAll('button');
     for (const button of buttons) {
-        if (button.textContent.trim() === 'Process' && 
-            button.closest('tr').querySelector('strong').textContent === filename) {
+        const row = button.closest('tr');
+        if (row && button.textContent.trim() === 'Process' &&
+            row.querySelector('strong')?.textContent === filename) {
             button.click();
             break;
         }
@@ -444,8 +445,9 @@ function deleteFileFromModal(filename) {
     // Find the delete button for this file and click it
     const buttons = document.querySelectorAll('button');
     for (const button of buttons) {
-        if (button.textContent.trim() === 'Delete' && 
-            button.closest('tr').querySelector('strong').textContent === filename) {
+        const row = button.closest('tr');
+        if (row && button.textContent.trim() === 'Delete' &&
+            row.querySelector('strong')?.textContent === filename) {
             button.click();
             break;
         }

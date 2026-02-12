@@ -355,10 +355,16 @@ async function uploadSingleFile(file, index) {
     });
     
     if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.detail || 'Upload failed');
+        let detail = `HTTP ${response.status}`;
+        try {
+            const error = await response.json();
+            detail = error.detail || detail;
+        } catch (_) {
+            // Server returned non-JSON (HTML error page, empty body)
+        }
+        throw new Error(detail);
     }
-    
+
     return await response.json();
 }
 

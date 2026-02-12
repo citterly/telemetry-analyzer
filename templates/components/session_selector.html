@@ -71,12 +71,15 @@
 
 <!-- Initialization Script -->
 <script>
-    // Initialize session selector when page loads
-    // Store promise so consuming pages can await it before checking context
-    document.addEventListener('DOMContentLoaded', function() {
-        window._sessionSelector._initPromise = window._sessionSelector.init().then(() => {
-            // Populate filter dropdowns after sessions are loaded
-            populateFilterDropdowns();
+    // Initialize session selector when page loads.
+    // _initPromise is set synchronously so consuming pages can always await it,
+    // even if their DOMContentLoaded handler fires before this one.
+    window._sessionSelector._initPromise = new Promise(resolve => {
+        document.addEventListener('DOMContentLoaded', function() {
+            window._sessionSelector.init().then(() => {
+                populateFilterDropdowns();
+                resolve();
+            });
         });
     });
 

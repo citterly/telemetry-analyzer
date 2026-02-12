@@ -346,7 +346,7 @@ async function loadParquetFiles() {
                 <td>${size}</td>
                 <td>${rows} rows</td>
                 <td>
-                    <button class="btn btn-sm btn-primary" onclick="importFile('${file.full_path || file.path}', '${file.filename}')">
+                    <button class="btn btn-sm btn-primary" onclick="importFile('${(file.full_path || file.path).replace(/'/g, "\\'")}', '${file.filename.replace(/'/g, "\\'")}')">
                         Import
                     </button>
                 </td>
@@ -366,7 +366,7 @@ async function loadVehicles() {
     try {
         const response = await apiCall('/api/vehicles');
         const vehicles = response.vehicles || [];
-        activeVehicle = response.active_vehicle_id;
+        activeVehicle = response.active_vehicle;
 
         const select = document.getElementById('vehicleId');
         select.innerHTML = '<option value="">Select vehicle...</option>';

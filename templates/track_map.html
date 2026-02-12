@@ -1,276 +1,117 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>{{ title | default('Track Map') }} - AIM Telemetry</title>
-    <style>
-        * {
-            box-sizing: border-box;
-        }
-        body {
-            margin: 0;
-            padding: 20px;
-            background: #1a1a2e;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            color: #fff;
-            min-height: 100vh;
-        }
-        .container {
-            max-width: 1000px;
-            margin: 0 auto;
-        }
-        header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-            padding-bottom: 15px;
-            border-bottom: 1px solid #333;
-        }
-        header h1 {
-            margin: 0;
-            font-size: 24px;
-        }
-        header a {
-            color: #3498db;
-            text-decoration: none;
-        }
-        header a:hover {
-            text-decoration: underline;
-        }
-        .map-card {
-            background: #16213e;
-            border-radius: 8px;
-            padding: 20px;
-            margin-bottom: 20px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
-        }
-        .map-card h2 {
-            margin-top: 0;
-            font-size: 18px;
-            color: #fff;
-        }
-        .map-container {
-            position: relative;
-            width: 100%;
-            overflow: hidden;
-        }
-        .map-container svg {
-            display: block;
-            width: 100%;
-            height: auto;
-            max-height: 600px;
-        }
-        .controls {
-            display: flex;
-            gap: 15px;
-            flex-wrap: wrap;
-            margin-bottom: 15px;
-        }
-        .control-group {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        .control-group label {
-            font-size: 14px;
-            color: #aaa;
-        }
-        .control-group select {
-            padding: 8px 12px;
-            background: #1a1a2e;
-            color: #fff;
-            border: 1px solid #333;
-            border-radius: 4px;
-            font-size: 14px;
-            cursor: pointer;
-        }
-        .control-group select:hover {
-            border-color: #3498db;
-        }
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-            gap: 15px;
-            margin-top: 20px;
-        }
-        .stat {
-            background: #1a1a2e;
-            padding: 15px;
-            border-radius: 6px;
-            text-align: center;
-        }
-        .stat-value {
-            font-size: 24px;
-            font-weight: bold;
-            color: #3498db;
-        }
-        .stat-label {
-            font-size: 12px;
-            color: #888;
-            text-transform: uppercase;
-            margin-top: 5px;
-        }
-        .legend {
-            margin-top: 15px;
-            padding: 10px;
-            background: #1a1a2e;
-            border-radius: 4px;
-        }
-        .legend h3 {
-            margin: 0 0 10px 0;
-            font-size: 14px;
-            color: #aaa;
-        }
-        .legend-scale {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        .legend-gradient {
-            flex: 1;
-            height: 16px;
-            border-radius: 4px;
-            background: linear-gradient(to right, #3498db, #2ecc71, #f1c40f, #e74c3c);
-        }
-        .legend-labels {
-            display: flex;
-            justify-content: space-between;
-            font-size: 11px;
-            color: #888;
-            margin-top: 5px;
-        }
-        .loading {
-            text-align: center;
-            padding: 40px;
-            color: #666;
-        }
-        .error {
-            background: #f8d7da;
-            color: #721c24;
-            padding: 15px;
-            border-radius: 4px;
-            margin: 10px 0;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <header>
-            <h1>{{ title | default('Track Map') }}</h1>
-            <a href="/">&larr; Back to Dashboard</a>
-        </header>
+{% extends "base.html" %}
 
-        <div class="map-card">
-            <div class="controls">
-                <div class="control-group">
-                    <label for="colorBy">Color by:</label>
-                    <select id="colorBy">
-                        <option value="speed" selected>Speed</option>
-                        <option value="rpm">RPM</option>
-                        <option value="gear">Gear</option>
-                        <option value="throttle">Throttle</option>
-                    </select>
-                </div>
-                <div class="control-group">
-                    <label for="lapSelect">Lap:</label>
-                    <select id="lapSelect">
-                        <option value="all">All Laps</option>
-                        {% if laps %}
-                        {% for lap in laps %}
-                        <option value="{{ lap.number }}">Lap {{ lap.number }} ({{ lap.time }}s)</option>
-                        {% endfor %}
-                        {% endif %}
-                    </select>
-                </div>
-            </div>
+{% block title %}Track Map - {{ super() }}{% endblock %}
 
-            <div class="map-container" id="mapContainer">
-                {% if svg_content %}
-                {{ svg_content | safe }}
-                {% else %}
-                <div class="loading">Loading track map...</div>
-                {% endif %}
-            </div>
+{% block content %}
+{% include "components/session_selector.html" %}
 
-            <div class="legend">
-                <h3 id="legendTitle">Speed (mph)</h3>
-                <div class="legend-scale">
-                    <span>0</span>
-                    <div class="legend-gradient" id="legendGradient"></div>
-                    <span id="legendMax">150</span>
-                </div>
-            </div>
-        </div>
-
-        {% if stats %}
-        <div class="map-card">
-            <h2>Session Statistics</h2>
-            <div class="stats-grid">
-                <div class="stat">
-                    <div class="stat-value">{{ stats.max_speed | default('--') }}</div>
-                    <div class="stat-label">Max Speed (mph)</div>
-                </div>
-                <div class="stat">
-                    <div class="stat-value">{{ stats.max_rpm | default('--') }}</div>
-                    <div class="stat-label">Max RPM</div>
-                </div>
-                <div class="stat">
-                    <div class="stat-value">{{ stats.total_laps | default('--') }}</div>
-                    <div class="stat-label">Total Laps</div>
-                </div>
-                <div class="stat">
-                    <div class="stat-value">{{ stats.fastest_lap | default('--') }}</div>
-                    <div class="stat-label">Fastest Lap</div>
-                </div>
-            </div>
-        </div>
-        {% endif %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4">Track Map</h1>
+        <p class="text-muted">GPS track visualization colored by telemetry data</p>
     </div>
+</div>
 
-    <script>
-        // Legend gradient configurations
-        const gradients = {
-            speed: {
-                title: 'Speed (mph)',
-                gradient: 'linear-gradient(to right, #3498db, #2ecc71, #f1c40f, #e74c3c)',
-                min: '0',
-                max: '150'
-            },
-            rpm: {
-                title: 'RPM',
-                gradient: 'linear-gradient(to right, #2ecc71, #f1c40f, #e67e22, #e74c3c)',
-                min: '2000',
-                max: '7500'
-            },
-            gear: {
-                title: 'Gear',
-                gradient: 'linear-gradient(to right, #e74c3c, #f39c12, #3498db, #9b59b6)',
-                min: '1',
-                max: '4'
-            },
-            throttle: {
-                title: 'Throttle %',
-                gradient: 'linear-gradient(to right, #e74c3c, #f1c40f, #2ecc71)',
-                min: '0',
-                max: '100'
-            }
+<!-- Controls -->
+<div class="row mb-3">
+    <div class="col-md-4">
+        <div class="control-panel">
+            <label for="colorBy" class="form-label">Color by</label>
+            <select id="colorBy" class="form-select" onchange="reloadMap()">
+                <option value="speed" selected>Speed</option>
+                <option value="rpm">RPM</option>
+                <option value="gear">Gear</option>
+                <option value="throttle">Throttle</option>
+            </select>
+        </div>
+    </div>
+</div>
+
+<!-- Map Display -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <span id="map-title">Track Map</span>
+            </div>
+            <div class="card-body">
+                <div id="mapContainer" style="min-height: 400px;">
+                    <div class="text-center text-muted py-5">Select a session to view track map</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    let currentParquetPath = null;
+
+    // Initialize on page load
+    document.addEventListener('DOMContentLoaded', async function() {
+        if (window._sessionSelector._initPromise) {
+            await window._sessionSelector._initPromise;
+        }
+
+        window._sessionSelector.onContextChange = async function(context) {
+            await loadSessionForMap(context.active_session_id);
         };
 
-        // Update legend when color scheme changes
-        document.getElementById('colorBy').addEventListener('change', function(e) {
-            const scheme = e.target.value;
-            const config = gradients[scheme] || gradients.speed;
+        const context = window._sessionSelector.currentContext;
+        if (context && context.active_session_id) {
+            await loadSessionForMap(context.active_session_id);
+        }
+    });
 
-            document.getElementById('legendTitle').textContent = config.title;
-            document.getElementById('legendGradient').style.background = config.gradient;
-            document.getElementById('legendMax').textContent = config.max;
-        });
+    async function loadSessionForMap(sessionId) {
+        try {
+            const response = await apiCall(`/api/v2/sessions/${sessionId}`);
+            const session = response.session;
 
-        // Lap selection (placeholder for API integration)
-        document.getElementById('lapSelect').addEventListener('change', function(e) {
-            console.log('Selected lap:', e.target.value);
-            // In a real implementation, this would fetch data for the selected lap
-        });
-    </script>
-</body>
-</html>
+            if (!session || !session.parquet_path) {
+                showAlert('Session has no parquet data', 'warning');
+                return;
+            }
+
+            currentParquetPath = session.parquet_path;
+            await reloadMap();
+        } catch (error) {
+            showAlert(`Failed to load session: ${error.message}`, 'danger');
+        }
+    }
+
+    async function reloadMap() {
+        if (!currentParquetPath) return;
+
+        const container = document.getElementById('mapContainer');
+        container.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary" role="status"></div><p class="mt-2">Loading track map...</p></div>';
+
+        const colorBy = document.getElementById('colorBy').value;
+
+        try {
+            const response = await fetch(`/api/track-map/${encodeURIComponent(currentParquetPath)}?color_by=${colorBy}&format=svg`);
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.detail || 'Failed to load track map');
+            }
+
+            const svgContent = await response.text();
+            container.innerHTML = svgContent;
+
+            // Make SVG responsive
+            const svg = container.querySelector('svg');
+            if (svg) {
+                svg.style.width = '100%';
+                svg.style.height = 'auto';
+                svg.style.maxHeight = '600px';
+            }
+
+            document.getElementById('map-title').textContent = `Track Map (colored by ${colorBy})`;
+        } catch (error) {
+            container.innerHTML = `<div class="alert alert-danger">Failed to load track map: ${error.message}</div>`;
+        }
+    }
+</script>
+{% endblock %}

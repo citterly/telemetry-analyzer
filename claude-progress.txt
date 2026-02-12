@@ -2148,3 +2148,35 @@ Status: All 4 bugs marked PASSING
 Features: 50 passing, 17 planned, 0 failing
 
 Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+
+=== Session 28 continued (2026-02-12) ===
+Working on: 16 remaining priority-10 bugs from UAT
+
+All 16 bugs fixed:
+
+1. bug-trackmap-002: Added Track Map nav link to base.html navbar
+2. bug-trackmap-003: Rewrote track_map.html to extend base.html with session selector, Bootstrap, client-side SVG fetching
+3. bug-trackmap-004: Color-by dropdown now re-fetches SVG from API via reloadMap()
+4. bug-trackmap-005: Removed no-op lap select dropdown, page uses session selector
+5. bug-dashboard-002: Removed useless setInterval polling /api/stats without DOM updates
+6. bug-files-001: Added null guard on closest('tr') in processFileFromModal/deleteFileFromModal
+7. bug-sessionimport-001: Changed active_vehicle_id to active_vehicle to match API response
+8. bug-sessionimport-002: Added lap_time field to LapClassificationResult + to_dict() + classifier
+9. bug-upload-001: Wrapped response.json() in try/catch for non-JSON error responses
+10. bug-lapcomparison-003: Added lap-comparison-section hide on re-analysis
+11. bug-sessiondetail-006: Added computed total_time to Stint.to_dict() + JS fallback
+12. bug-gg-003: Added visible disclaimer for fabricated reference data, renamed to "Estimated Target"
+13. bug-gg-004: Already fixed in current code (hide calls inside success branch)
+14. bug-importflow-001: Escaped single quotes in file paths for onclick handlers
+15. bug-vehicleswitching-001: Changed get_vehicle() to get() matching VehicleDatabase API
+16. bug-corner-002: Set _initPromise synchronously in session_selector.html via wrapping Promise
+
+Test results: 1038/1042 passing (4 pre-existing DLL failures excluded)
+
+Status: All 16 bugs marked PASSING
+Features: 66 passing, 1 planned (uat-001 tracking only), 0 failing
+
+ALL UAT BUGS COMPLETE — 36 bugs fixed across 2 sessions (20 + 16)
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>

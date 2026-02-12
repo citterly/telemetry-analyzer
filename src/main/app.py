@@ -157,13 +157,7 @@ async def corner_analysis_page(request: Request):
 @app.get("/track-map")
 async def track_map_page(request: Request):
     """Track map visualization page"""
-    return templates.TemplateResponse("track_map.html", {
-        "request": request,
-        "title": "Track Map",
-        "svg_content": "",
-        "laps": [],
-        "stats": {},
-    })
+    return templates.TemplateResponse("track_map.html", {"request": request})
 
 
 @app.get("/queue", response_class=HTMLResponse)

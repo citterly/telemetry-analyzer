@@ -234,7 +234,7 @@ async def confirm_session_api(session_id: int, request: Request):
         try:
             from src.config.vehicles import get_vehicle_database
             vehicle_db = get_vehicle_database()
-            vehicle = vehicle_db.get_vehicle(session.vehicle_id)
+            vehicle = vehicle_db.get(session.vehicle_id)
             if vehicle and vehicle.current_setup:
                 session.setup_snapshot = {
                     "name": vehicle.current_setup.name,

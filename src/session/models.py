@@ -246,6 +246,7 @@ class Stint:
     end_time: float = 0.0
 
     def to_dict(self) -> dict:
+        total = (self.end_time - self.start_time) if self.end_time and self.start_time else None
         return {
             "id": self.id,
             "session_id": self.session_id,
@@ -257,6 +258,7 @@ class Stint:
             "avg_lap_time": self.avg_lap_time,
             "start_time": self.start_time,
             "end_time": self.end_time,
+            "total_time": total,
         }
 
     @classmethod
@@ -328,6 +330,7 @@ class LapClassificationResult:
     confidence: float
     stint_number: int
     flags: List[str] = field(default_factory=list)
+    lap_time: Optional[float] = None
 
     def to_dict(self) -> dict:
         return {
@@ -336,4 +339,5 @@ class LapClassificationResult:
             "confidence": self.confidence,
             "stint_number": self.stint_number,
             "flags": self.flags,
+            "lap_time": self.lap_time,
         }

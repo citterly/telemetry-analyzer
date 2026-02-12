@@ -137,6 +137,7 @@ class LapClassifier:
                 confidence=confidence,
                 stint_number=stint.stint_number,
                 flags=flags,
+                lap_time=lap.lap_time,
             ))
 
         return results
