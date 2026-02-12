@@ -717,15 +717,305 @@
       ],
       "notes": "Found during UAT of error handling. Severity: Critical. Security issue.",
       "source_uat": "error-handling"
+    },
+    {
+      "id": "bug-analysis-004",
+      "name": "Gear analysis display completely broken — field name and structure mismatches",
+      "category": "bugfix",
+      "description": "Frontend displayGearAnalysis() at analysis.html:L843-L930 reads data.gears_used, data.most_used_gear, data.avg_gear, data.total_time_seconds, and treats data.gear_usage as a dict. Backend GearAnalysisReport.to_dict() returns gear_usage as a list, uses total_duration_seconds, nests summary fields. Result: most metrics show N/A or NaN, gear table shows array indices instead of gear numbers.",
+      "status": "passing",
+      "priority": 1,
+      "tests": [],
+      "files": [
+        "templates/analysis.html",
+        "src/features/gear_analysis.py"
+      ],
+      "notes": "Fixed: reads summary.gears_used/most_used_gear/total_shifts, total_duration_seconds, iterates gear_usage as list, uses rpm_range.avg and usage_percent",
+      "source_uat": "analysis"
+    },
+    {
+      "id": "bug-analysis-005",
+      "name": "Power analysis display completely broken — field name and structure mismatches",
+      "category": "bugfix",
+      "description": "Frontend displayPowerAnalysis() at analysis.html:L932-L1013 reads flat top-level fields (data.max_power_hp, data.max_acceleration_g, etc.) but backend nests them under data.power.max_hp, data.acceleration.max_g, data.braking.max_g. Events array has different field names (start_time vs time, peak_g vs g_force). Result: all metric boxes show N/A, events table empty.",
+      "status": "passing",
+      "priority": 1,
+      "tests": [],
+      "files": [
+        "templates/analysis.html",
+        "src/features/power_analysis.py"
+      ],
+      "notes": "Fixed: reads power.max_hp/avg_hp, acceleration.max_g/events_count/events, braking.max_g/events_count/events, event fields start_time/peak_g/duration_s, power.at_peak_rpm_hp",
+      "source_uat": "analysis"
+    },
+    {
+      "id": "bug-parquet-006",
+      "name": "loadFile crashes — innerHTML destroys channel-stats DOM element",
+      "category": "bugfix",
+      "description": "loadFile() at parquet.html:158 replaces summary-section innerHTML, destroying tbody#channel-stats. At line 170, only partial structure is rebuilt (stat cards) without the channel overview table. Line 218 calls getElementById('channel-stats').innerHTML on null, throwing TypeError. Catch block shows alert and returns, preventing loadData() from being called. Page is completely non-functional for viewing any parquet file data.",
+      "status": "passing",
+      "priority": 1,
+      "tests": [],
+      "files": [
+        "templates/parquet.html"
+      ],
+      "notes": "Fixed: loading indicator now updates only summary-stats and channel-stats content instead of replacing summary-section innerHTML. Preserves DOM structure so channel-stats always exists.",
+      "source_uat": "parquet"
+    },
+    {
+      "id": "bug-trackmap-001",
+      "name": "No page route for /track-map — returns 404",
+      "category": "bugfix",
+      "description": "track_map.html template exists but no @app.get('/track-map') route is defined in app.py. Navigating to /track-map returns 404. The template expects server-side context variables (svg_content, laps, stats) that nothing provides. Fix: add a page route in app.py.",
+      "status": "passing",
+      "priority": 1,
+      "tests": [],
+      "files": [
+        "templates/track_map.html",
+        "src/main/app.py"
+      ],
+      "notes": "Fixed: added @app.get('/track-map') route with empty defaults for svg_content, laps, stats. Template handles defaults via Jinja2 | default() filters.",
+      "source_uat": "track-map"
+    },
+    {
+      "id": "bug-trackmap-002",
+      "name": "No navigation link to track-map in navbar",
+      "category": "bugfix",
+      "description": "base.html navbar (lines 233-263) lists all other pages but omits Track Map. Even once the route is added, users cannot discover the page through navigation. Fix: add nav-item for /track-map.",
+      "status": "planned",
+      "priority": 10,
+      "tests": [],
+      "files": [
+        "templates/base.html"
+      ],
+      "notes": "",
+      "source_uat": "track-map"
+    },
+    {
+      "id": "bug-trackmap-003",
+      "name": "track_map.html does not extend base.html — standalone HTML",
+      "category": "bugfix",
+      "description": "Template is standalone HTML with inline CSS, no navbar, no footer, no Bootstrap, no shared JS (audit.js, session_selector.js). Visually inconsistent with all other pages. Fix: rewrite to extend base.html.",
+      "status": "planned",
+      "priority": 10,
+      "tests": [],
+      "files": [
+        "templates/track_map.html",
+        "templates/base.html"
+      ],
+      "notes": "",
+      "source_uat": "track-map"
+    },
+    {
+      "id": "bug-trackmap-004",
+      "name": "Color-by dropdown only updates legend, not SVG",
+      "category": "bugfix",
+      "description": "colorBy change handler (line 260-267) updates the HTML legend text/gradient but never re-fetches the SVG from the API. The map stays colored by the original scheme while the legend shows a different one. Fix: add fetch call to /api/track-map/{filename}?color_by={scheme} on change.",
+      "status": "planned",
+      "priority": 10,
+      "tests": [],
+      "files": [
+        "templates/track_map.html"
+      ],
+      "notes": "",
+      "source_uat": "track-map"
+    },
+    {
+      "id": "bug-trackmap-005",
+      "name": "Lap selection dropdown is a no-op stub",
+      "category": "bugfix",
+      "description": "lapSelect change handler (line 270-273) only console.logs the selection. Comment says 'placeholder for API integration.' No filtering occurs. Fix: implement or remove the dropdown.",
+      "status": "planned",
+      "priority": 10,
+      "tests": [],
+      "files": [
+        "templates/track_map.html"
+      ],
+      "notes": "",
+      "source_uat": "track-map"
+    },
+    {
+      "id": "bug-dashboard-002",
+      "name": "Auto-refresh stats poller fetches data but never updates DOM",
+      "category": "bugfix",
+      "description": "setInterval at dashboard.html:283-291 calls GET /api/stats every 30 seconds but the callback does nothing with the response. Stat card DOM elements have no id attributes and no update logic. Wastes network resources with zero user benefit. Fix: either remove the interval or add DOM update logic.",
+      "status": "planned",
+      "priority": 10,
+      "tests": [],
+      "files": [
+        "templates/dashboard.html"
+      ],
+      "notes": "",
+      "source_uat": "dashboard"
+    },
+    {
+      "id": "bug-files-001",
+      "name": "Modal action buttons crash with TypeError on closest('tr')",
+      "category": "bugfix",
+      "description": "processFileFromModal() at line 435 and deleteFileFromModal() at line 446 iterate ALL button elements and call button.closest('tr').querySelector('strong').textContent without null-checking closest('tr'). Buttons outside table rows return null, causing TypeError. Both modal actions are non-functional. Fix: add null guard on closest('tr') result.",
+      "status": "planned",
+      "priority": 10,
+      "tests": [],
+      "files": [
+        "templates/files.html"
+      ],
+      "notes": "",
+      "source_uat": "files"
+    },
+    {
+      "id": "bug-sessionimport-001",
+      "name": "Vehicle dropdown active_vehicle_id key mismatch",
+      "category": "bugfix",
+      "description": "session_import.html:369 reads response.active_vehicle_id but GET /api/vehicles (vehicles.py:22) returns key active_vehicle. Causes activeVehicle to be undefined, preventing vehicle pre-selection and automatic setup loading. Fix: change to response.active_vehicle.",
+      "status": "planned",
+      "priority": 10,
+      "tests": [],
+      "files": [
+        "templates/session_import.html",
+        "src/main/routers/vehicles.py"
+      ],
+      "notes": "",
+      "source_uat": "session-import"
+    },
+    {
+      "id": "bug-sessionimport-002",
+      "name": "Lap times missing from detection review table",
+      "category": "bugfix",
+      "description": "LapClassificationResult.to_dict() at models.py:332-339 does not include lap_time, but frontend reads lap.lap_time at session_import.html:484. All laps show N/A for their time in Step 2 review. Fix: enrich lap_classifications to include lap_time.",
+      "status": "planned",
+      "priority": 10,
+      "tests": [],
+      "files": [
+        "src/session/importer.py",
+        "src/session/models.py",
+        "templates/session_import.html"
+      ],
+      "notes": "",
+      "source_uat": "session-import"
+    },
+    {
+      "id": "bug-upload-001",
+      "name": "uploadSingleFile error handler assumes JSON response",
+      "category": "bugfix",
+      "description": "In uploadSingleFile() at upload.html:L357-359, when server returns non-JSON error (HTML page, empty body), await response.json() throws unhandled secondary error. User sees confusing JSON parse error instead of actual server error. Fix: wrap response.json() in try/catch with fallback to HTTP status code.",
+      "status": "planned",
+      "priority": 10,
+      "tests": [],
+      "files": [
+        "templates/upload.html"
+      ],
+      "notes": "",
+      "source_uat": "upload"
+    },
+    {
+      "id": "bug-lapcomparison-003",
+      "name": "Stale comparison section persists on re-analysis",
+      "category": "bugfix",
+      "description": "runAnalysis() at analysis.html:432 hides lap-filter-section, lap-recommendations, track-map-section before new analysis, but does NOT hide lap-comparison-section. Old comparison from previous session/laps remains visible with stale data. Fix: add document.getElementById('lap-comparison-section').style.display = 'none' after line 450.",
+      "status": "planned",
+      "priority": 10,
+      "tests": [],
+      "files": [
+        "templates/analysis.html"
+      ],
+      "notes": "",
+      "source_uat": "lap-comparison"
+    },
+    {
+      "id": "bug-sessiondetail-006",
+      "name": "Stint total_time field does not exist in backend response",
+      "category": "bugfix",
+      "description": "session_detail.html:272 references stint.total_time but Stint.to_dict() in models.py:248-260 only has start_time and end_time. Total Time column in stints table always shows N/A. Fix: add computed total_time to Stint.to_dict() or compute in JS.",
+      "status": "planned",
+      "priority": 10,
+      "tests": [],
+      "files": [
+        "templates/session_detail.html",
+        "src/session/models.py"
+      ],
+      "notes": "",
+      "source_uat": "session-detail"
+    },
+    {
+      "id": "bug-gg-003",
+      "name": "Zone detail view uses fabricated reference data presented as real analysis",
+      "category": "bugfix",
+      "description": "getBestLapForZone() at line 2370 returns fabricated reference data using hardcoded improvementFactor=1.15. Entry speed formula (avg_total_g*25) has no physical basis, brake point hardcoded at 200/150 ft. All zone comparisons, recommendations, and zone G-G chart display fictitious numbers as 'Reference Lap' data without disclaimer. Fix: implement real best-lap lookup or add visible disclaimer.",
+      "status": "planned",
+      "priority": 10,
+      "tests": [],
+      "files": [
+        "templates/gg_diagram.html"
+      ],
+      "notes": "",
+      "source_uat": "gg-diagram"
+    },
+    {
+      "id": "bug-gg-004",
+      "name": "Biggest Opportunities click can leave user on blank page",
+      "category": "bugfix",
+      "description": "openZoneDetailFromOverview() at line 1021-1022 hides overview-section and deep-dive-view BEFORE checking if rankedIndex >= 0 at line 1019. If findIndex fails (returns -1 due to floating-point time comparison), zone-detail-view is never shown, leaving completely blank page. Fix: move hide calls inside the success branch.",
+      "status": "planned",
+      "priority": 10,
+      "tests": [],
+      "files": [
+        "templates/gg_diagram.html"
+      ],
+      "notes": "",
+      "source_uat": "gg-diagram"
+    },
+    {
+      "id": "bug-importflow-001",
+      "name": "Session import file path with quotes breaks onclick handler",
+      "category": "bugfix",
+      "description": "At session_import.html:349, paths are interpolated into onclick using single-quote delimiters. If a file path contains a single quote, the JavaScript breaks, making the Import button non-functional for that file. Fix: escape quotes or use data attributes with addEventListener.",
+      "status": "planned",
+      "priority": 10,
+      "tests": [],
+      "files": [
+        "templates/session_import.html"
+      ],
+      "notes": "",
+      "source_uat": "import-flow"
+    },
+    {
+      "id": "bug-vehicleswitching-001",
+      "name": "Setup snapshot uses nonexistent get_vehicle() method",
+      "category": "bugfix",
+      "description": "sessions.py:237 calls vehicle_db.get_vehicle(session.vehicle_id) but VehicleDatabase only has get() method (vehicles.py:320). Raises AttributeError, silently caught at line 246, preventing setup snapshots from being captured. Fix: change to vehicle_db.get(session.vehicle_id).",
+      "status": "planned",
+      "priority": 10,
+      "tests": [],
+      "files": [
+        "src/main/routers/sessions.py",
+        "src/config/vehicles.py"
+      ],
+      "notes": "",
+      "source_uat": "vehicle-switching"
+    },
+    {
+      "id": "bug-corner-002",
+      "name": "Context auto-load race condition on corner-analysis page load",
+      "category": "bugfix",
+      "description": "DOMContentLoaded handler in corner_analysis.html (L367-388) runs before session selector init. _initPromise is undefined and currentContext is null, so analysis never auto-loads for an already-selected session. Scope indicator shows session but page displays no results. Fix: set _initPromise synchronously or have init() call onContextChange when context loaded.",
+      "status": "planned",
+      "priority": 10,
+      "tests": [],
+      "files": [
+        "templates/corner_analysis.html",
+        "templates/components/session_selector.html"
+      ],
+      "notes": "",
+      "source_uat": "corner-analysis"
     }
   ],
   "metadata": {
     "created_at": "2025-01-29T01:00:00Z",
     "last_updated": "2026-02-12T00:00:00Z",
-    "total_features": 47,
-    "passing": 46,
+    "total_features": 67,
+    "passing": 50,
     "failing": 0,
-    "planned": 21,
+    "planned": 37,
     "archive_file": "features-archive.json"
   },
   "categories": {

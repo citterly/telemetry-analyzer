@@ -841,28 +841,30 @@
     }
 
     function displayGearAnalysis(data) {
+        const summary = data.summary || {};
+        const totalDuration = data.total_duration_seconds || 0;
         document.getElementById('summary-row').innerHTML = `
             <div class="col-md-3 mb-3">
                 <div class="metric-box">
-                    <div class="metric-value">${data.gears_used || Object.keys(data.gear_usage || {}).length}</div>
+                    <div class="metric-value">${summary.gears_used || (data.gear_usage || []).length}</div>
                     <div class="metric-label">Gears Used</div>
                 </div>
             </div>
             <div class="col-md-3 mb-3">
                 <div class="metric-box info">
-                    <div class="metric-value">${data.most_used_gear || 'N/A'}</div>
+                    <div class="metric-value">${summary.most_used_gear || 'N/A'}</div>
                     <div class="metric-label">Most Used Gear</div>
                 </div>
             </div>
             <div class="col-md-3 mb-3">
                 <div class="metric-box success">
-                    <div class="metric-value">${data.avg_gear?.toFixed(1) || 'N/A'}</div>
-                    <div class="metric-label">Avg Gear</div>
+                    <div class="metric-value">${summary.total_shifts || 'N/A'}</div>
+                    <div class="metric-label">Total Shifts</div>
                 </div>
             </div>
             <div class="col-md-3 mb-3">
                 <div class="metric-box warning">
-                    <div class="metric-value">${(data.total_time_seconds / 60)?.toFixed(1) || 'N/A'} min</div>
+                    <div class="metric-value">${totalDuration > 0 ? (totalDuration / 60).toFixed(1) : 'N/A'} min</div>
                     <div class="metric-label">Session Time</div>
                 </div>
             </div>
@@ -892,9 +894,14 @@
                             <tbody>
         `;
 
-        const gearUsage = data.gear_usage || {};
-        for (const [gear, stats] of Object.entries(gearUsage)) {
-            const pct = stats.time_pct || (stats.time_seconds / data.total_time_seconds * 100);
+        // Backend returns gear_usage as an array of objects
+        const gearUsageList = data.gear_usage || [];
+        // Build dict keyed by gear_number for chart rendering
+        const gearUsageDict = {};
+        for (const stats of gearUsageList) {
+            const gear = stats.gear_number;
+            const pct = stats.usage_percent || 0;
+            gearUsageDict[gear] = stats;
             detailsHtml += `
                 <tr>
                     <td><strong>Gear ${gear}</strong></td>
@@ -904,7 +911,7 @@
                             <div class="progress-bar bg-info" style="width: ${pct}%">${pct.toFixed(1)}%</div>
                         </div>
                     </td>
-                    <td>${stats.avg_rpm?.toFixed(0) || 'N/A'}</td>
+                    <td>${stats.rpm_range?.avg?.toFixed(0) || 'N/A'}</td>
                 </tr>
             `;
         }
@@ -925,33 +932,36 @@
         }
 
         setTimeout(() => {
-            renderGearDistributionChart(gearUsage);
+            renderGearDistributionChart(gearUsageDict);
         }, 100);
     }
 
     function displayPowerAnalysis(data) {
+        const power = data.power || {};
+        const accel = data.acceleration || {};
+        const braking = data.braking || {};
         document.getElementById('summary-row').innerHTML = `
             <div class="col-md-3 mb-3">
                 <div class="metric-box success">
-                    <div class="metric-value">${data.max_power_hp?.toFixed(0) || 'N/A'} hp</div>
+                    <div class="metric-value">${power.max_hp?.toFixed(0) || 'N/A'} hp</div>
                     <div class="metric-label">Peak Power</div>
                 </div>
             </div>
             <div class="col-md-3 mb-3">
                 <div class="metric-box info">
-                    <div class="metric-value">${data.max_acceleration_g?.toFixed(2) || 'N/A'} g</div>
+                    <div class="metric-value">${accel.max_g?.toFixed(2) || 'N/A'} g</div>
                     <div class="metric-label">Max Accel</div>
                 </div>
             </div>
             <div class="col-md-3 mb-3">
                 <div class="metric-box warning">
-                    <div class="metric-value">${data.max_braking_g?.toFixed(2) || 'N/A'} g</div>
+                    <div class="metric-value">${braking.max_g?.toFixed(2) || 'N/A'} g</div>
                     <div class="metric-label">Max Braking</div>
                 </div>
             </div>
             <div class="col-md-3 mb-3">
                 <div class="metric-box">
-                    <div class="metric-value">${data.avg_power_hp?.toFixed(0) || 'N/A'} hp</div>
+                    <div class="metric-value">${power.avg_hp?.toFixed(0) || 'N/A'} hp</div>
                     <div class="metric-label">Avg Power</div>
                 </div>
             </div>
@@ -959,10 +969,15 @@
 
         displayRecommendations(data.recommendations || []);
 
+        // Combine acceleration and braking events into one table
+        const accelEvents = (accel.events || []).map(e => ({...e, _type: 'acceleration'}));
+        const brakeEvents = (braking.events || []).map(e => ({...e, _type: 'braking'}));
+        const allEvents = [...accelEvents, ...brakeEvents].sort((a, b) => a.start_time - b.start_time);
+
         let detailsHtml = `
             <div class="col-md-6 mb-4">
                 <div class="card analysis-card power">
-                    <div class="card-header">Acceleration Events</div>
+                    <div class="card-header">Acceleration & Braking Events</div>
                     <div class="card-body" style="max-height: 350px; overflow-y: auto;">
                         <table class="table table-sm">
                             <thead>
@@ -971,15 +986,14 @@
                             <tbody>
         `;
 
-        const events = data.events || [];
-        for (const event of events.slice(0, 30)) {
-            const typeClass = event.type === 'acceleration' ? 'text-success' : 'text-warning';
+        for (const event of allEvents.slice(0, 30)) {
+            const typeClass = event._type === 'acceleration' ? 'text-success' : 'text-warning';
             detailsHtml += `
                 <tr>
-                    <td>${event.time?.toFixed(1) || 'N/A'}s</td>
-                    <td class="${typeClass}">${event.type}</td>
-                    <td>${event.g_force?.toFixed(2) || 'N/A'} g</td>
-                    <td>${event.duration?.toFixed(1) || 'N/A'}s</td>
+                    <td>${event.start_time?.toFixed(1) || 'N/A'}s</td>
+                    <td class="${typeClass}">${event._type}</td>
+                    <td>${event.peak_g?.toFixed(2) || 'N/A'} g</td>
+                    <td>${event.duration_s?.toFixed(1) || 'N/A'}s</td>
                 </tr>
             `;
         }
@@ -996,9 +1010,9 @@
                     <div class="card-body">
                         <ul class="list-unstyled">
                             <li class="mb-2"><strong>Vehicle Mass:</strong> ${data.vehicle_mass_kg || 'N/A'} kg</li>
-                            <li class="mb-2"><strong>Peak Power RPM:</strong> ${data.peak_power_rpm?.toFixed(0) || 'N/A'} RPM</li>
-                            <li class="mb-2"><strong>Accel Events:</strong> ${data.acceleration_event_count || 0}</li>
-                            <li class="mb-2"><strong>Braking Events:</strong> ${data.braking_event_count || 0}</li>
+                            <li class="mb-2"><strong>Peak Power at RPM:</strong> ${power.at_peak_rpm_hp?.toFixed(0) || 'N/A'} hp</li>
+                            <li class="mb-2"><strong>Accel Events:</strong> ${accel.events_count || 0}</li>
+                            <li class="mb-2"><strong>Braking Events:</strong> ${braking.events_count || 0}</li>
                         </ul>
                     </div>
                 </div>
@@ -1125,12 +1139,12 @@
         });
     }
 
-    function renderGearDistributionChart(gearUsage) {
+    function renderGearDistributionChart(gearUsageDict) {
         const ctx = document.getElementById('gear-distribution-chart');
         if (!ctx) return;
 
-        const gears = Object.keys(gearUsage).sort();
-        const times = gears.map(g => gearUsage[g].time_seconds || 0);
+        const gears = Object.keys(gearUsageDict).sort((a, b) => Number(a) - Number(b));
+        const times = gears.map(g => gearUsageDict[g].time_seconds || 0);
 
         charts['gear-dist'] = new Chart(ctx, {
             type: 'doughnut',

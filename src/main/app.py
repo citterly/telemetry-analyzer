@@ -154,6 +154,18 @@ async def corner_analysis_page(request: Request):
     return templates.TemplateResponse("corner_analysis.html", {"request": request})
 
 
+@app.get("/track-map")
+async def track_map_page(request: Request):
+    """Track map visualization page"""
+    return templates.TemplateResponse("track_map.html", {
+        "request": request,
+        "title": "Track Map",
+        "svg_content": "",
+        "laps": [],
+        "stats": {},
+    })
+
+
 @app.get("/queue", response_class=HTMLResponse)
 async def queue_dashboard_page(request: Request):
     """Queue status dashboard page"""

@@ -2116,3 +2116,35 @@ Features: 46 passing, 1 planned (uat-001 tracking only), 0 failing
 - Priority 10-20: 5 bugs (performance/UX improvements)
 
 Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>
+
+
+=== Session 28 (2026-02-12) ===
+Working on: 4 priority-1 bugs from UAT
+
+All 4 bugs fixed:
+
+1. bug-analysis-004 (CRITICAL): Gear analysis display completely broken
+   - analysis.html: displayGearAnalysis() now reads summary.gears_used, summary.most_used_gear,
+     summary.total_shifts, total_duration_seconds. Iterates gear_usage as array (not dict).
+     Uses stats.usage_percent and stats.rpm_range.avg. Chart receives dict keyed by gear_number.
+
+2. bug-analysis-005 (CRITICAL): Power analysis display completely broken
+   - analysis.html: displayPowerAnalysis() now reads power.max_hp/avg_hp,
+     acceleration.max_g/events_count/events, braking.max_g/events_count/events.
+     Events use start_time/peak_g/duration_s field names. Combined accel+brake events table.
+
+3. bug-parquet-006 (CRITICAL): loadFile crashes — innerHTML destroys channel-stats DOM
+   - parquet.html: loading indicator now updates summary-stats and channel-stats content
+     instead of replacing summary-section innerHTML. Preserves card structure so
+     channel-stats tbody always exists. Prevents TypeError cascade that blocked loadData().
+
+4. bug-trackmap-001 (CRITICAL): No page route for /track-map — returns 404
+   - app.py: added @app.get('/track-map') route with empty defaults for svg_content,
+     laps, stats. Template handles missing data via Jinja2 | default() filters.
+
+Test results: 1038/1042 passing (4 pre-existing DLL failures excluded)
+
+Status: All 4 bugs marked PASSING
+Features: 50 passing, 17 planned, 0 failing
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>

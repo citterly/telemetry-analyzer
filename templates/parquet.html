@@ -155,7 +155,12 @@
         // Show loading indicator
         const summarySection = document.getElementById('summary-section');
         const dataSection = document.getElementById('data-section');
-        summarySection.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div><p class="mt-2">Loading file...</p></div>';
+        summarySection.style.display = 'block';
+        // Only update card body content, preserving the card structure
+        const summaryStats = document.getElementById('summary-stats');
+        const channelStats = document.getElementById('channel-stats');
+        summaryStats.innerHTML = '<div class="col-12 text-center py-3"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div><p class="mt-2">Loading file...</p></div>';
+        channelStats.innerHTML = '';
         dataSection.style.display = 'none';
 
         // Load summary
@@ -166,13 +171,9 @@
             }
             const summary = await summaryRes.json();
 
-            // Rebuild summary section structure
-            summarySection.innerHTML = `
-                <h5 id="summary-title">Session: ${summary.filename}</h5>
-                <div class="row mt-3" id="summary-stats"></div>
-            `;
+            document.getElementById('summary-title').textContent = `Session: ${summary.filename}`;
 
-            document.getElementById('summary-stats').innerHTML = `
+            summaryStats.innerHTML = `
                 <div class="col-md-3">
                     <div class="stat-card p-3 text-center">
                         <h3>${summary.rows.toLocaleString()}</h3>
@@ -215,9 +216,7 @@
                     </tr>
                 `;
             }
-            document.getElementById('channel-stats').innerHTML = channelHtml;
-
-            document.getElementById('summary-section').style.display = 'block';
+            channelStats.innerHTML = channelHtml;
 
             totalRows = summary.rows;
 
