@@ -20,7 +20,7 @@
       "name": "UAT: Analysis page",
       "category": "uat",
       "description": "Run /uat analysis — trace every interaction on the main analysis dashboard. This is the most complex page: session selector, 5 analysis type buttons (Full Report, Shifts, Laps, Gears, Power), track map rendering, lap table with classification filters, lap comparison with delta map, audit toggle + panel, Chart.js visualizations. Trace each button click through JS → API → router → analyzer → response → DOM rendering. Check error paths (no session selected, missing GPS, server error). Fix any bugs found.",
-      "status": "planned",
+      "status": "passing",
       "priority": 62,
       "depends_on": [],
       "tests": [],
@@ -254,15 +254,52 @@
       "tests": [],
       "files": ["templates/error.html", "src/main/app.py", "src/main/deps.py"],
       "notes": ""
+    },
+
+    {
+      "id": "bug-analysis-001",
+      "name": "Fix undefined `filename` variable in runAnalysis()",
+      "category": "bugfix",
+      "description": "analysis.html:449 uses `filename` variable which does not exist after arch-007 migration (file dropdown removed, replaced by session selector). Should use `currentFile` which is set at line 435 from `currentParquetPath`. Same bug at line 460 in loadTrackMap call. ALL analysis types are broken — fetch URL becomes /api/analyze/{type}/undefined → 404.",
+      "status": "planned",
+      "priority": 1,
+      "tests": [],
+      "files": ["templates/analysis.html"],
+      "notes": "Found during UAT of analysis. Severity: Critical",
+      "source_uat": "analysis"
+    },
+    {
+      "id": "bug-analysis-002",
+      "name": "Fix onContextChange callback overwritten by session_selector.html",
+      "category": "bugfix",
+      "description": "session_selector.html:79 DOMContentLoaded handler overwrites onContextChange callback with console.log after analysis.html:382 sets it to loadSessionForAnalysis. Due to async race: analysis.html handler runs synchronously and sets callback, then session_selector.html handler resumes from await init() and overwrites it. Fix: remove generic onContextChange from session_selector.html, let consuming pages set their own callbacks. Affects all 3 pages that include session_selector.html (analysis, gg-diagram, corner-analysis).",
+      "status": "planned",
+      "priority": 1,
+      "tests": [],
+      "files": ["templates/components/session_selector.html", "templates/analysis.html", "templates/gg_diagram.html", "templates/corner_analysis.html"],
+      "notes": "Found during UAT of analysis. Severity: Critical. Root cause shared across 3 pages.",
+      "source_uat": "analysis"
+    },
+    {
+      "id": "bug-analysis-003",
+      "name": "Fix DOMContentLoaded race condition with session selector init",
+      "category": "bugfix",
+      "description": "analysis.html:387 reads window._sessionSelector.currentContext before _sessionSelector.init() has completed (async race). Context is always null on initial page load, causing buttons to be disabled even when a valid context exists server-side. Fix: analysis.html should await init() completion before checking context, or use a ready promise/callback pattern. Also affects gg-diagram and corner-analysis pages.",
+      "status": "planned",
+      "priority": 10,
+      "tests": [],
+      "files": ["templates/analysis.html", "templates/components/session_selector.html", "templates/gg_diagram.html", "templates/corner_analysis.html"],
+      "notes": "Found during UAT of analysis. Severity: Major. Related to bug-analysis-002 — same async race root cause.",
+      "source_uat": "analysis"
     }
   ],
   "metadata": {
     "created_at": "2025-01-29T01:00:00Z",
     "last_updated": "2026-02-11T23:50:00Z",
-    "total_features": 21,
-    "passing": 0,
+    "total_features": 24,
+    "passing": 1,
     "failing": 0,
-    "planned": 21,
+    "planned": 23,
     "archive_file": "features-archive.json"
   },
   "categories": {

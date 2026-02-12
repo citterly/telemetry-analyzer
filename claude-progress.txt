@@ -1706,3 +1706,34 @@ Features: 62 total (61 passing, 1 planned)
 Next priority: arch-007-exec (Execute: Session-centric analysis UX)
 
 Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>
+
+
+=== Session 19 (2026-02-11) ===
+UAT pipeline setup + first UAT run
+
+Work completed:
+
+1. Boot-up: Fixed test_results_page.py regression (arch-007 removed file dropdown, test checked for loadFileList)
+2. Archived 61 completed features to features-archive.json (features.json 1048→280 lines)
+3. Updated /uat skill with Phase 6: auto-record Critical/Major bugs to features.json
+4. Ran UAT on analysis page (uat-010) — traced 12 interactions through full stack
+
+Bugs found (3 bugs, recorded to features.json):
+- bug-analysis-001 (CRITICAL): `filename` undefined in runAnalysis() at analysis.html:449,460
+  - arch-007 replaced file dropdown with session selector but didn't update variable name
+  - ALL analysis types broken — fetch URL becomes /api/analyze/{type}/undefined → 404
+- bug-analysis-002 (CRITICAL): onContextChange callback overwritten by session_selector.html:79
+  - session_selector.html DOMContentLoaded resumes from async init() and overwrites
+    the callback set by analysis.html with console.log
+  - Selecting a session doesn't trigger loadSessionForAnalysis
+  - Affects all 3 pages: analysis, gg-diagram, corner-analysis
+- bug-analysis-003 (MAJOR): DOMContentLoaded race condition
+  - analysis.html reads currentContext before init() completes → always null
+  - Buttons always disabled on initial load even with valid context
+  - Same root cause as bug-002 (async init race)
+
+Working correctly: lap filters, lap selection/compare, track map controls, display functions,
+audit panel rendering, threshold sliders (7 of 12 interactions)
+
+Status: uat-010 marked PASSING
+Features: 24 total (2 passing, 22 planned including 3 new bugs)
