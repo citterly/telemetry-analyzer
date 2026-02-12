@@ -341,6 +341,51 @@ async function saveSetup() {
     }
 }
 
+async function loadSetup() {
+    try {
+        const response = await apiCall(`/api/v2/sessions/${sessionId}/setup`);
+
+        if (response.setup_data) {
+            const data = response.setup_data;
+
+            // Load tire pressures
+            if (data.tire_pressures) {
+                if (data.tire_pressures.front_left) {
+                    document.getElementById('tireFrontLeft').value = data.tire_pressures.front_left;
+                }
+                if (data.tire_pressures.front_right) {
+                    document.getElementById('tireFrontRight').value = data.tire_pressures.front_right;
+                }
+                if (data.tire_pressures.rear_left) {
+                    document.getElementById('tireRearLeft').value = data.tire_pressures.rear_left;
+                }
+                if (data.tire_pressures.rear_right) {
+                    document.getElementById('tireRearRight').value = data.tire_pressures.rear_right;
+                }
+            }
+
+            // Load other fields
+            if (data.fuel_level) {
+                document.getElementById('fuelLevel').value = data.fuel_level;
+            }
+            if (data.temperature) {
+                document.getElementById('temperature').value = data.temperature;
+            }
+            if (data.weather) {
+                document.getElementById('weather').value = data.weather;
+            }
+        }
+
+        // Load notes (separate field)
+        if (response.notes) {
+            document.getElementById('setupNotes').value = response.notes;
+        }
+    } catch (error) {
+        // Silently fail - setup might not exist yet
+        console.log('No saved setup data found');
+    }
+}
+
 function getClassificationBadgeClass(classification) {
     const classes = {
         'hot_lap': 'bg-success',
@@ -353,7 +398,8 @@ function getClassificationBadgeClass(classification) {
     return classes[classification] || 'bg-secondary';
 }
 
-// Load laps on page load
+// Load laps and setup on page load
 loadLaps();
+loadSetup();
 </script>
 {% endblock %}

@@ -553,7 +553,7 @@
       "name": "Setup form never loads existing data on page load",
       "category": "bugfix",
       "description": "session_detail.html setup form fields (tire pressures, fuel, temperature, weather, notes) are always empty on page load. GET /api/v2/sessions/{id}/setup endpoint exists at sessions.py:254 but is never called. Previously saved setup data is invisible \u2014 user has no way to see or edit existing setup. Fix: add loadSetup() function that calls the API on page load and populates form fields.",
-      "status": "planned",
+      "status": "passing",
       "priority": 2,
       "tests": [],
       "files": [
@@ -624,7 +624,7 @@
       "name": "Sessions status filter broken \u2014 JS checks 'status' but API returns 'import_status'",
       "category": "bugfix",
       "description": "sessions.html:136 filters by session.status but Session.to_dict() returns import_status field. Filter has no effect. Fix: change JS to check session.import_status.",
-      "status": "planned",
+      "status": "passing",
       "priority": 2,
       "tests": [],
       "files": [
@@ -681,7 +681,7 @@
       "name": "apiCall() crashes parsing non-JSON error responses",
       "category": "bugfix",
       "description": "base.html:335 calls response.json() on error responses without checking Content-Type. If server returns HTML (e.g., 502 proxy error, 500 with traceback), JSON.parse throws SyntaxError. The error is swallowed, showing opaque message. Fix: wrap error JSON parse in try/catch, fall back to response.text().",
-      "status": "planned",
+      "status": "passing",
       "priority": 2,
       "tests": [],
       "files": [
@@ -695,7 +695,7 @@
       "name": "alternative_setups silently lost on vehicle save",
       "category": "bugfix",
       "description": "vehicles.html:398-419 saveVehicle() doesn't include alternative_setups in payload. Backend Vehicle.from_dict() defaults to empty list. On save, all alternative transmission setups are deleted. Fix: include selectedVehicle.alternative_setups in the save payload.",
-      "status": "planned",
+      "status": "passing",
       "priority": 2,
       "tests": [],
       "files": [
@@ -723,7 +723,7 @@
     "created_at": "2025-01-29T01:00:00Z",
     "last_updated": "2026-02-12T00:00:00Z",
     "total_features": 47,
-    "passing": 31,
+    "passing": 35,
     "failing": 0,
     "planned": 21,
     "archive_file": "features-archive.json"

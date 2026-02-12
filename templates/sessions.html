@@ -133,7 +133,7 @@ function renderSessions() {
     const filtered = allSessions.filter(session => {
         if (trackFilter && session.track_name !== trackFilter) return false;
         if (typeFilter && session.session_type !== typeFilter) return false;
-        if (statusFilter && session.status !== statusFilter) return false;
+        if (statusFilter && session.import_status !== statusFilter) return false;
         return true;
     });
 

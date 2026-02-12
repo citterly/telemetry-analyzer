@@ -332,8 +332,16 @@
                 });
                 
                 if (!response.ok) {
-                    const error = await response.json();
-                    throw new Error(error.detail || 'Request failed');
+                    let errorMessage = 'Request failed';
+                    try {
+                        const error = await response.json();
+                        errorMessage = error.detail || errorMessage;
+                    } catch (parseError) {
+                        // Response is not JSON (e.g., HTML error page)
+                        const text = await response.text();
+                        errorMessage = text.substring(0, 200) || `HTTP ${response.status}`;
+                    }
+                    throw new Error(errorMessage);
                 }
                 
                 return await response.json();

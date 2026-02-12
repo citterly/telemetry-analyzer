@@ -1977,3 +1977,37 @@ Features: 31 passing, 16 planned, 0 failing
 Next priority: bug-sessiondetail-002 (priority 2) — Setup form never loads data
 
 Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>
+
+
+=== Session 27 continued (2026-02-11) ===
+Working on: 4 priority-2 bugs from UAT
+
+All 4 priority-2 bugs fixed:
+
+1. bug-sessiondetail-002 (MAJOR): Setup form never loads existing data
+   - session_detail.html: added loadSetup() function
+   - Calls GET /api/v2/sessions/{id}/setup on page load
+   - Populates tire pressures, fuel, temperature, weather, notes
+   - Silently fails if no saved setup exists yet
+
+2. bug-sessions-002 (CRITICAL): Sessions status filter broken
+   - sessions.html line 136: session.status → session.import_status
+   - Filter now checks correct field returned by API
+
+3. bug-base-001 (CRITICAL): apiCall() crashes parsing non-JSON error responses
+   - base.html line 335: wrapped response.json() in try/catch
+   - Falls back to response.text() for HTML error pages
+   - Handles 502 proxy errors, 500 with traceback, etc.
+
+4. bug-vehicles-002 (MAJOR): alternative_setups silently lost on vehicle save
+   - vehicles.html line 418: added alternative_setups to payload
+   - Preserves alternative transmission setups on save
+
+Test results: 1038/1042 passing (4 pre-existing DLL failures excluded)
+
+Status: All 4 bugs marked PASSING
+Features: 35 passing, 12 planned, 0 failing
+
+Next priority: bug-sessiondetail-003 (priority 3) — Analysis links ignored params
+
+Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>
