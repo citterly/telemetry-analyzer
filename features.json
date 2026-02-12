@@ -467,7 +467,7 @@
       "name": "Time column shows interpolated values instead of actual parquet index",
       "category": "bugfix",
       "description": "parquet.html:237 interpolates time from index_range[0..1]/total_rows instead of using actual df.index values. The view endpoint (parquet.py:89) uses to_dict(orient='records') which discards the index. For non-uniform sampling or data with gaps, displayed time values are wrong. Fix: include actual index values in the response (e.g., add 'timestamps' array or include index in each record).",
-      "status": "planned",
+      "status": "passing",
       "priority": 5,
       "tests": [],
       "files": [
@@ -581,7 +581,7 @@
       "name": "No confirm session button on detail page",
       "category": "bugfix",
       "description": "session_detail.html has no UI element to confirm a pending session. Backend endpoint PUT /api/v2/sessions/{id}/confirm exists at sessions.py:192 with full metadata update support, but the detail page only shows a 'Pending' badge (line 42) with no way to change it. Users cannot confirm sessions from the detail view. Fix: add 'Confirm Session' button visible when import_status=='pending', calling the confirm endpoint.",
-      "status": "planned",
+      "status": "passing",
       "priority": 4,
       "tests": [],
       "files": [
@@ -595,7 +595,7 @@
       "name": "No stint breakdown displayed on detail page",
       "category": "bugfix",
       "description": "session_detail.html has no stint section. Backend GET /api/v2/sessions/{id} at sessions.py:119 returns stints array (db.get_stints), but the detail page never calls this endpoint and has no stint UI. The page only calls /api/v2/sessions/{id}/laps. Fix: add stint breakdown section showing stint number, lap range, best/avg lap times. Could be a collapsible card between session info and lap table.",
-      "status": "planned",
+      "status": "passing",
       "priority": 5,
       "tests": [],
       "files": [
@@ -723,7 +723,7 @@
     "created_at": "2025-01-29T01:00:00Z",
     "last_updated": "2026-02-12T00:00:00Z",
     "total_features": 47,
-    "passing": 38,
+    "passing": 41,
     "failing": 0,
     "planned": 21,
     "archive_file": "features-archive.json"

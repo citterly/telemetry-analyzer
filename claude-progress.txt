@@ -2042,3 +2042,35 @@ Features: 38 passing, 9 planned, 0 failing
 Next priority: bug-sessiondetail-004 (priority 4) — Confirm session button
 
 Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>
+
+
+=== Session 27 continued (2026-02-11) ===
+Working on: 3 priority-4/5 bugs from UAT
+
+All 3 bugs fixed:
+
+1. bug-sessiondetail-004 (MAJOR): No confirm session button on detail page
+   - session_detail.html: added "Confirm Session" button next to Pending badge
+   - Button only visible when import_status=='pending'
+   - Added confirmSession() function calling PUT /api/v2/sessions/{id}/confirm
+   - Reloads page after confirm to update badge
+
+2. bug-sessiondetail-005 (MAJOR): No stint breakdown displayed on detail page
+   - session_detail.html: added stints card section before lap table
+   - Shows stint number, lap range, best/avg/total times
+   - Added loadStints() function calling GET /api/v2/sessions/{id}
+   - Card hidden if no stints found
+
+3. bug-parquet-001 (CRITICAL): Time column shows interpolated values
+   - parquet.py: added actual Time values from df.index to response
+   - parquet.html: use row.Time instead of interpolated calculation
+   - Non-uniform sampling now shows correct timestamps
+
+Test results: 1038/1042 passing (4 pre-existing DLL failures excluded)
+
+Status: All 3 bugs marked PASSING
+Features: 41 passing, 6 planned, 0 failing
+
+Remaining: 5 priority-10+ bugs + 1 UAT tracking
+
+Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>

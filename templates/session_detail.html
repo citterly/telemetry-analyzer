@@ -40,6 +40,9 @@
                     <span class="badge bg-success">Confirmed</span>
                     {% else %}
                     <span class="badge bg-warning">Pending</span>
+                    <button onclick="confirmSession()" class="btn btn-sm btn-success ms-2">
+                        Confirm Session
+                    </button>
                     {% endif %}
                 </p>
             </div>
@@ -75,6 +78,30 @@
             </div>
         </div>
         {% endif %}
+    </div>
+</div>
+
+<!-- Stints Section -->
+<div class="card mb-4" id="stintsCard" style="display: none;">
+    <div class="card-header">
+        <h5 class="mb-0">Stints</h5>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-sm">
+                <thead>
+                    <tr>
+                        <th>Stint</th>
+                        <th>Laps</th>
+                        <th>Best Lap</th>
+                        <th>Avg Lap</th>
+                        <th>Total Time</th>
+                    </tr>
+                </thead>
+                <tbody id="stintsTableBody">
+                </tbody>
+            </table>
+        </div>
     </div>
 </div>
 
@@ -222,6 +249,35 @@
 <script>
 const sessionId = {{ session.id }};
 let lapsData = [];
+
+async function loadStints() {
+    try {
+        const response = await apiCall(`/api/v2/sessions/${sessionId}`);
+        const stints = response.stints || [];
+
+        if (stints.length > 0) {
+            const stintsCard = document.getElementById('stintsCard');
+            const tbody = document.getElementById('stintsTableBody');
+
+            stintsCard.style.display = 'block';
+            tbody.innerHTML = '';
+
+            stints.forEach(stint => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>Stint ${stint.stint_number}</td>
+                    <td>Laps ${stint.start_lap}-${stint.end_lap}</td>
+                    <td>${formatLapTime(stint.best_lap_time)}</td>
+                    <td>${formatLapTime(stint.avg_lap_time)}</td>
+                    <td>${formatLapTime(stint.total_time)}</td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+    } catch (error) {
+        console.log('Failed to load stints:', error.message);
+    }
+}
 
 async function loadLaps() {
     try {
@@ -387,6 +443,21 @@ async function loadSetup() {
     }
 }
 
+async function confirmSession() {
+    try {
+        await apiCall(`/api/v2/sessions/${sessionId}/confirm`, {
+            method: 'PUT',
+            body: JSON.stringify({})
+        });
+
+        showAlert('Session confirmed', 'success');
+        // Reload page to update badge
+        setTimeout(() => window.location.reload(), 1000);
+    } catch (error) {
+        showAlert(`Failed to confirm session: ${error.message}`, 'danger');
+    }
+}
+
 async function navigateToAnalysis(path) {
     try {
         // Set this session as the analysis context
@@ -417,8 +488,9 @@ function getClassificationBadgeClass(classification) {
     return classes[classification] || 'bg-secondary';
 }
 
-// Load laps and setup on page load
+// Load laps, stints, and setup on page load
 loadLaps();
+loadStints();
 loadSetup();
 </script>
 {% endblock %}

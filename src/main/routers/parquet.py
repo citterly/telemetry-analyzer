@@ -85,8 +85,13 @@ async def view_parquet_file(filename: str, limit: int = 100, offset: int = 0):
         # Get subset of data
         subset = df.iloc[offset:offset + limit]
 
-        # Convert to records, handling NaN
+        # Convert to records, handling NaN, and include actual index values
         records = subset.fillna("NaN").to_dict(orient="records")
+
+        # Add actual time values from index
+        timestamps = subset.index.tolist()
+        for i, record in enumerate(records):
+            record['Time'] = float(timestamps[i])
 
         # Get column stats
         col_stats = {}

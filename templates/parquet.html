@@ -232,9 +232,8 @@
             let bodyHtml = '';
             for (const row of data.data) {
                 bodyHtml += '<tr>';
-                // Time index (assuming index is in the row somehow, or use offset)
-                const idx = data.data.indexOf(row);
-                const time = data.index_range[0] + (currentOffset + idx) * (data.index_range[1] - data.index_range[0]) / data.total_rows;
+                // Use actual time from index (now included in response)
+                const time = row.Time !== undefined ? row.Time : 0;
                 bodyHtml += `<td>${time.toFixed(2)}</td>`;
 
                 for (const col of data.columns.slice(0, 10)) {
