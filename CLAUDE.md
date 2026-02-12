@@ -10,9 +10,25 @@ When starting work or told to "boot up":
 2. Read `claude-progress.txt` for recent history
 3. Run `bash init.sh` to start environment
 4. Pick highest-priority **unblocked** feature (see priority rules below)
-5. Execute it according to its phase type (see phase rules below)
-6. Update features.json and claude-progress.txt, commit
-7. Continue to next feature automatically
+5. Assess model requirement (see model selection below)
+6. Execute it according to its phase type (see phase rules below)
+7. Update features.json and claude-progress.txt, commit
+8. Continue to next feature automatically
+
+### Model Selection
+After picking the next feature, recommend the appropriate model before starting work.
+Print the recommendation so the user can switch with `/model` if needed.
+
+| Situation | Model | Rationale |
+|---|---|---|
+| Failing features (bug fixes) | **Opus** | Multi-file debugging needs deep reasoning |
+| Plan phase (`-plan`) | **Opus** | Architectural decisions drive everything downstream |
+| Exec phase (`-exec`) | **Sonnet** | Following an approved spec; escalate to Opus if stuck |
+| Test phase (`-test`) | **Sonnet** | Writing tests from acceptance criteria is well-scoped |
+
+**Escalation rule**: If Sonnet hits a wall during exec (e.g., subtle cross-cutting bug,
+complex multi-file coordination, or repeated failed attempts), print:
+`⚠ MODEL ESCALATION: This task needs Opus — switch with /model`
 
 ### Priority Rules
 Pick work in this order:
