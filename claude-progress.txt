@@ -1737,3 +1737,38 @@ audit panel rendering, threshold sliders (7 of 12 interactions)
 
 Status: uat-010 marked PASSING
 Features: 24 total (2 passing, 22 planned including 3 new bugs)
+
+
+=== Session 20 (2026-02-11) ===
+Working on: bug-analysis-001, bug-analysis-002, bug-analysis-003 (3 critical/major bugs)
+
+All three bugs fixed in a single pass — they share a root cause in session selector init.
+
+bug-analysis-001 (CRITICAL) — Fixed:
+- analysis.html line 449: `filename` → `currentFile` (fetch URL)
+- analysis.html line 460: `filename` → `currentFile` (track map load)
+- All 5 analysis types now use the correct parquet path
+
+bug-analysis-002 (CRITICAL) — Fixed:
+- Removed `onContextChange` overwrite from session_selector.html
+- session_selector.html now only stores init promise + populates filters
+- Consuming pages set their own callbacks after awaiting init
+
+bug-analysis-003 (MAJOR) — Fixed:
+- session_selector.html stores init promise as `_initPromise`
+- All 3 consuming pages (analysis, gg-diagram, corner-analysis) await `_initPromise`
+  before checking `currentContext`
+- onContextChange is set after init completes, preventing overwrite race
+
+Files changed:
+- templates/analysis.html (bug-001 + bug-003)
+- templates/components/session_selector.html (bug-002 + bug-003)
+- templates/gg_diagram.html (bug-003)
+- templates/corner_analysis.html (bug-003)
+
+Test results: 1038/1038 passing (4 pre-existing DLL failures excluded)
+
+Status: All 3 bugs marked PASSING
+Features: 24 total (5 passing, 19 planned)
+
+Next priority: uat-011 (UAT: G-G diagram page, priority 63)

@@ -72,22 +72,12 @@
 <!-- Initialization Script -->
 <script>
     // Initialize session selector when page loads
-    document.addEventListener('DOMContentLoaded', async function() {
-        await window._sessionSelector.init();
-
-        // Optional: Set up callback for when context changes
-        window._sessionSelector.onContextChange = function(context) {
-            console.log('Analysis context changed:', context);
-
-            // Page-specific reload logic
-            // Example: reload analysis data with new context
-            // if (typeof loadAnalysisData === 'function') {
-            //     loadAnalysisData();
-            // }
-        };
-
-        // Optional: Populate filter dropdowns with unique values
-        populateFilterDropdowns();
+    // Store promise so consuming pages can await it before checking context
+    document.addEventListener('DOMContentLoaded', function() {
+        window._sessionSelector._initPromise = window._sessionSelector.init().then(() => {
+            // Populate filter dropdowns after sessions are loaded
+            populateFilterDropdowns();
+        });
     });
 
     function populateFilterDropdowns() {

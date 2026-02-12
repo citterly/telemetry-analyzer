@@ -378,7 +378,12 @@
             toggleContainer.innerHTML = window._auditManager.renderToggleButton();
         }
 
-        // Set up context change handler
+        // Wait for session selector init to complete before checking context
+        if (window._sessionSelector._initPromise) {
+            await window._sessionSelector._initPromise;
+        }
+
+        // Set up context change handler (after init to avoid being overwritten)
         window._sessionSelector.onContextChange = async function(context) {
             await loadSessionForAnalysis(context.active_session_id);
         };
@@ -446,7 +451,7 @@
 
         try {
             const traceParam = window._auditManager.traceParam('?');
-            const response = await fetch(`/api/analyze/${type}/${encodeURIComponent(filename)}${traceParam}`);
+            const response = await fetch(`/api/analyze/${type}/${encodeURIComponent(currentFile)}${traceParam}`);
             if (!response.ok) {
                 const error = await response.json();
                 throw new Error(error.detail || 'Analysis failed');
@@ -457,7 +462,7 @@
 
             // Load track map for lap analysis
             if (type === 'laps' || type === 'report') {
-                loadTrackMap(filename, document.getElementById('track-map-color').value);
+                loadTrackMap(currentFile, document.getElementById('track-map-color').value);
             }
 
         } catch (error) {

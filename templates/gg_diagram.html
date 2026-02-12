@@ -783,7 +783,12 @@
             toggleContainer.innerHTML = window._auditManager.renderToggleButton();
         }
 
-        // Set up context change handler
+        // Wait for session selector init to complete before checking context
+        if (window._sessionSelector._initPromise) {
+            await window._sessionSelector._initPromise;
+        }
+
+        // Set up context change handler (after init to avoid being overwritten)
         window._sessionSelector.onContextChange = async function(context) {
             await loadSessionForAnalysis(context.active_session_id);
         };
