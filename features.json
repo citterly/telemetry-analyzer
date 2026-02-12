@@ -298,11 +298,11 @@
       "name": "Fix 5 stale `file-select` references in gg_diagram.html",
       "category": "bugfix",
       "description": "gg_diagram.html has 5 references to document.getElementById('file-select').value at lines 1668, 1675, 1714, 1899, 1925. The file dropdown was removed by arch-007 (replaced by session selector). Should use `currentParquetPath`. Affects: updateColorScheme() (color-by dropdown broken), filterByLap() (lap filter broken), compareLaps() (lap comparison broken), populateSessionList() (session comparison list broken), compareSessions() (session comparison broken). ALL interactive features beyond initial load are broken.",
-      "status": "planned",
+      "status": "passing",
       "priority": 1,
       "tests": [],
       "files": ["templates/gg_diagram.html"],
-      "notes": "Found during UAT of gg-diagram. Severity: Critical. Same pattern as bug-analysis-001.",
+      "notes": "Fixed: all 5 file-select refs → currentParquetPath",
       "source_uat": "gg-diagram"
     },
     {
@@ -310,11 +310,11 @@
       "name": "Remove empty control-panel div in gg_diagram.html",
       "category": "bugfix",
       "description": "gg_diagram.html lines 297-299 have an empty <div class='control-panel'> inside a col-md-6 — leftover from file dropdown removal. Causes an empty column in the controls row.",
-      "status": "planned",
+      "status": "passing",
       "priority": 50,
       "tests": [],
       "files": ["templates/gg_diagram.html"],
-      "notes": "Found during UAT of gg-diagram. Severity: Minor (cosmetic).",
+      "notes": "Fixed: removed empty control-panel div and col-md-6 wrapper",
       "source_uat": "gg-diagram"
     },
     {
@@ -322,11 +322,11 @@
       "name": "Fix stale `file-select` reference in corner_analysis.html renderTrackMap()",
       "category": "bugfix",
       "description": "corner_analysis.html line 845: renderTrackMap() uses document.getElementById('file-select').value which doesn't exist after arch-007. Should use `currentParquetPath`. Track map view mode is completely broken — returns undefined filename, API call fails.",
-      "status": "planned",
+      "status": "passing",
       "priority": 1,
       "tests": [],
       "files": ["templates/corner_analysis.html"],
-      "notes": "Found during UAT of corner-analysis. Severity: Critical. Same pattern as bug-analysis-001.",
+      "notes": "Fixed: file-select ref → currentParquetPath",
       "source_uat": "corner-analysis"
     }
   ],
@@ -334,9 +334,9 @@
     "created_at": "2025-01-29T01:00:00Z",
     "last_updated": "2026-02-12T00:00:00Z",
     "total_features": 27,
-    "passing": 7,
+    "passing": 10,
     "failing": 0,
-    "planned": 20,
+    "planned": 17,
     "archive_file": "features-archive.json"
   },
   "categories": {

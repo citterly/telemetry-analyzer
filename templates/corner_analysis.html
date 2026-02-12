@@ -842,7 +842,7 @@
     let selectedCorner = null;
 
     async function renderTrackMap() {
-        const filename = document.getElementById('file-select').value;
+        const filename = currentParquetPath;
         if (!filename || !currentData) return;
 
         const colorScheme = document.getElementById('map-color-scheme').value;

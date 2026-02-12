@@ -296,9 +296,6 @@
 <div class="row mb-4">
     <div class="col-md-6">
         <div class="control-panel">
-    </div>
-    <div class="col-md-6">
-        <div class="control-panel">
             <label for="lap-select" class="form-label">Lap Filter</label>
             <select class="form-select" id="lap-select" onchange="filterByLap()">
                 <option value="all">All Laps</option>
@@ -1665,14 +1662,14 @@
     }
 
     async function updateColorScheme() {
-        const filename = document.getElementById('file-select').value;
+        const filename = currentParquetPath;
         if (filename) {
             await loadSVG(filename);
         }
     }
 
     async function filterByLap() {
-        const filename = document.getElementById('file-select').value;
+        const filename = currentParquetPath;
         const lap = document.getElementById('lap-select').value;
         if (filename) {
             // Re-fetch JSON data with lap filter to update all displays
@@ -1711,7 +1708,7 @@
     async function compareLaps() {
         const lapA = document.getElementById('compare-lap-a').value;
         const lapB = document.getElementById('compare-lap-b').value;
-        const filename = document.getElementById('file-select').value;
+        const filename = currentParquetPath;
 
         if (!lapA || !lapB) {
             alert('Please select two laps to compare');
@@ -1896,7 +1893,7 @@
     }
 
     async function populateSessionList() {
-        const currentFile = document.getElementById('file-select').value;
+        const currentFile = currentParquetPath;
         const sessionSelect = document.getElementById('compare-session-b');
 
         try {
@@ -1922,7 +1919,7 @@
     }
 
     async function compareSessions() {
-        const sessionA = document.getElementById('file-select').value;
+        const sessionA = currentParquetPath;
         const sessionB = document.getElementById('compare-session-b').value;
 
         if (!sessionA) {
