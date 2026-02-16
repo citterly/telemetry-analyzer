@@ -2,7 +2,7 @@
 name: uat
 description: "Perform User Acceptance Testing by tracing code paths from the user's perspective. Simulates button clicks, form submissions, and page navigation through the full stack to find broken wiring, missing error handling, and UX issues."
 disable-model-invocation: true
-argument-hint: "[page-name | flow-name | list]"
+argument-hint: "[page-name | flow-name | all | list]"
 ---
 
 # User Acceptance Testing Skill
@@ -13,6 +13,7 @@ argument-hint: "[page-name | flow-name | list]"
 Where `<target>` is one of:
 - A **page name**: `analysis`, `gg-diagram`, `corner-analysis`, `sessions`, `session-import`, `vehicles`, `dashboard`, `parquet`, `queue`, `files`, `upload`
 - A **user flow**: `session-selection`, `audit-mode`, `vehicle-switching`, `lap-comparison`, `import-flow`
+- `all` — run UAT on **every** target in parallel, then produce a combined summary
 - `list` — show all available targets with brief descriptions
 
 The argument is available as `$ARGUMENTS`.
@@ -47,6 +48,73 @@ If `$ARGUMENTS` is `list` or empty, output this table and stop:
 | `vehicle-switching` | Flow | Changing active vehicle and re-running analysis |
 | `lap-comparison` | Flow | Selecting two laps and viewing delta |
 | `import-flow` | Flow | Full upload → import → analyze workflow |
+| `all` | Meta | Run every target above in parallel |
+
+If `$ARGUMENTS` is `all`, execute the **Parallel UAT** procedure below, then stop (do NOT continue to Phase 2).
+
+#### Parallel UAT Procedure
+
+1. **Launch subagents in parallel** using the Task tool with `subagent_type: "general-purpose"`. Launch ALL of the following targets as separate background agents in a **single message** (this is critical — they must all be launched at once for true parallelism):
+
+   **Pages (13):** `analysis`, `gg-diagram`, `corner-analysis`, `sessions`, `session-import`, `session-detail`, `vehicles`, `dashboard`, `parquet`, `queue`, `files`, `upload`, `track-map`
+
+   **Flows (5):** `session-selection`, `audit-mode`, `vehicle-switching`, `lap-comparison`, `import-flow`
+
+   Each agent's prompt should be:
+   ```
+   You are performing a User Acceptance Test on the "{target}" {page|flow} of the telemetry-analyzer project at /home/chris/projects/telemetry-analyzer.
+
+   Follow the full UAT procedure from .claude/skills/uat/SKILL.md — execute Phase 2 through Phase 5 for the target "{target}". Read the SKILL.md file first to understand the full procedure.
+
+   IMPORTANT:
+   - Do NOT execute Phase 6 (bug recording to features.json) — the coordinator will handle that.
+   - Do NOT skip any files — read every file needed to trace the full code path.
+   - At the end, output ONLY the Phase 5 report (the UAT Report section).
+   - End your report with a machine-readable summary line in this exact format:
+     UAT_SUMMARY|{target}|interactions:{N}|working:{N}|broken:{N}|ux_concerns:{N}|edge_cases:{N}
+   - For each Critical or Major bug, also output a line in this format:
+     UAT_BUG|{target}|{severity}|{short_title}|{files_csv}|{description}
+   ```
+
+   Use `run_in_background: true` for all agents. Name each agent `uat-{target}`.
+
+2. **Wait for all agents to complete.** Use the Read tool to check each agent's output file. Poll periodically until all are done.
+
+3. **Collect results.** Parse the `UAT_SUMMARY` and `UAT_BUG` lines from each agent's output.
+
+4. **Execute Phase 6 once.** Read `features.json`, collect all Critical and Major bugs from all agents, deduplicate, assign sequential IDs (`bug-{target}-NNN`), and write them all in a single update to `features.json`.
+
+5. **Output combined report.** Structure it as:
+
+---
+
+## UAT Full Sweep Report
+
+**Tested**: {date}
+**Targets tested**: 18 (13 pages + 5 flows)
+
+### Aggregate Summary
+| Category | Total |
+|----------|-------|
+| Interactions traced | {sum} |
+| Working correctly | {sum} |
+| Broken | {sum} |
+| UX concerns | {sum} |
+| Edge cases flagged | {sum} |
+
+### Per-Target Results
+| Target | Type | Interactions | Working | Broken | UX | Edge |
+|--------|------|-------------|---------|--------|-----|------|
+| `analysis` | Page | ... | ... | ... | ... | ... |
+| ... | ... | ... | ... | ... | ... | ... |
+
+### All Critical/Major Bugs
+{Numbered list of all bugs recorded to features.json, grouped by severity}
+
+### Cross-Target Patterns
+{Any patterns that appear across multiple targets — e.g., "5 pages have no loading spinner", "3 pages don't handle missing session context"}
+
+---
 
 Otherwise, proceed to Phase 2.
 
